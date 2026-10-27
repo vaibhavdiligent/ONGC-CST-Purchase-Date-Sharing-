@@ -30,21 +30,35 @@
 *& Change request    : 8000009091
 *& Description       : Fetch bamng instead of menge from EKBE
 *----------------------------------------------------------------------*
+* Code Remediation S4 2025_A - PGI rate issue after upgrade
+* Description     : 1. ZFI_COPA / ZFI_COPA_PGIR are DDIC views on
+*                      FAGLFLEXA (+BKPF). FAGLFLEXA is no longer updated
+*                      in S/4HANA (replaced by ACDOCA) and a DDIC
+*                      database view does not use the compatibility
+*                      view, so new postings were not selected.
+*                      Read ACDOCA + BKPF instead.
+*                   2. MSEG replaced by MATDOC (RECORD_TYPE = 'MDOC').
+*                   3. Company code currency read from current row
+*                      (was the last row of ZFI_COPA_PGIR).
+*                   4. INR->FC branch of exchange rate read TCURR rows
+*                      of the FC->INR branch; rate not reset on change
+*                      of company code; UKURS sum could overflow.
+*                   5. REVERSE / UKURS1 carried over between MSEG lines.
+*----------------------------------------------------------------------*
 
 
 REPORT zco_pgi_rate.
-TABLES: zfi_copa_pgir.
 
 TYPES: BEGIN OF ty_zfi_copa_tmp,
-         ryear   TYPE zfi_copa-ryear,
-         docnr   TYPE zfi_copa-docnr,
-         rldnr   TYPE zfi_copa-rldnr,
-         rbukrs  TYPE zfi_copa-rbukrs,
-         racct   TYPE zfi_copa-racct,
-         hsl     TYPE zfi_copa-hsl,
-         poper   TYPE zfi_copa-poper,
-         awkey   TYPE zfi_copa-awkey,
-         budat   TYPE zfi_copa-budat,
+         ryear   TYPE acdoca-ryear,
+         docnr   TYPE acdoca-belnr,
+         rldnr   TYPE acdoca-rldnr,
+         rbukrs  TYPE acdoca-rbukrs,
+         racct   TYPE acdoca-racct,
+         hsl     TYPE acdoca-hsl,
+         poper   TYPE acdoca-poper,
+         awkey   TYPE bkpf-awkey,
+         budat   TYPE acdoca-budat,
          awkey_m TYPE mseg-mblnr,
          awkey_g TYPE mseg-gjahr,
        END OF ty_zfi_copa_tmp,
@@ -94,8 +108,6 @@ DATA: ta_zfi_copa_tmp TYPE TABLE OF ty_zfi_copa_tmp,
       gv_fday_c(8)                   ,
       gv_lday         TYPE bkpf-budat,
       gv_lday_c(8)                  ,
-      gv_ukurs        TYPE tcurr-ukurs,
-      gv_ffact        TYPE tcurr-ffact,
       gv_bukrs        TYPE bkpf-bukrs,
       gv_igjahr       TYPE bkpf-gjahr,
       gv_imonat       TYPE bkpf-monat,
@@ -114,10 +126,19 @@ DATA: lv_pgi_rate_ukurs TYPE ukurs,
       lv_fy1            TYPE t009b-bdatj,
       lv_matnr          TYPE ekbe-matnr,
       lv_charg          TYPE ekbe-charg.
+
+DATA: gv_sel_bukrs  TYPE acdoca-rbukrs,
+      gv_sel_racct  TYPE acdoca-racct,
+      gv_sel_cpudt  TYPE bkpf-cpudt,
+      gv_rate_sum   TYPE decfloat34,
+      gv_rate_one   TYPE decfloat34,
+      gv_rate_ffact TYPE decfloat34,
+      gv_rate_tfact TYPE decfloat34,
+      lv_count      TYPE i.
 RANGES:r_lifnr FOR lfa1-lifnr,
        r_ebeln FOR ekko-ebeln,
        r_vbund FOR lfa1-vbund.
-CONSTANTS: co_0l      TYPE zfi_copa-rldnr VALUE '0L',
+CONSTANTS: co_0l      TYPE acdoca-rldnr   VALUE '0L',
            co_atinn   TYPE cabn-atnam     VALUE 'ZMANUFACTURER',
            co_plnt(4) VALUE 'PLNT',
            co_003000  TYPE lfa1-vbund     VALUE '003000',
@@ -128,15 +149,15 @@ CONSTANTS: co_0l      TYPE zfi_copa-rldnr VALUE '0L',
            co_eq      TYPE char2 VALUE 'EQ'.
 
 SELECTION-SCREEN:BEGIN OF BLOCK abc WITH  FRAME TITLE text-01a.
-PARAMETERS:     p_gjahr TYPE  zfi_copa_pgir-ryear        OBLIGATORY.
-SELECT-OPTIONS: s_bukrs FOR   zfi_copa_pgir-rbukrs       OBLIGATORY,
-                s_racct FOR   zfi_copa_pgir-racct        OBLIGATORY.
-SELECT-OPTIONS: s_cpudt FOR   zfi_copa_pgir-cpudt        OBLIGATORY.
+PARAMETERS:     p_gjahr TYPE  acdoca-ryear               OBLIGATORY.
+SELECT-OPTIONS: s_bukrs FOR   gv_sel_bukrs               OBLIGATORY,
+                s_racct FOR   gv_sel_racct               OBLIGATORY.
+SELECT-OPTIONS: s_cpudt FOR   gv_sel_cpudt               OBLIGATORY.
 SELECTION-SCREEN: END OF BLOCK abc.
 SELECTION-SCREEN: BEGIN OF BLOCK abd.
 PARAMETERS:     p_rd1 RADIOBUTTON GROUP ab USER-COMMAND ac DEFAULT 'X',
                 p_rd2 RADIOBUTTON GROUP ab.
-PARAMETERS:     p_poper TYPE  zfi_copa_pgir-poper."        OBLIGATORY .
+PARAMETERS:     p_poper TYPE  acdoca-poper."        OBLIGATORY .
 
 SELECTION-SCREEN: END OF BLOCK abd.
 
@@ -241,13 +262,38 @@ START-OF-SELECTION.
 
 
   ENDIF.
-  SELECT * FROM zfi_copa_pgir INTO TABLE @DATA(ta_zfi_copa) " ZFI_COPA view replaced with ZFI_COPA_PGIR for incremental data
-    WHERE ryear   =   @p_gjahr      AND
-          rldnr   =   @co_0l        AND
-          rbukrs  IN  @s_bukrs      AND
-          racct   IN  @s_racct      AND
-          poper   =   @p_poper      AND
-  cpudt   IN  @s_cpudt.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE - FAGLFLEXA based view replaced by ACDOCA
+*  SELECT * FROM zfi_copa_pgir INTO TABLE @DATA(ta_zfi_copa) " ZFI_COPA view replaced with ZFI_COPA_PGIR for incremental data
+*    WHERE ryear   =   @p_gjahr      AND
+*          rldnr   =   @co_0l        AND
+*          rbukrs  IN  @s_bukrs      AND
+*          racct   IN  @s_racct      AND
+*          poper   =   @p_poper      AND
+*  cpudt   IN  @s_cpudt.
+  SELECT a~ryear,
+         a~belnr AS docnr,
+         a~rldnr,
+         a~rbukrs,
+         a~racct,
+         a~hsl,
+         a~poper,
+         b~awkey,
+         a~budat,
+         b~cpudt
+    FROM acdoca AS a
+    INNER JOIN bkpf AS b
+       ON b~bukrs = a~rbukrs
+      AND b~gjahr = a~gjahr
+      AND b~belnr = a~belnr
+    WHERE a~ryear   =   @p_gjahr      AND
+          a~rldnr   =   @co_0l        AND
+          a~rbukrs  IN  @s_bukrs      AND
+          a~racct   IN  @s_racct      AND
+          a~poper   =   @p_poper      AND
+          a~bstat   <>  'C'           AND   " exclude CO-only lines (not in FAGLFLEXA)
+          b~cpudt   IN  @s_cpudt
+    INTO TABLE @DATA(ta_zfi_copa).
+* **END OF CHANGE
 
   IF sy-subrc IS INITIAL.
     gv_igjahr   = p_gjahr.
@@ -313,6 +359,9 @@ START-OF-SELECTION.
     LOOP AT ta_zfi_copa INTO DATA(wa_zfi_copa).
       wa_zfi_copa_tmp = CORRESPONDING #( wa_zfi_copa ).
       DATA(lv_len_awkey) = strlen( wa_zfi_copa-awkey ).
+      IF lv_len_awkey <= 4.
+        CONTINUE.
+      ENDIF.
       lv_len_awkey = lv_len_awkey - 4.
       wa_zfi_copa_tmp-awkey_m = wa_zfi_copa-awkey+0(lv_len_awkey).
       wa_zfi_copa_tmp-awkey_g = wa_zfi_copa-awkey+lv_len_awkey(4).
@@ -337,10 +386,11 @@ START-OF-SELECTION.
         smbln,
         sakto, " 15.07.2021
         vbeln_im,
-        vbelp_im FROM mseg INTO TABLE @DATA(ta_mseg)
+        vbelp_im FROM matdoc INTO TABLE @DATA(ta_mseg)   " S4 2025_A: MSEG -> MATDOC
               FOR ALL ENTRIES IN @ta_zfi_copa_tmp1
               WHERE mblnr = @ta_zfi_copa_tmp1-awkey_m  AND
-      mjahr = @ta_zfi_copa_tmp1-awkey_g.
+                    mjahr = @ta_zfi_copa_tmp1-awkey_g  AND
+                    record_type = 'MDOC'.
 
       IF ta_mseg[] IS NOT INITIAL.
 
@@ -426,12 +476,13 @@ START-OF-SELECTION.
                   charg,
                   lifnr,
                   bukrs,
-                  kzzug FROM mseg INTO TABLE @DATA(ta_mseg_kzzug)
+                  kzzug FROM matdoc INTO TABLE @DATA(ta_mseg_kzzug)   " S4 2025_A: MSEG -> MATDOC
                         FOR ALL ENTRIES IN @ta_ekbe_tmp1
                         WHERE mblnr = @ta_ekbe_tmp1-belnr AND
                               mjahr = @ta_ekbe_tmp1-gjahr AND
                               bukrs IN @s_bukrs            AND
-                kzzug = ''.
+                              kzzug = ''                   AND
+                              record_type = 'MDOC'.
                 IF sy-subrc = 0.
                 ENDIF.
               ENDIF.
@@ -561,6 +612,8 @@ START-OF-SELECTION.
         DATA(lv_ind) = line_index( ta_mseg[ mblnr = wa_zfi_copa_tmp-awkey_m mjahr = wa_zfi_copa_tmp-awkey_g sakto = wa_zfi_copa_tmp-racct ] ). "15.07.2021
         LOOP AT ta_mseg FROM lv_ind INTO DATA(wa_mseg).
           CLEAR: wa_zco_pgi_rate-tagging,
+                 wa_zco_pgi_rate-reverse,
+                 wa_zco_pgi_rate-ukurs1,
                  wa_zco_pgi_rate-objek,
                  wa_zco_pgi_rate-maktx,
                  wa_zco_pgi_rate-lifnr,
@@ -671,8 +724,9 @@ wa_zco_pgi_rate-objek = CONV #( wa_ausp-objek ) .
               wa_zco_pgi_rate-tagging = 1.
             ENDIF.
             CONDENSE wa_zco_pgi_rate-tagging.
-            IF line_exists( ta_t001[ bukrs = wa_zfi_copa-rbukrs ] ).
-              DATA(wa_t001) = ta_t001[ bukrs = wa_zfi_copa-rbukrs ].
+* Code Remediation S4 2025_A **BEGIN OF CHANGE - currency of current row, corrected exchange rate
+            IF line_exists( ta_t001[ bukrs = wa_zfi_copa_tmp-rbukrs ] ).
+              DATA(wa_t001) = ta_t001[ bukrs = wa_zfi_copa_tmp-rbukrs ].
               wa_zco_pgi_rate-waers = wa_t001-waers.
 
             ENDIF.
@@ -685,65 +739,46 @@ wa_zco_pgi_rate-objek = CONV #( wa_ausp-objek ) .
 
                 IF gv_bukrs IS INITIAL OR ( gv_bukrs NE wa_zco_pgi_rate-rbukrs ).
                   gv_bukrs = wa_zco_pgi_rate-rbukrs.
+                  CLEAR: lv_pgi_rate_ukurs, gv_rate_sum, lv_count.
 
+                  " Average of the period's M rates, as INR per 1 unit of company code currency.
+                  " TCURR: direct  -> TO = FROM / FFACT * UKURS * TFACT
+                  "        indirect (UKURS < 0) -> TO = FROM / FFACT / |UKURS| * TFACT
                   IF line_exists( ta_tcurr_finr[ fcurr = wa_zco_pgi_rate-waers ] ).
-
-                    DATA(ta_tcurr_finr_tmp) = ta_tcurr_finr[].
-                    DELETE ta_tcurr_finr_tmp WHERE fcurr NE wa_zco_pgi_rate-waers.
-                    DESCRIBE TABLE ta_tcurr_finr_tmp LINES DATA(lv_count).
-
-                    LOOP AT ta_tcurr_finr_tmp INTO DATA(wa_tcurr_finr_tmp).
-                      gv_ukurs = gv_ukurs + wa_tcurr_finr_tmp-ukurs.
-                      CLEAR wa_tcurr_finr_tmp.
-                    ENDLOOP.
-                    "SOC by Pooja Adupala for CR#8000007907
-                    READ TABLE ta_tcurr_finr_tmp INTO wa_tcurr_finr_tmp INDEX 1.
-                    IF sy-subrc = 0.
-                      gv_ffact = wa_tcurr_finr_tmp-ffact.
-                    ENDIF.
-                    "EOC by Pooja Adupala for CR#8000007907
-
-                    IF lv_count IS NOT INITIAL.
-                      IF gv_ffact IS INITIAL.
-                        gv_ffact = 1.
+                    LOOP AT ta_tcurr_finr INTO DATA(wa_tcurr_finr_tmp) WHERE fcurr = wa_zco_pgi_rate-waers
+                                                                         AND ukurs <> 0.
+                      gv_rate_ffact = COND #( WHEN wa_tcurr_finr_tmp-ffact IS INITIAL THEN 1 ELSE wa_tcurr_finr_tmp-ffact ).
+                      gv_rate_tfact = COND #( WHEN wa_tcurr_finr_tmp-tfact IS INITIAL THEN 1 ELSE wa_tcurr_finr_tmp-tfact ).
+                      IF wa_tcurr_finr_tmp-ukurs > 0.
+                        gv_rate_one = wa_tcurr_finr_tmp-ukurs * gv_rate_tfact / gv_rate_ffact.
+                      ELSE.
+                        gv_rate_one = gv_rate_tfact / ( abs( wa_tcurr_finr_tmp-ukurs ) * gv_rate_ffact ).
                       ENDIF.
-                      lv_pgi_rate_ukurs = ( gv_ukurs / lv_count ).
-                      lv_pgi_rate_ukurs =   ( lv_pgi_rate_ukurs / gv_ffact )."LOC added by Pooja Adupala for CR#8000007907
-                      wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
-
-                    ENDIF.
-
-                    CLEAR: gv_ukurs,gv_ffact, lv_count, ta_tcurr_finr_tmp[].
+                      gv_rate_sum = gv_rate_sum + gv_rate_one.
+                      lv_count = lv_count + 1.
+                    ENDLOOP.
 
                   ELSEIF line_exists( ta_tcurr_tinr[ tcurr = wa_zco_pgi_rate-waers ] ).
-
-                    ta_tcurr_finr_tmp = ta_tcurr_finr[].
-                    DELETE ta_tcurr_finr_tmp WHERE fcurr NE wa_zco_pgi_rate-waers.
-                    DESCRIBE TABLE ta_tcurr_finr_tmp LINES lv_count.
-
-                    LOOP AT ta_tcurr_finr_tmp INTO wa_tcurr_finr_tmp.
-                      gv_ukurs = gv_ukurs + wa_tcurr_finr_tmp-ukurs.
-                      CLEAR wa_tcurr_finr_tmp.
-                    ENDLOOP.
-
-                    "SOC added by Pooja Adupala for CR#8000007907
-                    READ TABLE ta_tcurr_finr_tmp INTO wa_tcurr_finr_tmp INDEX 1.
-                    IF sy-subrc = 0.
-                      gv_ffact = wa_tcurr_finr_tmp-ffact.
-                    ENDIF.
-                    "EOC added by Pooja Adupala for CR#8000007907
-
-                    IF lv_count IS NOT INITIAL.
-                      IF gv_ffact IS INITIAL.
-                        gv_ffact = 1.
+                    " Only INR -> FC maintained: invert it
+                    LOOP AT ta_tcurr_tinr INTO DATA(wa_tcurr_tinr_tmp) WHERE tcurr = wa_zco_pgi_rate-waers
+                                                                         AND ukurs <> 0.
+                      gv_rate_ffact = COND #( WHEN wa_tcurr_tinr_tmp-ffact IS INITIAL THEN 1 ELSE wa_tcurr_tinr_tmp-ffact ).
+                      gv_rate_tfact = COND #( WHEN wa_tcurr_tinr_tmp-tfact IS INITIAL THEN 1 ELSE wa_tcurr_tinr_tmp-tfact ).
+                      IF wa_tcurr_tinr_tmp-ukurs > 0.
+                        gv_rate_one = gv_rate_ffact / ( wa_tcurr_tinr_tmp-ukurs * gv_rate_tfact ).
+                      ELSE.
+                        gv_rate_one = abs( wa_tcurr_tinr_tmp-ukurs ) * gv_rate_ffact / gv_rate_tfact.
                       ENDIF.
-                      lv_pgi_rate_ukurs = ( gv_ukurs / lv_count ).
-                      lv_pgi_rate_ukurs = ( lv_pgi_rate_ukurs / gv_ffact )."LOC added by Pooja Adupala for CR#8000007907
-                      wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
-                    ENDIF.
-
-                    CLEAR: gv_ukurs, lv_count, ta_tcurr_finr_tmp[].
+                      gv_rate_sum = gv_rate_sum + gv_rate_one.
+                      lv_count = lv_count + 1.
+                    ENDLOOP.
                   ENDIF.
+
+                  IF lv_count IS NOT INITIAL.
+                    lv_pgi_rate_ukurs = round( val = gv_rate_sum / lv_count dec = 5 ).
+                  ENDIF.
+                  wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
+                  CLEAR: gv_rate_sum, lv_count.
 
                 ELSEIF gv_bukrs EQ wa_zco_pgi_rate-rbukrs.
 
@@ -753,6 +788,7 @@ wa_zco_pgi_rate-objek = CONV #( wa_ausp-objek ) .
               ENDIF.
 
             ENDIF.
+* **END OF CHANGE
 
             IF wa_zco_pgi_rate-waers = 'UGX'.
               wa_zco_pgi_rate-dmbtr = wa_zco_pgi_rate-dmbtr * 100.
