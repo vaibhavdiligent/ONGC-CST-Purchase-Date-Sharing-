@@ -2659,7 +2659,13 @@ FORM additional_mj_discount.
         lv_qty  TYPE p DECIMALS 3,
         lv_rate TYPE i,
         lv_mon  TYPE char10,
-        lv_rem  TYPE char40.
+        lv_rem  TYPE char40,
+        lt_raf  TYPE RANGE OF s922-kondm,
+        ls_raf  LIKE LINE OF lt_raf,
+        lv_mcq  TYPE p DECIMALS 3,
+        lv_mn   TYPE i,
+        lv_fld  TYPE char30.
+  FIELD-SYMBOLS <lv_cq> TYPE any.
 
 * GAIL 26.10.2026: remarks per run month, e.g. 'CIS ADDL DISC MAY 2026' /
 * 'CIS ADDL DISC JUNE 2026' (becomes the reference no. of the rebate order)
@@ -2672,6 +2678,23 @@ FORM additional_mj_discount.
     WHEN '11'. lv_mon = 'NOVEMBER'.  WHEN '12'. lv_mon = 'DECEMBER'.
   ENDCASE.
   CONCATENATE 'CIS ADDL DISC' lv_mon s_sptag-low(4) INTO lv_rem SEPARATED BY space.
+
+* GAIL DVR test 27.10.2026: Raffia-sector grades (Rs. 4000/MT) are the
+* grade families named in the circular - W50, T50, Y50, E36, E24 (e.g.
+* W50A009A/B/OG, T50A010A/B/OG, Y50A010U A/B/OG, E36A060A/B/OG,
+* E24A070U A/B/OG). Their material pricing groups (MPG = S922-KONDM) are read
+* from the material master, so the rate no longer depends on YRVA_PRS_GRADES.
+* Earlier RANGE_R (YRVA_PRS_GRADES indicator 'R') was empty in DVR, and an
+* EMPTY range matches every value - so every grade got Rs. 4000.
+  SELECT DISTINCT kondm FROM mvke INTO TABLE @DATA(lt_rafk)
+    WHERE vkorg = '5000'
+      AND kondm <> @space
+      AND ( matnr LIKE 'W50%' OR matnr LIKE 'T50%' OR matnr LIKE 'Y50%'
+         OR matnr LIKE 'E36%' OR matnr LIKE 'E24%' ).
+  LOOP AT lt_rafk INTO DATA(ls_rafk).
+    ls_raf-sign = 'I'. ls_raf-option = 'EQ'. ls_raf-low = ls_rafk-kondm.
+    APPEND ls_raf TO lt_raf.
+  ENDLOOP.
 
 * applicable grade set = HDPE + LLDPE grades
   SELECT kondm FROM yrva_hdpe_grades  INTO TABLE @DATA(lt_grd).
@@ -2713,7 +2736,7 @@ FORM additional_mj_discount.
   LOOP AT lt_elig INTO DATA(ls_elig).
     CLEAR: lv_val, lv_qty, it_data_monthly.
     LOOP AT lt_s922 INTO DATA(ls_s) WHERE pkunag = ls_elig-kunnr.
-      IF ls_s-kondm IN range_r.          " Raffia-sector grade
+      IF lt_raf IS NOT INITIAL AND ls_s-kondm IN lt_raf.   " Raffia-sector grade
         lv_rate = 4000.
       ELSE.
         lv_rate = 3000.
@@ -2736,6 +2759,42 @@ FORM additional_mj_discount.
     it_data_monthly-ind_lift_qty = lv_qty.
     it_data_monthly-tot_elgl_qty = lv_qty.
     it_data_monthly-value        = lv_val.
+*   GAIL DVR test 27.10.2026: MCQ and MCQ % were blank. MCQ = the customer's
+*   committed qty for the run month (COMMITED_QTY_M1 = April ... M12 = March).
+*   These customers joined CIS in Jun/Jul 2026, so a May (or June) month can
+*   be before their CIS start - then the monthly MCQ of their first CIS month
+*   is shown. MCQ % = lifted qty / MCQ.
+    CLEAR lv_mcq.
+    lv_mn = s_sptag-low+4(2).
+    IF lv_mn >= 4.
+      lv_mn = lv_mn - 3.
+    ELSE.
+      lv_mn = lv_mn + 9.
+    ENDIF.
+    lv_fld = |COMMITED_QTY_M{ lv_mn }|.
+    CONDENSE lv_fld NO-GAPS.
+    ASSIGN COMPONENT lv_fld OF STRUCTURE ls_elig TO <lv_cq>.
+    IF sy-subrc = 0.
+      lv_mcq = <lv_cq>.
+    ENDIF.
+    IF lv_mcq IS INITIAL.
+      lv_mn = ls_elig-mou_begda+4(2).
+      IF lv_mn >= 4.
+        lv_mn = lv_mn - 3.
+      ELSE.
+        lv_mn = lv_mn + 9.
+      ENDIF.
+      lv_fld = |COMMITED_QTY_M{ lv_mn }|.
+      CONDENSE lv_fld NO-GAPS.
+      ASSIGN COMPONENT lv_fld OF STRUCTURE ls_elig TO <lv_cq>.
+      IF sy-subrc = 0.
+        lv_mcq = <lv_cq>.
+      ENDIF.
+    ENDIF.
+    it_data_monthly-commited_qty = lv_mcq.
+    IF lv_mcq > 0.
+      it_data_monthly-mcq_perc = lv_qty / lv_mcq * 100.
+    ENDIF.
     it_data_monthly-remarks      = lv_rem.
     CLEAR it_data_monthly-sale_order.    " GAIL 26.10.2026: Sales Order column blank
     APPEND it_data_monthly.
