@@ -96,7 +96,24 @@ difference, and no note‑3185840 finding.
 | xblnr | BKPF‑XBLNR | I_JournalEntry‑DocumentReferenceID |
 | u_xblnr_alt | BKPF‑XBLNR_ALT | AlternativeReferenceDocument |
 | u_usnam | BKPF‑USNAM | AccountingDocCreatedByUser |
-| jamon | derived `budat(4)/budat+4(2)` | computed in the form |
+| jamon | fiscal year / posting period (`GJAHR/POPER`) | computed in the form from FiscalYear + FiscalPeriod |
+
+### Row filters applied (identical to FAGLL03 for the old call)
+
+FAGLL03 with `x_norm='X'`, `x_glyec=' '`, `x_enfoj=' '` selects
+`BSTAT IN (' ', 'L', gl_only)` and `check_item_ok` requires `UMSKZ = space`.
+The form applies both (`AccountingDocumentCategory IN lt_bstat`,
+`SpecialGLCode = space`), plus ledger `0L`, document key, `GLAccount IN
+s_saknr`, `PostingDate IN s_budat`.
+
+### Why the old SUBMIT lost data in S/4 (CRS incident, Dec 2025)
+
+S/4 `FAGL_ACCOUNT_ITEMS_GL` converts the passed free selection from
+`FAGLFLEXA_FS` to `ACDOCA_FS` and **deletes every field not in ACDOCA_FS**.
+ACDOCA has no `DOCNR`, so the 500‑document restriction was silently dropped;
+FAGLL03 ran unrestricted once per chunk, which leads to memory dumps
+(`TSV_TNEW_PAGE_ALLOC_FAILED`, note 3185840) or silently caught capture
+failures → missing days. The direct read has no free selection and no SUBMIT.
 | zzgkont_ltxt | BAdI FAGL_ITEMS_CH_DATA | BAdI called in the form |
 
 ### If you must keep a SUBMIT (not recommended)
