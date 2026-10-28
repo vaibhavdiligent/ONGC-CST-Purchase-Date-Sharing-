@@ -1130,8 +1130,6 @@ FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
                           p_ref   TYPE clike
                  CHANGING p_ok    TYPE flag.
   DATA: ls_bkpf   TYPE bkpf,
-        lt_bseg   TYPE STANDARD TABLE OF bseg,
-        ls_bseg   TYPE bseg,
         lt_chg    TYPE STANDARD TABLE OF accchg,
         ls_chg    TYPE accchg,
         lv_awkey  TYPE awkey,
@@ -1163,15 +1161,19 @@ FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
   CHECK lv_ref IS NOT INITIAL.
   lv_text = |INVOICE { lv_ref }|.
 
-  SELECT * FROM bseg INTO TABLE lt_bseg
-    WHERE bukrs = ls_bkpf-bukrs
-      AND belnr = ls_bkpf-belnr
-      AND gjahr = ls_bkpf-gjahr
-      AND koart = 'S'.
-  LOOP AT lt_bseg INTO ls_bseg WHERE sgtxt IS INITIAL.
+* G/L line items of the document - read through the released S/4HANA view
+* I_OperationalAcctgDocItem instead of a direct BSEG select (ATC, S/4HANA)
+  SELECT accountingdocumentitem, documentitemtext
+    FROM i_operationalacctgdocitem
+    WHERE companycode          = @ls_bkpf-bukrs
+      AND accountingdocument   = @ls_bkpf-belnr
+      AND fiscalyear           = @ls_bkpf-gjahr
+      AND financialaccounttype = 'S'
+    INTO TABLE @DATA(lt_item).
+  LOOP AT lt_item INTO DATA(ls_item) WHERE documentitemtext IS INITIAL.
     REFRESH lt_chg.
     ls_chg-fdname = 'SGTXT'.
-    ls_chg-oldval = ls_bseg-sgtxt.
+    ls_chg-oldval = ls_item-documentitemtext.
     ls_chg-newval = lv_text.
     APPEND ls_chg TO lt_chg.
     CALL FUNCTION 'FI_DOCUMENT_CHANGE'
@@ -1180,11 +1182,11 @@ FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
         i_awref              = ls_bkpf-awkey(10)
         i_aworg              = ls_bkpf-awkey+10(10)
         i_awsys              = ls_bkpf-awsys
-        i_obzei              = ls_bseg-buzei
+        i_obzei              = ls_item-accountingdocumentitem
         i_bukrs              = ls_bkpf-bukrs
         i_belnr              = ls_bkpf-belnr
         i_gjahr              = ls_bkpf-gjahr
-        i_buzei              = ls_bseg-buzei
+        i_buzei              = ls_item-accountingdocumentitem
       TABLES
         t_accchg             = lt_chg
       EXCEPTIONS
