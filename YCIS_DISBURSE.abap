@@ -632,7 +632,10 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
 *   'Posting block' flag on billing type G2 is OFF (VOFA). The credit-note
 *   output (PDF download + customer e-mail) is fired by output determination
 *   on G2 set to dispatch time 4 (send immediately) - no manual step.
-  CALL FUNCTION 'BAPI_BILLINGDOC_CREATEMULTIPLE'
+*   ATC (S/4HANA, Note 2438131 - material number field length extension):
+*   reviewed - no material number is passed or read here (billing data
+*   BAPIVBRK only carries the reference order), so no adaptation needed.
+  CALL FUNCTION 'BAPI_BILLINGDOC_CREATEMULTIPLE'     "#EC CI_USAGE_OK[2438131]
     TABLES
       billingdatain = lt_bill
       return        = lt_return
