@@ -2549,15 +2549,27 @@ FORM get_gl_items_direct
   TYPES: BEGIN OF lty_item.
            INCLUDE TYPE ty_fagll03.
   TYPES:   docln TYPE c LENGTH 6,            " ACDOCA-DOCLN is CHAR 6
+           poper TYPE poper,                   " ACDOCA-POPER (for JAMON)
          END OF lty_item.
 
   DATA: lt_sel   TYPE STANDARD TABLE OF lty_item,
         lt_items TYPE STANDARD TABLE OF ty_fagll03,
         lt_badi  TYPE faglposx_t,
         lo_badi  TYPE REF TO if_ex_fagl_items_ch_data,
-        lv_impl  TYPE c LENGTH 1.
+        lv_impl  TYPE c LENGTH 1,
+        lt_bstat TYPE RANGE OF bstat_d.
 
   CHECK it_docs IS NOT INITIAL.
+
+  "--- 0. Document status exactly as FAGLL03 selects it for the old call
+  "    (x_norm = 'X', x_glyec = ' ', x_enfoj = ' ', G/L view, ledger 0L):
+  "    BSTAT IN ( ' ', 'L', gl_only ). 'J' (year-end closing) and 'C'
+  "    (carry-forward) were NOT selected by the old call. Simulation /
+  "    prediction statuses cannot occur in standard ledger 0L.
+  lt_bstat = VALUE #( sign = 'I' option = 'EQ'
+                      ( low = space )
+                      ( low = 'L' )
+                      ( low = if_fins_acdoc_constants=>gc_document_status-gl_only ) ).
 
   "--- 1. Same rows FAGLL03 produced: GL view, ledger 0L, all items ----
   SELECT
@@ -2566,6 +2578,7 @@ FORM get_gl_items_direct
       gl~fiscalyear                       AS gjahr,
       gl~accountingdocumentitem           AS buzei,
       gl~ledgergllineitem                 AS docln,
+      gl~fiscalperiod                     AS poper,
       gl~glaccount                        AS hkont,
       gl~glaccount                        AS konto,
       gl~accountingdocumenttype           AS blart,
@@ -2611,6 +2624,8 @@ FORM get_gl_items_direct
         AND ev~accountingdocumentitem = gl~accountingdocumentitem
     FOR ALL ENTRIES IN @it_docs
     WHERE gl~ledger             = @lc_ledger
+      AND gl~accountingdocumentcategory IN @lt_bstat
+      AND gl~specialglcode      = @space
       AND gl~companycode        = @it_docs-bukrs
       AND gl~accountingdocument = @it_docs-belnr
       AND gl~fiscalyear         = @iv_gjahr
@@ -2621,12 +2636,13 @@ FORM get_gl_items_direct
   CHECK lt_sel IS NOT INITIAL.
 
   SORT lt_sel BY bukrs belnr gjahr docln.
-  MOVE-CORRESPONDING lt_sel TO lt_items.
 
-  "--- 2. Derived field FAGLPOSX-JAMON ('YYYY/MM') ----------------------
-  LOOP AT lt_items ASSIGNING FIELD-SYMBOL(<ls_item>).
-    <ls_item>-jamon = |{ <ls_item>-budat(4) }/{ <ls_item>-budat+4(2) }|.
+  "--- 2. Derived field FAGLPOSX-JAMON = fiscal year / posting period --
+  LOOP AT lt_sel ASSIGNING FIELD-SYMBOL(<ls_sel>).
+    <ls_sel>-jamon = |{ <ls_sel>-gjahr }/{ <ls_sel>-poper+1(2) }|.
   ENDLOOP.
+
+  MOVE-CORRESPONDING lt_sel TO lt_items.
 
   "--- 3. Run the same BAdI FAGLL03 ran (fills ZZGKONT_LTXT etc.) ------
   CALL METHOD cl_exithandler=>get_instance
