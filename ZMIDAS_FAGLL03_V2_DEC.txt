@@ -1,0 +1,360 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZMIDAS_FAGLL03_V2_DEC
+*&---------------------------------------------------------------------*
+*& Title             : Midas 3 ( BU P&L Automation )
+*& Program           : ZMIDAS_FAGLL03_V2_DEC
+*& Tcode             : ZMIDAS_FAGLL03_V2_DEC
+*& Author            : Gajanan Patil
+*& Functional Design : Arijit Podder
+*& Technical Design  : Gajanan Patil
+*& Creation Date     : 03.12.2025
+*& Transport Request : CRDK998672
+*& Change request    : 8000004907
+*& Description       : Call FAGLL03 Tcode to update custom table-Excluding Company Code 1000
+*&---------------------------------------------------------------------*
+
+TABLES: bsis,ska1,skb1,zmidas_fagll03.
+
+TYPES: BEGIN OF ty_fagll03,
+  "Code remediation changes S4 2025 Conversion Begin of change ABAP7
+*         u_zuonr      TYPE faglposx-u_zuonr,      "Assignment
+         u_zuonr      TYPE dzuonr,      "Assignment
+         belnr        TYPE faglposx-belnr,        "DocumentNo
+         blart        TYPE faglposx-blart,        "Doc Type
+         bldat        TYPE faglposx-bldat,        "Doc. Date
+         bschl        TYPE faglposx-bschl,        "PK
+         dmshb        TYPE faglposx-dmshb,        "Amount in local cur.
+         mwskz        TYPE faglposx-mwskz,        "Tx
+         augbl        TYPE faglposx-augbl,        "Clrng doc.
+         prctr        TYPE faglposx-prctr,        "Profit Ctr
+         sgtxt        TYPE faglposx-sgtxt,        "Text
+         koart        TYPE faglposx-koart,        "Acct type
+         wrshb        TYPE faglposx-wrshb,        "Amount in Document Currency ,Added by Pooja CR#8000009091 on 06.07.2023
+         gkart        TYPE faglposx-gkart,        "Offst.acct Type "Added by Gajanan - 25.09.2024 - CR#8000003569
+         gkont        TYPE faglposx-gkont,        "Offst.acct
+         aufnr        TYPE faglposx-aufnr,        "Order
+         budat        TYPE faglposx-budat,        "Pstng Date
+         bukrs        TYPE faglposx-bukrs,        "CoCd
+         buzei        TYPE faglposx-buzei,        "Itm
+         gjahr        TYPE faglposx-gjahr,        "Year
+         jamon        TYPE faglposx-jamon,        "Year/month
+         konto        TYPE faglposx-konto,        "Account
+         kostl        TYPE faglposx-kostl,        "Cost Ctr
+         qbshb        TYPE faglposx-qbshb,        "Withholding tax amnt
+         rebzg        TYPE faglposx-rebzg,        "Inv. ref.
+         shkzg        TYPE faglposx-shkzg,        "D/C
+         hwaer        TYPE faglposx-hwaer,        "Curr.
+         hwae2        TYPE faglposx-hwae2,        "Curr.2
+         pswbt        TYPE faglposx-pswbt,        "General ledger amt
+         hkont        TYPE faglposx-hkont,        "G/L
+         pswsl        TYPE faglposx-pswsl,      "Added by Pooja CR#8000009091 on 06.07.2023
+         kidno        TYPE faglposx-kidno,        "Payment reference
+         buzid        TYPE faglposx-buzid,        "LID
+*         u_usnam      TYPE faglposx-u_usnam,      "User name
+         u_usnam      TYPE usnam,      "User name
+*         u_xblnr_alt  TYPE faglposx-u_xblnr_alt,  "Alt Reference Number
+         u_xblnr_alt  TYPE xblnr_alt,  "Alt Reference Number
+         zzgkont_ltxt TYPE faglposx-zzgkont_ltxt, "Offsett Account Description
+*         u_ebeln      TYPE faglposx-u_ebeln,      "Purch.Doc.
+         u_ebeln      TYPE ebeln,      "Purch.Doc.
+         segment      TYPE faglposx-segment,      "Segment
+         xblnr        TYPE faglposx-xblnr,        "Reference
+*         u_lifnr      TYPE faglposx-u_lifnr,      "Vendor
+         u_lifnr      TYPE lifnr,      "Vendor
+  "Code remediation changes S4 2025 Conversion End of change ABAP7
+       END OF ty_fagll03,
+
+       "SOC by Pooja on 29.09.2022 CR#8000007907
+       BEGIN OF ty_zone_gl,
+         vbeln TYPE vbrk-vbeln,
+       END OF ty_zone_gl,
+       "EOC by Pooja on 29.09.2022 CR#8000007907
+       BEGIN OF ty_coas,
+         aufnr TYPE aufnr,
+         auart TYPE aufart,
+         kostv TYPE aufkostv,
+         akstl TYPE ps_akstl,
+       END OF ty_coas,
+
+       BEGIN OF ty_t003p,
+         spras TYPE spras,
+         auart TYPE auart,
+         txt   TYPE auarttext,
+       END OF ty_t003p,
+
+       BEGIN OF ty_csks,
+         kokrs TYPE kokrs,
+         kostl TYPE kostl,
+         datbi TYPE datbi,
+         name1 TYPE name1_gp,
+         name2 TYPE name2_gp,
+         name3 TYPE name3_gp,
+       END OF ty_csks,
+
+       BEGIN OF ty_cskt,
+         spras TYPE spras,
+         kokrs TYPE kokrs,
+         kostl TYPE kostl,
+         datbi TYPE datbi,
+         ltext TYPE ltext,
+       END OF ty_cskt,
+
+       BEGIN OF ty_kostl,
+         kostl TYPE kostl,
+       END OF ty_kostl,
+
+       BEGIN OF ty_t003t,
+         spras TYPE spras,
+         blart TYPE blart,
+         ltext TYPE ltext_003t,
+       END OF ty_t003t,
+
+       BEGIN OF ty_skat,
+         spras TYPE spras,
+         ktopl TYPE ktopl,
+         saknr TYPE saknr,
+         txt50 TYPE txt50_skat,
+       END OF ty_skat,
+
+       BEGIN OF ty_bkpf,
+         bukrs TYPE bukrs,
+         belnr TYPE belnr_d,
+         gjahr TYPE gjahr,
+         cpudt TYPE cpudt,
+         usnam TYPE usnam, "added by pooja on 09.03.2023 CR#8000007907
+       END OF ty_bkpf,
+
+       BEGIN OF ty_bseg,
+         bukrs TYPE bukrs,
+         belnr TYPE belnr_d,
+         gjahr TYPE gjahr,
+         buzei TYPE buzei,
+         hkont TYPE hkont,
+       END OF ty_bseg.
+
+*&---------------------------------------------------------------------*
+*& G L O B A L  V A R I A B L E S
+*&---------------------------------------------------------------------*
+
+DATA: ta_fagll03      TYPE TABLE OF ty_fagll03,
+      wa_fagll03      TYPE ty_fagll03,
+      ta_fagll03_tm   TYPE TABLE OF ty_fagll03, "Added by Gajanan - 28.10.2024 - CR#8000003569
+      wa_zone_gl1     TYPE ty_zone_gl, "LOC added by Pooja A on 29.09.2022 CR#8000007907
+      ta_zone_gl1     TYPE TABLE OF ty_zone_gl, "LOC added by Pooja A on 29.09.2022 CR#8000007907
+      ta_fagll03_temp TYPE TABLE OF ty_fagll03,
+      ta_final        TYPE TABLE OF zmidas_fagll03,
+      wa_final        TYPE zmidas_fagll03,
+      ta_coas         TYPE TABLE OF ty_coas,
+      wa_coas         TYPE ty_coas,
+      ta_t003p        TYPE TABLE OF ty_t003p,
+      wa_t003p        TYPE ty_t003p,
+      ta_csks         TYPE TABLE OF ty_csks,
+      wa_csks         TYPE ty_csks,
+      ta_cskt         TYPE TABLE OF ty_cskt,
+      wa_cskt         TYPE ty_cskt,
+      ta_kostl        TYPE TABLE OF ty_kostl,
+      wa_kostl        TYPE ty_kostl,
+      ta_t003t        TYPE TABLE OF ty_t003t,
+      wa_t003t        TYPE ty_t003t,
+      ta_skat         TYPE TABLE OF ty_skat,
+      wa_skat         TYPE ty_skat,
+      ta_bkpf         TYPE TABLE OF ty_bkpf,
+      ta_bseg         TYPE TABLE OF ty_bseg,
+      ta_bseg_temp    TYPE TABLE OF ty_bseg,
+      ta_reimb        TYPE TABLE OF zco_midas_reimb,
+      wa_reimb        TYPE zco_midas_reimb,
+      ta_pnl_hd       TYPE TABLE OF zco_midas_pnl_hd,
+      wa_pnl_hd       TYPE zco_midas_pnl_hd,
+      ta_elem         TYPE TABLE OF zco_midas_ic_ele,
+      wa_elem         TYPE zco_midas_ic_ele,
+      ta_prof_gl      TYPE TABLE OF zfi_prof_fpna_gl,
+      wa_prof_gl      TYPE zfi_prof_fpna_gl,
+      ta_prof_cc      TYPE TABLE OF zfi_prof_fpna_cc,
+      wa_prof_cc      TYPE zfi_prof_fpna_cc,
+      ta_prevmo       TYPE TABLE OF zfi_fpna_prevmo,
+      wa_prevmo       TYPE zfi_fpna_prevmo,
+      ta_prof_of      TYPE TABLE OF zfi_prof_fpna_of,
+      wa_prof_of      TYPE zfi_prof_fpna_of,
+      ta_fin_tag      TYPE TABLE OF zmidas_fin_tag,
+      wa_fin_tag      TYPE  zmidas_fin_tag,
+      ta_det_pnl      TYPE TABLE OF zmidas_det_pnl,
+      wa_det_pnl      TYPE zmidas_det_pnl,
+      ta_grp          TYPE TABLE OF zfi_fpna_grp,
+      wa_grp          TYPE zfi_fpna_grp,
+      ta_subgrp       TYPE TABLE OF zfi_fpna_subgrp,
+      wa_subgrp       TYPE zfi_fpna_subgrp,
+      ta_setleaf_sal  TYPE TABLE OF setleaf,
+      wa_setleaf_sal  TYPE setleaf,
+      ta_setlinet     TYPE TABLE OF setlinet,
+      wa_setlinet     TYPE setlinet,
+      ta_seg_rel      TYPE TABLE OF zmidas_seg_rel,
+      wa_seg_rel      TYPE zmidas_seg_rel,
+      "SOA by Gajanan - 24.09.2024 - CR#8000003569
+      ta_gl_pc        TYPE TABLE OF zmidas3_gl_pc,
+      wa_gl_pc        TYPE zmidas3_gl_pc,
+      lv_lifnr        TYPE lfa1-lifnr.
+"EOA by Gajanan - 24.09.2024 - CR#8000003569
+
+RANGES: ra_bukrs FOR t001-bukrs.
+
+
+DATA: o_ta_data     TYPE REF TO data,
+      gv_fisc_yr(4) TYPE c,
+      gv_pnl(200),
+      gv_pnl2(200),
+      gv_remark     TYPE string,
+      gv_forg_val   TYPE bapisoll,
+      gv_write_val  TYPE bapisoll,
+      lta_dyn_exp   TYPE rsds_texpr,
+      lwa_free      TYPE rsds_type,
+      lta_clause    TYPE rsds_twhere,
+      lta_field_rg  TYPE  rsds_trange,
+      lwa_field_rg  LIKE LINE OF lta_field_rg.
+
+FIELD-SYMBOLS: <fs_data> TYPE STANDARD TABLE.
+
+RANGES: r_saknr FOR ska1-saknr,
+        r_zone_gl FOR ska1-saknr,
+        r_bukrs FOR t001-bukrs,
+        r_kostl FOR csks-kostl,
+        r_not_cons FOR ska1-saknr,
+        r_sal_wages FOR ska1-saknr,
+        r_dist_opex FOR ska1-saknr,
+        r_dist_secfreight FOR ska1-saknr,
+        r_staff_welfare FOR ska1-saknr,
+        r_rnd_gl FOR ska1-saknr,
+        r_rnd_cc FOR csks-kostl,
+        r_forg_exg FOR ska1-saknr,
+        r_write_back FOR ska1-saknr,
+        r_europe_cc FOR t001-bukrs,
+        r_ib_cc FOR zmidas_fagll03-fin_kostl,
+        r_south_africa_cc FOR t001-bukrs,
+        r_emerging_market_cc FOR t001-bukrs,
+        r_awards_order FOR aufk-aufnr,
+        r_seg_tag_costc_api FOR zmidas_fagll03-fin_kostl,
+        r_seg_tag_costc_ipd FOR zmidas_fagll03-fin_kostl,
+        r_seg_tag_costc_ipd2 FOR zmidas_fagll03-fin_kostl,
+        r_seg_tag_costc_ipd3 FOR zmidas_fagll03-fin_kostl,"added by Pooja Adupala on 18.08.2022
+        r_seg_tag_pc_special FOR zmidas_fagll03-prctr,
+*        r_salwages_gl FOR zmidas_fagll03-hkont,
+        r_rx_othexp_io FOR zmidas_fagll03-aufnr,
+        r_freight_gl FOR ska1-saknr, "Added by Gajanan - 24.08.2025 - CR#8000003569
+        r_prov_dobtful_dbt_gl FOR ska1-saknr. "Added by Gajanan - 24.08.2025 - CR#8000003569
+*&---------------------------------------------------------------------*
+*& G L O B A L  C O N S T A N T S
+*&---------------------------------------------------------------------*
+
+
+CONSTANTS: co_gl_set              TYPE setleaf-setname VALUE 'ZMIDAS_GL_MAINSET',
+           co_not_consider        TYPE setleaf-setname VALUE 'ZMIDAS_NOT_CONSIDER_GL',
+           co_sal_wages           TYPE setleaf-setname VALUE 'ZMIDAS_SALWAGES_GL',
+           co_dist_opex           TYPE setleaf-setname VALUE 'ZMIDAS_DIST_OPEX_GL',
+           co_dist_secfreight     TYPE setleaf-setname VALUE 'ZMIDAS_DIST_SECFREIGHT',
+           co_staff_welfare       TYPE setleaf-setname VALUE 'ZMIDAS_STAFF_WELFARE',
+           co_rnd_gl              TYPE setleaf-setname VALUE 'ZMIDAS_RND_GL',
+           co_rnd_cc              TYPE setleaf-setname VALUE 'ZMIDAS_RND_CC',
+           co_europe_cc           TYPE setleaf-setname VALUE 'EUROPE_CC',
+           co_south_africa_cc     TYPE setleaf-setname VALUE 'SOUTH_AFRICA_CC',
+           co_emerging_market_cc  TYPE setleaf-setname VALUE 'EMERGING_MARKET_CC',
+           co_main_cat_write_back TYPE setleaf-setname VALUE 'MAIN_CAT_WRITE_BACK',
+           co_main_cat_forg_exg   TYPE setleaf-setname VALUE 'MAIN_CAT_FORG_EXG',
+           co_ib_cc               TYPE setleaf-setname VALUE 'ZMIDAS_IB_CC',
+           co_ach_awards_order    TYPE setleaf-setname VALUE 'ACH_AWARDS_ORDER',
+           co_seg_tag_costc_api   TYPE setleaf-setname VALUE 'BU_NA_SEG_TAG_COSTC_API',
+           co_seg_tag_pc_special  TYPE setleaf-setname VALUE 'BU_NA_SEG_TAG_PC_SPECIAL',
+           co_seg_tag_costc_ipd   TYPE setleaf-setname VALUE 'BU_NA_SEG_TAG_COSTC_IPD',
+           co_seg_tag_costc_ipd2  TYPE setleaf-setname VALUE 'BU_NA_SEG_TAG_COSTC_IPD2',
+           co_seg_tag_costc_ipd3  TYPE setleaf-setname VALUE 'BU_NA_SEG_TAG_COSTC_IPD3', "added by Pooja Adupala on 18.08.2022
+           co_fagll03_zone_gl     TYPE setleaf-setname VALUE 'ZMIDAS_FAGLL03_ZONE_GL', "added by Pooja Adupala on 29.09.2022
+           co_rx_other_exp_io     TYPE setleaf-setname VALUE 'RX_OTHER_EXP_IO', "added by Pooja Adupala on 01.03.2023
+*           co_salwages_gl         TYPE setleaf-setname VALUE 'ZMIDAS_SALWAGES_GL', "added by Pooja Adupala on 01.03.2023
+           co_freight_gl          TYPE setleaf-setname VALUE 'ZMIDAS_FREIGHT', "Added by Gajanan - 24.08.2025 - CR#8000003569
+           co_prov_dobtful_dbt_gl TYPE setleaf-setname VALUE 'ZMIDAS_PROV_DOBTFUL_DBT', "Added by Gajanan - 24.08.2025 - CR#8000003569
+           co_i(1)                VALUE 'I',
+           co_eq(2)               VALUE 'EQ',
+           co_s(1)                VALUE 'S',
+           co_e(1)                VALUE 'E',
+           co_9(1)                VALUE '9',
+           co_z8                  TYPE blart VALUE 'Z8',
+           co_ep                  TYPE blart VALUE 'EP',
+           co_5190010             TYPE hkont VALUE '0005190010',
+           co_5190001             TYPE hkont VALUE '0005190001',
+           co_5350011             TYPE hkont VALUE '0005350011',
+           co_5350051             TYPE hkont VALUE '0005350051',
+           co_5190006             TYPE hkont VALUE '0005190006',
+           co_5180004             TYPE hkont VALUE '0005180004',
+           co_5230006             TYPE hkont VALUE '0005230006',
+           co_5350058             TYPE hkont VALUE '0005350058',
+           co_5080013             TYPE hkont VALUE '0005080013',
+           co_5310003             TYPE hkont VALUE '0005310003',
+           co_5310001             TYPE hkont VALUE '0005310001',
+           co_5350009             TYPE hkont VALUE '0005350009',
+           co_5180050             TYPE hkont VALUE '0005180050',
+           co_503001              TYPE hkont VALUE '0000503001',
+           co_10hmu01704          TYPE kostl VALUE '10HMU01704',
+           co_10hmu01521          TYPE kostl VALUE '10HMU01521',
+           co_10hmu01010          TYPE kostl VALUE '10HMU01010',
+           co_10hmu01725          TYPE kostl VALUE '10HMU01725',
+           co_10hmu01d01          TYPE kostl VALUE '10HMU01D01',
+           co_10hmu01d05          TYPE kostl VALUE '10HMU01D05',
+           co_1000                TYPE bukrs VALUE '1000',
+           co_3800                TYPE bukrs VALUE '3800',
+           co_5200                TYPE bukrs VALUE '5200',
+           co_5400                TYPE bukrs VALUE '5400',
+           co_5000                TYPE bukrs VALUE '5000',
+           co_4500                TYPE bukrs VALUE '4500',
+           co_4900                TYPE bukrs VALUE '4900',
+           co_6100                TYPE bukrs VALUE '6100',
+           co_2260011             TYPE gkont VALUE '0002260011',
+           co_2260012             TYPE gkont VALUE '0002260012',
+           co_marketing_depot     TYPE zde_cc_type VALUE 'Marketing/Depot',
+           co_sales_office_cc     TYPE zde_cc_type VALUE 'sales office cost center',
+           co_distribution_cc     TYPE zde_cc_type VALUE 'Distribution cc',
+           co_esproute            TYPE zde_esp_conf VALUE 'ESPROute',
+           co_achiever_awards     TYPE zde_esp_conf VALUE 'achiever awards',
+           co_system              TYPE zde_midas_type VALUE 'SYSTEM'.
+
+* Start of Change Inc 8000003399 | TR CRDK989166 | Prathamesh Parab | 09.01.2024
+TYPES: BEGIN OF ty_kna1,
+         kunnr TYPE kunnr,
+         vbund TYPE rassc,
+       END OF ty_kna1.
+
+DATA: ta_kna1 TYPE TABLE OF ty_kna1,
+      wa_kna1 TYPE ty_kna1.
+* End of Change Inc 8000003399 | TR CRDK989166 | Prathamesh Parab | 09.01.2024
+* Start of Change Inc 8000003399 | TR CRDK989314 | Prathamesh Parab | 23.01.2024
+TYPES: BEGIN OF ty_vbrk,
+         vbeln TYPE vbeln,
+         kunrg TYPE kunrg,
+         kunag TYPE kunag, "by Gajanan - 24.08.2025 - CR#8000003569
+       END OF ty_vbrk.
+
+DATA: ta_vbrk TYPE TABLE OF ty_vbrk,
+      wa_vbrk TYPE          ty_vbrk.
+* End of Change Inc 8000003399 | TR CRDK989314 | Prathamesh Parab | 23.01.2024
+
+****SOA by Gajanan - 24.08.2025 - CR#8000003569
+TYPES: BEGIN OF ty_u_zuonr,
+         kunnr TYPE kunnr,
+       END OF ty_u_zuonr.
+
+DATA: ta_u_zuonr TYPE TABLE OF ty_u_zuonr,
+      wa_u_zuonr TYPE ty_u_zuonr,
+      lv_lifnr1  TYPE lfa1-lifnr.
+****EOA by Gajanan - 24.08.2025 - CR#8000003569
+
+
+
+*&---------------------------------------------------------------------*
+*& S E L E C T I O N  S C R E E N
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-s01.
+
+SELECT-OPTIONS: s_bukrs FOR bsis-bukrs OBLIGATORY NO INTERVALS. "Company Code
+SELECT-OPTIONS: s_budat FOR bsis-budat, "Posting Date
+                s_saknr FOR ska1-saknr , "GL Set
+                s_erdat FOR skb1-erdat OBLIGATORY. "Entry Date
+
+SELECTION-SCREEN END OF BLOCK b1.

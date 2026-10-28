@@ -1,0 +1,45 @@
+*&---------------------------------------------------------------------*
+*& Report  ZMIDAS_FAGLL03_V2
+*&
+*&---------------------------------------------------------------------*
+*& Title             : Midas 3 ( BU P&L Automation )
+*& Program           : ZMIDAS_FAGLL03_V2
+*& Tcode             : ZMIDAS_FAGLL03_V2
+*& Author            : Gajanan Patil
+*& Functional Design : Arijit Podder
+*& Technical Design  : Gajanan Patil
+*& Creation Date     : 03.12.2025
+*& Transport Request : CRDK998672
+*& Change request    : 8000004907
+*& Description       : Call FAGLL03 Tcode to update custom table-Excluding Company Code 1000
+*&---------------------------------------------------------------------*
+REPORT zmidas_fagll03_v2.
+
+INCLUDE zmidas_fagll03_v2_dec.
+INCLUDE zmidas_fagll03_v2_forms.
+
+INITIALIZATION.
+  PERFORM refresh_tab.
+  PERFORM hide_sel_opt_interval.
+
+AT SELECTION-SCREEN.
+*  "Exclude Company Code based on ZPARAM_TABLE
+*  IF s_bukrs[] IS NOT INITIAL.
+*    SELECT * FROM zparam_table
+*      INTO TABLE @DATA(ta_param)
+*      WHERE id_name = 'COCD_V2_EX'.
+*    IF NOT ta_param IS INITIAL.
+*      REFRESH:ra_bukrs[].
+*      LOOP AT ta_param INTO DATA(wa_param).
+*        APPEND VALUE #( sign = 'I' option = 'EQ' low = wa_param-param_name ) TO ra_bukrs.
+*        CLEAR: wa_param.
+*      ENDLOOP.
+*
+*      DELETE s_bukrs[] WHERE low IN ra_bukrs[].
+*    ENDIF.
+*  ENDIF.
+
+START-OF-SELECTION.
+  PERFORM get_glset.
+  PERFORM get_data.
+  PERFORM update_tab.
