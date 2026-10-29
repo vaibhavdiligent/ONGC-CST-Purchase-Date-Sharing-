@@ -11178,17 +11178,7 @@ FORM create_field_catalog .
 **SOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
 *    IF R_MONTH = 'X' OR R_MONTH1 EQ 'X' OR R_RPD EQ 'X' OR R_RHD EQ 'X' OR R_RLLD EQ 'X' OR C_MAINT EQ 'X'." SOC Commented by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
 * CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
-    gt_fieldcat-fieldname = 'P_R_IND'.
-    gt_fieldcat-outputlen    =  10.
-    gt_fieldcat-just         =  'L' .
-    gt_fieldcat-col_pos      =  w_sr.
-    gt_fieldcat-seltext_s    = 'P/R/S Indicator'.
-    gt_fieldcat-seltext_m    = 'P/R/S Indicator'.
-    gt_fieldcat-ddictxt      = 'M'.
-    gt_fieldcat-do_sum       = space.
-    APPEND gt_fieldcat.
-    CLEAR gt_fieldcat.
-    w_sr = w_sr  + 1  .
+    " P/R/S Indicator column removed (GAIL UAT 29.10.2026)
     gt_fieldcat-fieldname = 'P_SC_IND'.
     gt_fieldcat-outputlen    =  10.
     gt_fieldcat-just         =  'L' .

@@ -11388,17 +11388,7 @@ FORM create_field_catalog .
 * CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers
 * (not for the Strategic / Additional May-June discount - GAIL 26.10.2026)
     IF r_addmj IS INITIAL.
-      gt_fieldcat-fieldname = 'P_R_IND'.
-      gt_fieldcat-outputlen    =  10.
-      gt_fieldcat-just         =  'L' .
-      gt_fieldcat-col_pos      =  w_sr.
-      gt_fieldcat-seltext_s    = 'P/R/S Indicator'.
-      gt_fieldcat-seltext_m    = 'P/R/S Indicator'.
-      gt_fieldcat-ddictxt      = 'M'.
-      gt_fieldcat-do_sum       = space.
-      APPEND gt_fieldcat.
-      CLEAR gt_fieldcat.
-      w_sr = w_sr  + 1  .
+      " P/R/S Indicator column removed (GAIL UAT 29.10.2026)
       gt_fieldcat-fieldname = 'P_SC_IND'.
       gt_fieldcat-outputlen    =  10.
       gt_fieldcat-just         =  'L' .

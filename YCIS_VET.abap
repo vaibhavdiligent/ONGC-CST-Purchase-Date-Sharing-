@@ -245,7 +245,7 @@ FORM build_fieldcat.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
   add_fc 'SALES_OFF'   'Sales Office'    ''.
-  add_fc 'SEAS_IND'    'P/R/S Indicator'    ''.
+*  P/R/S Indicator column removed (GAIL UAT 29.10.2026)
   add_fc 'SC_IND'      'Seasonal Indicator' ''.
   add_fc 'WAIVER_1'    'Waiver Month 1'     ''.
   add_fc 'WAIVER_2'    'Waiver Month 2'     ''.

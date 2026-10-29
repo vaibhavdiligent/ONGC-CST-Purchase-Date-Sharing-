@@ -224,7 +224,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM build_out.
   DATA: lv_posted TYPE flag,
-        lv_upd    TYPE flag.
+        lv_upd    TYPE flag,
+        lv_txtok  TYPE flag.
   REFRESH gt_out.
   PERFORM read_qais_master.
   LOOP AT gt_appr INTO gs_appr.
@@ -242,6 +243,13 @@ FORM build_out.
         MODIFY ycis_apprvl FROM gs_appr.
         lv_upd = 'X'.
       ENDIF.
+    ENDIF.
+*   GAIL UAT 29.10.2026: posted credit notes whose expense G/L line has no
+*   text yet get 'INVOICE <reference>' when the Executed view is opened
+    IF p_exec = 'X' AND gs_appr-cn_doc IS NOT INITIAL
+                    AND gs_appr-cn_doc <> 'GROUP OK'.
+      PERFORM set_gl_text USING gs_appr-cn_doc gs_appr-purch_no ' '
+                          CHANGING lv_txtok.
     ENDIF.
     APPEND gs_out TO gt_out.
   ENDLOOP.
@@ -285,7 +293,7 @@ FORM build_fieldcat.
   add_fc 'CUST_NAME'   'Customer Name'   ''.
   add_fc 'KVGR2'       'Cust Group'      ''.
   add_fc 'SALES_OFF'   'Sales Office'    ''.
-  add_fc 'SEAS_IND'    'P/R/S Indicator'    ''.
+*  P/R/S Indicator column removed (GAIL UAT 29.10.2026)
   add_fc 'SC_IND'      'Seasonal Indicator' ''.
   add_fc 'WAIVER_1'    'Waiver Month 1'     ''.
   add_fc 'WAIVER_2'    'Waiver Month 2'     ''.
@@ -547,7 +555,7 @@ FORM process_selected USING p_action TYPE char1.
 *   CIS UAT 23.10.2026: text on the expense G/L line of the accounting
 *   document ('INVOICE <reference>') - replaces the manual YRFR126 step
     CLEAR lv_txtok.
-    PERFORM set_gl_text USING ls_cn-cn_doc ls_cn-purch_no CHANGING lv_txtok.
+    PERFORM set_gl_text USING ls_cn-cn_doc ls_cn-purch_no 'X' CHANGING lv_txtok.
     IF lv_txtok = 'X'.
       lv_ntext = lv_ntext + 1.
     ENDIF.
@@ -1131,6 +1139,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
                           p_ref   TYPE clike
+                          p_show  TYPE c
                  CHANGING p_ok    TYPE flag.
   DATA: ls_bkpf   TYPE bkpf,
         lt_chg    TYPE STANDARD TABLE OF accchg,
@@ -1179,13 +1188,13 @@ FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
     ls_chg-oldval = ls_item-documentitemtext.
     ls_chg-newval = lv_text.
     APPEND ls_chg TO lt_chg.
+*   GAIL UAT 29.10.2026: the text was still blank - the change is now
+*   addressed to the FI document line itself (company code / document /
+*   year / line item). The reference fields AWTYP/AWREF/AWORG/OBZEI are no
+*   longer passed: OBZEI is the line of the ORIGINAL (billing) document, not
+*   the FI line item, so the line was not found and nothing was changed.
     CALL FUNCTION 'FI_DOCUMENT_CHANGE'
       EXPORTING
-        i_awtyp              = ls_bkpf-awtyp
-        i_awref              = ls_bkpf-awkey(10)
-        i_aworg              = ls_bkpf-awkey+10(10)
-        i_awsys              = ls_bkpf-awsys
-        i_obzei              = ls_item-accountingdocumentitem
         i_bukrs              = ls_bkpf-bukrs
         i_belnr              = ls_bkpf-belnr
         i_gjahr              = ls_bkpf-gjahr
@@ -1201,11 +1210,17 @@ FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
         OTHERS               = 6.
     IF sy-subrc = 0.
       p_ok = 'X'.
+    ELSEIF p_show = 'X'.
+*     show why the text could not be set (e.g. document change rules OB32)
+      IF sy-msgid IS NOT INITIAL.
+        MESSAGE ID sy-msgid TYPE 'I' NUMBER sy-msgno
+                WITH sy-msgv1 sy-msgv2 sy-msgv3 sy-msgv4.
+      ELSE.
+        MESSAGE |G/L text not set on document { ls_bkpf-belnr } line { ls_item-accountingdocumentitem } (FI_DOCUMENT_CHANGE rc { sy-subrc })| TYPE 'I'.
+      ENDIF.
     ENDIF.
   ENDLOOP.
   IF p_ok = 'X'.
     COMMIT WORK AND WAIT.
-  ELSE.
-    ROLLBACK WORK.
   ENDIF.
 ENDFORM.
