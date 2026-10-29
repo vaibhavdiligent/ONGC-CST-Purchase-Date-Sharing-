@@ -121,12 +121,12 @@ FORM get_gl_items_direct
       ev~withholdingtaxamount             AS qbshb,     " BSEG-QBSHB (signed)
       ev~paymentreference                 AS kidno,     " BSEG-KIDNO
       ev~accountingdocumentitemtype       AS buzid      " BSEG-BUZID
-    FROM i_journalentryitem AS gl
-      INNER JOIN i_journalentry AS hd
+    FROM i_journalentryitem WITH PRIVILEGED ACCESS AS gl        " no silent DCL row loss
+      INNER JOIN i_journalentry WITH PRIVILEGED ACCESS AS hd
         ON  hd~companycode        = gl~companycode
         AND hd~accountingdocument = gl~accountingdocument
         AND hd~fiscalyear         = gl~fiscalyear
-      LEFT OUTER JOIN i_operationalacctgdocitem AS ev
+      LEFT OUTER JOIN i_operationalacctgdocitem WITH PRIVILEGED ACCESS AS ev
         ON  ev~companycode            = gl~companycode
         AND ev~accountingdocument     = gl~accountingdocument
         AND ev~fiscalyear             = gl~fiscalyear

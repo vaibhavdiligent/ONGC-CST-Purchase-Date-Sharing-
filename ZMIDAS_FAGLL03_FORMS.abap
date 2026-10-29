@@ -588,7 +588,8 @@ FORM get_glset.
 **          AND hkont IN r_saknr."Commented by Pooja on 17.10.2022  CR# 8000007907
  SELECT  COMPANYCODE AS BUKRS , ACCOUNTINGDOCUMENT AS BELNR ,
 FISCALYEAR AS GJAHR , ACCOUNTINGDOCUMENTITEM AS BUZEI , GLACCOUNT AS
-HKONT FROM I_OPERATIONALACCTGDOCITEM FOR ALL ENTRIES IN @TA_BKPF WHERE
+HKONT FROM I_OPERATIONALACCTGDOCITEM WITH PRIVILEGED ACCESS "SAP Note 3185840 fix: no DCL row loss
+ FOR ALL ENTRIES IN @TA_BKPF WHERE
 COMPANYCODE = @TA_BKPF-BUKRS AND ACCOUNTINGDOCUMENT = @TA_BKPF-BELNR
 AND FISCALYEAR = @TA_BKPF-GJAHR AND GLACCOUNT IN @S_SAKNR INTO TABLE
 @TA_BSEG .
@@ -2612,12 +2613,12 @@ FORM get_gl_items_direct
       ev~withholdingtaxamount             AS qbshb,     " BSEG-QBSHB (signed)
       ev~paymentreference                 AS kidno,     " BSEG-KIDNO
       ev~accountingdocumentitemtype       AS buzid      " BSEG-BUZID
-    FROM i_journalentryitem AS gl
-      INNER JOIN i_journalentry AS hd
+    FROM i_journalentryitem WITH PRIVILEGED ACCESS AS gl        " no silent DCL row loss
+      INNER JOIN i_journalentry WITH PRIVILEGED ACCESS AS hd
         ON  hd~companycode        = gl~companycode
         AND hd~accountingdocument = gl~accountingdocument
         AND hd~fiscalyear         = gl~fiscalyear
-      LEFT OUTER JOIN i_operationalacctgdocitem AS ev
+      LEFT OUTER JOIN i_operationalacctgdocitem WITH PRIVILEGED ACCESS AS ev
         ON  ev~companycode            = gl~companycode
         AND ev~accountingdocument     = gl~accountingdocument
         AND ev~fiscalyear             = gl~fiscalyear
