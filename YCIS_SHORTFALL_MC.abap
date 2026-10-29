@@ -57,10 +57,18 @@ DATA: gt_sf     TYPE STANDARD TABLE OF ycis_shortfall,
       gv_checker TYPE flag.        " 'X' = current user is a CPC L3 checker
 
 *--------------------------------------------------------------------*
-SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE t_b1.
 SELECT-OPTIONS: s_prd  FOR ycis_shortfall-period_from,
                 s_mat  FOR ycis_shortfall-matnr.
 SELECTION-SCREEN END OF BLOCK b1.
+
+*--------------------------------------------------------------------*
+* GAIL DVR test 29.10.2026: field names instead of the technical names
+* S_PRD / S_MAT (set here, independent of maintained selection texts)
+INITIALIZATION.
+  t_b1 = 'Selection Criteria'.
+  %_s_prd_%_app_%-text = 'Period From'.
+  %_s_mat_%_app_%-text = 'Material / Grade'.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
@@ -96,6 +104,14 @@ FORM build_out.
   LOOP AT gt_sf INTO gs_sf.
     CLEAR gs_out.
     MOVE-CORRESPONDING gs_sf TO gs_out.
+*   GAIL DVR test 29.10.2026: the maker enters the rows in table maintenance
+*   (T-code YGCIS_SHORTFALL, SM30), which fills CREATED_BY / CREATED_ON -
+*   not MAKER / MAKER_DATE - so Maker and Maker Date were blank. Show the
+*   creator as the maker when MAKER is not filled.
+    IF gs_out-maker IS INITIAL.
+      gs_out-maker      = gs_sf-created_by.
+      gs_out-maker_date = gs_sf-created_on.
+    ENDIF.
     PERFORM status_text USING gs_sf-appr_status CHANGING gs_out-status_txt.
     APPEND gs_out TO gt_out.
   ENDLOOP.
@@ -253,6 +269,8 @@ FORM add_row.
   gs_sf-appr_status = 'P'.
   gs_sf-maker       = sy-uname.
   gs_sf-maker_date  = sy-datum.
+  gs_sf-created_by  = sy-uname.          " same fields as table maintenance
+  gs_sf-created_on  = sy-datum.
   gs_sf-maker_time  = sy-uzeit.
   CLEAR: gs_sf-checker, gs_sf-chk_date, gs_sf-chk_time, gs_sf-chk_rem.
 
