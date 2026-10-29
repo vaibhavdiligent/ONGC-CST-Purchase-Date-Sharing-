@@ -94,6 +94,18 @@ START-OF-SELECTION.
   lv_total = REDUCE i( INIT s = 0 FOR c IN lt_cnt NEXT s = s + c-cnt ).
   _print 'C  ACDOCA 0L rows, FAGLL03 filters (new logic result)' lv_total lt_cnt.
 
+  "--- C2: offsetting account filled? (KBA 2806316: migrated docs may
+  "        have empty ACDOCA-GKONT unless 'Fill the Offsetting Account
+  "        in FI Documents' was run after conversion) ---------------
+  SELECT rbukrs AS bukrs, COUNT(*) AS cnt FROM acdoca
+    FOR ALL ENTRIES IN @lt_doc
+    WHERE rldnr = '0L' AND rbukrs = @lt_doc-bukrs AND belnr = @lt_doc-belnr
+      AND gjahr = @lt_doc-gjahr AND racct IN @s_saknr AND budat IN @s_budat
+      AND bstat IN @lt_bstat AND umskz = @space AND gkont = @space
+    GROUP BY rbukrs INTO TABLE @lt_cnt.
+  lv_total = REDUCE i( INIT s = 0 FOR c IN lt_cnt NEXT s = s + c-cnt ).
+  _print 'C2 ... of which ACDOCA-GKONT empty (should be ~0, see KBA 2806316)' lv_total lt_cnt.
+
   "--- D: what the old run stored -----------------------------------
   SELECT bukrs, COUNT(*) AS cnt FROM zmidas_fagll03
     WHERE bukrs IN @s_bukrs AND cpudt = @p_erdat
