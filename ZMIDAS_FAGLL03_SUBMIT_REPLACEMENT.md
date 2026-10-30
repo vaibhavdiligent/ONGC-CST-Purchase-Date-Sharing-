@@ -134,3 +134,11 @@ All CDS element names above were verified against the system export
 Run old and new for one `p_erdat`/company code and compare
 `lines( ta_fagll03 )` and `SUM( dmshb )` grouped by `bukrs hkont`
 before removing the SUBMIT block.
+
+## SAP notes reviewed (full text, 30.10.2026)
+
+| Note | What it says | Consequence for ZMIDAS |
+|---|---|---|
+| **3185840** (v4, 12.10.2026) | In S/4 FAGLL03 reads ACDOCA+BKPF+BSEG generically, merges and converts every field into one internal table before the ALV (`SAPLFAGL_ITEMS_SELECT`, `CONVERT_DATA_WITH_BSEG`); dumps even for 1 day / 1 CoCd / 1 account. **Resolution: use FAGLL03H, which selects directly and optimised against ACDOCA.** | SUBMIT of FAGLL03 must go. For a program, "optimised selection directly against ACDOCA" = `FORM get_gl_items_direct`. |
+| **3533517** (v4, 14.07.2025) | S/4 FAGLL03 takes its dynamic-selection fields from `FAGL_GET_REPORTING_FIELDS` (`FINSV_ACDOC_FCT` / `FINS_FCT`); fields not in that catalogue are deleted (MSITEM103). | Confirms that free selections passed with FAGLFLEXA field names (`DOCNR`/`RYEAR`) are not supported in S/4 – the silent drop found in the code. |
+| **2806316** (v3, 11.04.2024) | For **migrated** documents (`ACDOCA-MIG_SOURCE <> space`) `ACDOCA-GKONT` is filled only if the document is CO-relevant and COEP had GKONT. Empty GKONT otherwise is **expected behaviour**; the post-migration activity fills BSEG-GKONT only. | In CRS, December-2025 documents are migrated: GKONT-based tagging (ZFI_PROF_FPNA_OF, ZMIDAS_EU_TAG, CoCd 4500, final vendor) can differ from ECC production for those rows (7,969 rows with empty GKONT in the CRS dump). Not a program error; applies equally to S/4 FAGLL03 (note 2588267). Post go-live documents carry GKONT from posting. |
