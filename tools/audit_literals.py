@@ -17,7 +17,9 @@ the repository are not ours to change.
 import re, sys
 
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap']
+         'src/zsds_cust_tmpl_download.prog.abap',
+         'src/zsds_cust_bp_maint.prog.abap',
+         'src/zmms_vend_bp_maint.prog.abap']
 
 BLANK = r"'\s+'"                      # a quoted literal of blanks only
 findings = []

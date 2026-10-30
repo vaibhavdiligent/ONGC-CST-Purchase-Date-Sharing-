@@ -25,7 +25,9 @@ from abap_parse import statements, unchain
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap',
-         'tools/cipla/download_skeleton.abap']
+         'tools/cipla/download_skeleton.abap',
+         'src/zsds_cust_bp_maint.prog.abap',
+         'src/zmms_vend_bp_maint.prog.abap']
 
 CALL = r'(?:\w+(?:=>|->))*\w+\s*\('          # meth( / cls=>meth( / obj->meth(
 EXPR = r'(?:COND|SWITCH|CONV|VALUE|NEW|CORRESPONDING|REDUCE|FILTER|EXACT|REF)\s+[#\w]'

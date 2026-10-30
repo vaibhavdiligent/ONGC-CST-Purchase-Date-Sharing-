@@ -20,7 +20,9 @@ import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap']
+         'src/zsds_cust_tmpl_download.prog.abap',
+         'src/zsds_cust_bp_maint.prog.abap',
+         'src/zmms_vend_bp_maint.prog.abap']
 
 # A PARAMETERS or SELECT-OPTIONS statement runs to its closing period and may
 # be chained, so the whole statement is taken and every element's name read off
