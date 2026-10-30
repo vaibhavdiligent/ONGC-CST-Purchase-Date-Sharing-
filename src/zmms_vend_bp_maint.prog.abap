@@ -96,8 +96,6 @@ SELECTION-SCREEN END OF BLOCK b3.
 " checked when the program is run instead.
 SELECTION-SCREEN BEGIN OF BLOCK b4 WITH FRAME TITLE TEXT-005.
 PARAMETERS: p_file  TYPE ty_path LOWER CASE,
-            p_pc    RADIOBUTTON GROUP g1 DEFAULT 'X',
-            p_srv   RADIOBUTTON GROUP g1,
             p_xlsx  RADIOBUTTON GROUP g2 USER-COMMAND ft DEFAULT 'X',
             p_txt   RADIOBUTTON GROUP g2,
             p_empty AS CHECKBOX.
@@ -478,10 +476,7 @@ CLASS lcl_screen IMPLEMENTATION.
             iv_value = COND #( WHEN p_stop = abap_true THEN `Yes` ELSE `No` ) ).
       show( iv_label = `Heading rows to skip` iv_value = |{ p_skip }| ).
     ENDIF.
-    show( iv_label = `File`     iv_value = CONV #( p_file ) ).
-    show( iv_label = `Location`
-          iv_value = COND #( WHEN p_pc = abap_true THEN `PC`
-                             WHEN p_srv = abap_true THEN `Application server` ) ).
+    show( iv_label = `File (on the PC)` iv_value = CONV #( p_file ) ).
     show( iv_label = `Format`
           iv_value = COND #( WHEN p_xlsx = abap_true THEN `Excel (.xlsx)`
                              ELSE `Text, tab-separated (.txt)` ) ).

@@ -133,18 +133,6 @@
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_PC</KEY>
-     <ENTRY>D       .On the PC</ENTRY>
-     <LENGTH>18</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_SRV</KEY>
-     <ENTRY>D       .On the application server</ENTRY>
-     <LENGTH>34</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
      <KEY>P_XLSX</KEY>
      <ENTRY>D       .Excel (.xlsx)</ENTRY>
      <LENGTH>22</LENGTH>
