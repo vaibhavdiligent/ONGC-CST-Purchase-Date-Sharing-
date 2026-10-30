@@ -1,0 +1,1323 @@
+*&---------------------------------------------------------------------*
+*& Report  ZCO_PGI_RATE
+*&
+*&---------------------------------------------------------------------*
+* Program
+* Title             : PGI Rate Upload
+* Author            : Sushil Pandey
+* Program Type      : Executable
+* Creation Date     : 18.05.2021
+* Transaction       : ZCO_PGI_RATE
+* Functional design : FS_CO_031_MIDAS2_V7.0
+* Technical design  :
+* Change request    : 8000007120
+* Transport number  : CRDK977824, CRDK978246
+* Description       : PGI Rate Upload-in table ZCO_PGI_RATE
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : 25/05/2022
+* Author          : Pooja Adupala
+* Functional      : Shashank Sharma
+* Change request  : 8000007907
+* Transport number: CRDK983331
+* Description     : To change logic for Exchange rate
+*&---------------------------------------------------------------------*
+*& Author            : Pooja Adupala
+*& Functional Design : Shashank Sharma
+*& Technical Design  : Pooja Adupala
+*& Creation Date     : 18.07.2023
+*& Transport Request : CRDK987477
+*& Change request    : 8000009091
+*& Description       : Fetch bamng instead of menge from EKBE
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : 27.10.2026
+* Change          : Code Remediation S4 2025_A - PGI rate checking issue
+*                   observed in T-code ZCO_PGI_RATE after S/4HANA upgrade
+* Description     :
+*  1. Obsolete table FAGLFLEXA (SE11 shows Replacement Object
+*     FGL_FAGLFLEXA). Custom views ZFI_COPA / ZFI_COPA_PGIR are DDIC
+*     database views on FAGLFLEXA + BKPF. The replacement object is only
+*     applied to Open SQL on FAGLFLEXA itself, NOT to a database view
+*     built on it, so ZFI_COPA_PGIR reads the physical FAGLFLEXA table
+*     which is no longer updated after the upgrade -> new PGI postings
+*     are not selected and PGI rate is not updated.
+*     Solution: read SAP compatibility view FGL_FAGLFLEXA (Replacement
+*     Object of FAGLFLEXA, SQL view FGLV_FAGLFLEXA) joined with BKPF -
+*     same fields and joins as ZFI_COPA_PGIR.
+*  2. Obsolete table MSEG (compatibility view on MATDOC in S/4HANA).
+*     Solution: read MATDOC with RECORD_TYPE = 'MDOC'.
+*  3. Company code currency was read with WA_ZFI_COPA (last row of the
+*     header loop) instead of the current row -> wrong currency/rate
+*     when more than one company code is selected.
+*  4. Exchange rate: INR->FC branch read the FC->INR table (rate stayed
+*     blank), rate of previous company code was reused when no rate was
+*     found, indirect quotation / TFACT ignored, UKURS sum could overflow.
+*  5. REVERSE / UKURS1 carried over from previous material doc line.
+*  6. AWKEY split dumps if AWKEY length <= 4.
+*  Each change below is marked with BEGIN/END OF CHANGE 27.10.2026,
+*  with the old code commented and the Issue/Solution written inline.
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : 30.10.2026
+* Change          : PGI rate check CRS vs production (material 32042899)
+* Description     :
+*  A. Purchase qty / value per batch (EKBE, BWART 101) were summed over
+*     ONE goods receipt per posting date, but the surviving record per
+*     date was whichever row the database returned first (SORT by
+*     MATNR CHARG BUDAT only, then DELETE ADJACENT DUPLICATES). On HANA
+*     the row order differs from the old database, so a different GR
+*     (e.g. a zero-value sample GR) survived -> different purchase
+*     qty/value and PGI rate. Fixed: deterministic order, the GR with
+*     the highest value (then quantity, then document key) per date is
+*     kept - this reproduces the production results for the test case.
+*  B. Vendor per batch was taken from the FIRST row of the EKBE
+*     selection (no ORDER BY, former MSSQL index hint removed by ATC
+*     remediation) -> vendor differed between systems. Fixed: earliest
+*     goods receipt (GJAHR, BELNR, BUZEI ascending) is used.
+*  C. New optional parameter P_PUDAT "Purchases posted up to": goods
+*     receipts posted after this date are ignored. Needed to compare
+*     with a production run made earlier (receipts posted later, e.g.
+*     25.02.2026 / 02.03.2026, are otherwise included because they fall
+*     in the same fiscal year). Blank = unchanged behaviour.
+*  Changes are marked BEGIN/END OF CHANGE 30.10.2026.
+*----------------------------------------------------------------------*
+
+
+REPORT zco_pgi_rate.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : ZFI_COPA_PGIR is a view on obsolete FAGLFLEXA (Replacement
+*           Object FGL_FAGLFLEXA) - not to be used in S/4HANA.
+* Solution: TABLES removed, selection fields typed on ACDOCA/BKPF.
+*TABLES: zfi_copa_pgir.
+
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+
+TYPES: BEGIN OF ty_zfi_copa_tmp,
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : Types referred to ZFI_COPA (view on obsolete FAGLFLEXA).
+* Solution: Types referred to ACDOCA / BKPF.
+*         ryear   TYPE zfi_copa-ryear,
+*         docnr   TYPE zfi_copa-docnr,
+*         rldnr   TYPE zfi_copa-rldnr,
+*         rbukrs  TYPE zfi_copa-rbukrs,
+*         racct   TYPE zfi_copa-racct,
+*         hsl     TYPE zfi_copa-hsl,
+*         poper   TYPE zfi_copa-poper,
+*         awkey   TYPE zfi_copa-awkey,
+*         budat   TYPE zfi_copa-budat,
+         ryear   TYPE acdoca-ryear,
+         docnr   TYPE acdoca-belnr,
+         rldnr   TYPE acdoca-rldnr,
+         rbukrs  TYPE acdoca-rbukrs,
+         racct   TYPE acdoca-racct,
+         hsl     TYPE acdoca-hsl,
+         poper   TYPE acdoca-poper,
+         awkey   TYPE bkpf-awkey,
+         budat   TYPE acdoca-budat,
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+         awkey_m TYPE mseg-mblnr,
+         awkey_g TYPE mseg-gjahr,
+       END OF ty_zfi_copa_tmp,
+
+       BEGIN OF ty_ausp_objek,
+         matnr    TYPE mch1-matnr,
+         charg    TYPE mch1-charg,
+         lifnr    TYPE mch1-lifnr,
+         cuobj_bm TYPE mch1-cuobj_bm,
+         objek    TYPE ausp-objek,
+       END OF ty_ausp_objek,
+
+       BEGIN OF ty_ekbe,
+         ebeln TYPE ekbe-ebeln,
+         ebelp TYPE ekbe-ebelp,
+         matnr TYPE ekbe-matnr,
+         charg TYPE ekbe-charg,
+         bwart TYPE ekbe-bwart,
+         menge TYPE ekbe-menge,
+         bamng TYPE ekbe-bamng, "added by Pooja
+         dmbtr TYPE ekbe-dmbtr,
+       END OF ty_ekbe,
+
+       BEGIN OF ty_ekbe1,
+         matnr TYPE ekbe-matnr,
+         charg TYPE ekbe-charg,
+         bwart TYPE ekbe-bwart,
+         menge TYPE ekbe-menge,
+         bamng TYPE ekbe-bamng, "added by Pooja
+         dmbtr TYPE ekbe-dmbtr,
+       END OF ty_ekbe1,
+
+       BEGIN OF ty_year,
+         matnr      TYPE ekbe-matnr,
+         charg      TYPE ekbe-charg,
+         budat_low  TYPE ekbe-budat,
+         budat_high TYPE ekbe-budat,
+       END OF ty_year.
+
+DATA: ta_zfi_copa_tmp TYPE TABLE OF ty_zfi_copa_tmp,
+      wa_zfi_copa_tmp TYPE ty_zfi_copa_tmp,
+      ta_ausp_objek   TYPE TABLE OF ty_ausp_objek,
+      ta_zco_pgi_rate TYPE TABLE OF zco_pgi_rate,
+      wa_zco_pgi_rate TYPE zco_pgi_rate,
+      gv_atinn        TYPE ausp-atinn,
+      gv_fday         TYPE bkpf-budat,
+      gv_fday_c(8)                   ,
+      gv_lday         TYPE bkpf-budat,
+      gv_lday_c(8)                  ,
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : GV_UKURS (DEC 9,5) used to sum daily rates - can overflow.
+* Solution: replaced by DECFLOAT34 fields GV_RATE_* declared below.
+*      gv_ukurs        TYPE tcurr-ukurs,
+*      gv_ffact        TYPE tcurr-ffact,
+
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+      gv_bukrs        TYPE bkpf-bukrs,
+      gv_igjahr       TYPE bkpf-gjahr,
+      gv_imonat       TYPE bkpf-monat,
+      gv_iperiv       TYPE t001-periv VALUE 'V3',
+      ta_ekbe_pur1    TYPE TABLE OF ty_ekbe1,
+      wa_ekbe_pur1    TYPE ty_ekbe1,
+      ta_year         TYPE TABLE OF ty_year,
+      wa_year         TYPE ty_year,
+      wa_ekbe_year1   TYPE ty_ekbe,
+      ta_ekbe_year1   TYPE TABLE OF ty_ekbe.
+
+DATA: lv_pgi_rate_ukurs TYPE ukurs,
+      lv_gjahr          TYPE ekbe-gjahr,
+      lv_period         TYPE t009b-poper,
+      lv_fy             TYPE t009b-bdatj,
+      lv_fy1            TYPE t009b-bdatj,
+      lv_matnr          TYPE ekbe-matnr,
+      lv_charg          TYPE ekbe-charg.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Selection screen fields (replace TABLES ZFI_COPA_PGIR) and
+* exchange rate calculation fields.
+DATA: gv_sel_bukrs  TYPE acdoca-rbukrs,
+      gv_sel_racct  TYPE acdoca-racct,
+      gv_sel_cpudt  TYPE bkpf-cpudt,
+      gv_rate_sum   TYPE decfloat34,
+      gv_rate_one   TYPE decfloat34,
+      gv_rate_ffact TYPE decfloat34,
+      gv_rate_tfact TYPE decfloat34,
+      lv_count      TYPE i.
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+RANGES:r_lifnr FOR lfa1-lifnr,
+       r_ebeln FOR ekko-ebeln,
+       r_vbund FOR lfa1-vbund.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : typed on ZFI_COPA (view on obsolete FAGLFLEXA).
+* Solution: typed on ACDOCA-RLDNR.
+*CONSTANTS: co_0l      TYPE zfi_copa-rldnr VALUE '0L',
+CONSTANTS: co_0l      TYPE acdoca-rldnr   VALUE '0L',
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+           co_atinn   TYPE cabn-atnam     VALUE 'ZMANUFACTURER',
+           co_plnt(4) VALUE 'PLNT',
+           co_003000  TYPE lfa1-vbund     VALUE '003000',
+           co_3000    TYPE lfa1-vbund     VALUE '3000',
+           co_s       TYPE mseg-shkzg     VALUE 'S',
+           co_h       TYPE mseg-shkzg     VALUE 'H',
+           co_i       TYPE char1 VALUE 'I',
+           co_eq      TYPE char2 VALUE 'EQ'.
+
+SELECTION-SCREEN:BEGIN OF BLOCK abc WITH  FRAME TITLE text-01a.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : selection screen referred to ZFI_COPA_PGIR (FAGLFLEXA view).
+* Solution: same field names/types from ACDOCA/BKPF - variants unchanged.
+*PARAMETERS:     p_gjahr TYPE  zfi_copa_pgir-ryear        OBLIGATORY.
+*SELECT-OPTIONS: s_bukrs FOR   zfi_copa_pgir-rbukrs       OBLIGATORY,
+*                s_racct FOR   zfi_copa_pgir-racct        OBLIGATORY.
+*SELECT-OPTIONS: s_cpudt FOR   zfi_copa_pgir-cpudt        OBLIGATORY.
+PARAMETERS:     p_gjahr TYPE  acdoca-ryear               OBLIGATORY.
+SELECT-OPTIONS: s_bukrs FOR   gv_sel_bukrs               OBLIGATORY,
+                s_racct FOR   gv_sel_racct               OBLIGATORY.
+SELECT-OPTIONS: s_cpudt FOR   gv_sel_cpudt               OBLIGATORY.
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+* **BEGIN OF CHANGE 30.10.2026 - purchases posted after this date ignored
+* (blank = all, as before). Use the production run date to reconcile.
+PARAMETERS:     p_pudat TYPE  ekbe-budat.
+* **END OF CHANGE 30.10.2026
+SELECTION-SCREEN: END OF BLOCK abc.
+SELECTION-SCREEN: BEGIN OF BLOCK abd.
+PARAMETERS:     p_rd1 RADIOBUTTON GROUP ab USER-COMMAND ac DEFAULT 'X',
+                p_rd2 RADIOBUTTON GROUP ab.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : referred to ZFI_COPA_PGIR (FAGLFLEXA view).
+* Solution: typed on ACDOCA-POPER.
+*PARAMETERS:     p_poper TYPE  zfi_copa_pgir-poper."        OBLIGATORY .
+PARAMETERS:     p_poper TYPE  acdoca-poper."        OBLIGATORY .
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+
+SELECTION-SCREEN: END OF BLOCK abd.
+
+AT SELECTION-SCREEN OUTPUT.
+
+
+  IF p_rd1 = abap_true.
+    LOOP AT SCREEN.
+      IF screen-name = 'P_POPER'.
+        screen-input = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+
+  ELSE.
+    LOOP AT SCREEN.
+      IF screen-name = 'P_POPER'.
+        screen-input = '1'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+AT SELECTION-SCREEN.
+
+  IF p_rd1 = abap_true.
+    LOOP AT SCREEN.
+      IF screen-name = 'P_POPER'.
+        screen-input = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+    IF s_cpudt-low IS NOT INITIAL.
+      DATA:lv_monat_fill TYPE ftis_monat.
+      CALL FUNCTION 'FTI_FISCAL_YEAR_MONTH_GET'
+        EXPORTING
+          i_bukrs = '1000'
+          i_budat = s_cpudt-low
+*         I_DZTERM       = FTIS_DATUM-INITIAL
+*         I_GJAHR = FTIS_GJAHR-INITIAL
+        IMPORTING
+*         E_GJAHR =
+          e_monat = lv_monat_fill.
+
+      p_poper = lv_monat_fill.
+
+    ENDIF.
+  ELSE.
+    LOOP AT SCREEN.
+      IF screen-name = 'P_POPER'.
+        screen-input = '1'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+
+    IF s_cpudt-low IS NOT INITIAL AND p_poper IS INITIAL.
+
+      CALL FUNCTION 'FTI_FISCAL_YEAR_MONTH_GET'
+        EXPORTING
+          i_bukrs = '1000'
+          i_budat = s_cpudt-low
+*         I_DZTERM       = FTIS_DATUM-INITIAL
+*         I_GJAHR = FTIS_GJAHR-INITIAL
+        IMPORTING
+*         E_GJAHR =
+          e_monat = lv_monat_fill.
+
+      p_poper = lv_monat_fill.
+
+    ENDIF.
+  ENDIF.
+
+START-OF-SELECTION.
+
+  IF s_cpudt-low IS NOT INITIAL AND p_rd1 = abap_true.
+    DATA:gv_monat_fill TYPE ftis_monat.
+    CALL FUNCTION 'FTI_FISCAL_YEAR_MONTH_GET'
+      EXPORTING
+        i_bukrs = '1000'
+        i_budat = s_cpudt-low
+*       I_DZTERM       = FTIS_DATUM-INITIAL
+*       I_GJAHR = FTIS_GJAHR-INITIAL
+      IMPORTING
+*       E_GJAHR =
+        e_monat = gv_monat_fill.
+
+    p_poper = gv_monat_fill.
+
+  ELSEIF s_cpudt-low IS NOT INITIAL AND p_rd2 = abap_true AND p_poper IS INITIAL.
+
+    CALL FUNCTION 'FTI_FISCAL_YEAR_MONTH_GET'
+      EXPORTING
+        i_bukrs = '1000'
+        i_budat = s_cpudt-low
+*       I_DZTERM       = FTIS_DATUM-INITIAL
+*       I_GJAHR = FTIS_GJAHR-INITIAL
+      IMPORTING
+*       E_GJAHR =
+        e_monat = gv_monat_fill.
+
+    p_poper = gv_monat_fill.
+
+
+  ENDIF.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : ZFI_COPA_PGIR is a DDIC view on FAGLFLEXA + BKPF. FAGLFLEXA
+*           is obsolete in S/4HANA (Replacement Object FGL_FAGLFLEXA).
+*           A DDIC view does not use the replacement object, it reads
+*           the physical FAGLFLEXA which is not updated after the
+*           upgrade -> no new PGI documents, PGI rate not calculated.
+* Solution: read CDS compatibility view FGL_FAGLFLEXA (SE11 Replacement
+*           Object of FAGLFLEXA, SQL view FGLV_FAGLFLEXA, based on
+*           ACDOCA) instead of the physical table. It has the same field
+*           names as FAGLFLEXA, so the view ZFI_COPA_PGIR is rebuilt 1:1:
+*             FAGLFLEXA-RYEAR/DOCNR/RLDNR/RBUKRS/RACCT/HSL/POPER
+*               -> FGL_FAGLFLEXA-RYEAR/DOCNR/RLDNR/RBUKRS/RACCT/HSL/POPER
+*             BKPF-AWKEY/BUDAT/CPUDT -> unchanged
+*             join RYEAR=GJAHR, RBUKRS=BUKRS, DOCNR=BELNR -> unchanged
+*             no selection conditions in ZFI_COPA_PGIR.
+*           CO-only lines (BSTAT = 'C') are excluded as they never
+*           existed in FAGLFLEXA.
+*           View ZFI_COPA_PGIR is no longer used by this program.
+*  SELECT * FROM zfi_copa_pgir INTO TABLE @DATA(ta_zfi_copa) " ZFI_COPA view replaced with ZFI_COPA_PGIR for incremental data
+*    WHERE ryear   =   @p_gjahr      AND
+*          rldnr   =   @co_0l        AND
+*          rbukrs  IN  @s_bukrs      AND
+*          racct   IN  @s_racct      AND
+*          poper   =   @p_poper      AND
+*  cpudt   IN  @s_cpudt.
+  SELECT a~ryear,
+         a~docnr,
+         a~rldnr,
+         a~rbukrs,
+         a~racct,
+         a~hsl,
+         a~poper,
+         b~awkey,
+         b~budat,
+         b~cpudt
+    FROM fgl_faglflexa AS a
+    INNER JOIN bkpf AS b
+       ON b~bukrs = a~rbukrs
+      AND b~gjahr = a~ryear
+      AND b~belnr = a~docnr
+    WHERE a~ryear   =   @p_gjahr      AND
+          a~rldnr   =   @co_0l        AND
+          a~rbukrs  IN  @s_bukrs      AND
+          a~racct   IN  @s_racct      AND
+          a~poper   =   @p_poper      AND
+          a~bstat   <>  'C'           AND
+          b~cpudt   IN  @s_cpudt
+    INTO TABLE @DATA(ta_zfi_copa).
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+
+  IF sy-subrc IS INITIAL.
+    gv_igjahr   = p_gjahr.
+    gv_imonat   = p_poper.
+
+    CALL FUNCTION 'PERIOD_DAY_DETERMINE'
+      EXPORTING
+        i_gjahr              = gv_igjahr
+        i_monat              = gv_imonat
+        i_periv              = gv_iperiv
+      IMPORTING
+        e_fday               = gv_fday
+        e_lday               = gv_lday
+*       E_SPERIOD            =
+      EXCEPTIONS
+        error_period         = 1
+        error_period_version = 2
+        firstday_not_defined = 3
+        period_not_defined   = 4
+        year_invalid         = 5
+        OTHERS               = 6.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ELSE.
+      CONVERT DATE gv_fday INTO INVERTED-DATE gv_fday_c.
+      CONVERT DATE gv_lday INTO INVERTED-DATE gv_lday_c.
+    ENDIF.
+
+
+    DATA(ta_zfi_copa_bukrs) = ta_zfi_copa[].
+    SORT   ta_zfi_copa_bukrs BY rbukrs.
+    DELETE ADJACENT DUPLICATES FROM ta_zfi_copa_bukrs COMPARING rbukrs.
+
+    IF ta_zfi_copa_bukrs[] IS NOT INITIAL.
+      SELECT
+        bukrs,
+        waers FROM t001 INTO TABLE @DATA(ta_t001)
+              FOR ALL ENTRIES IN @ta_zfi_copa_bukrs
+      WHERE bukrs = @ta_zfi_copa_bukrs-rbukrs.
+
+      IF ta_t001[] IS NOT INITIAL.
+        SELECT * FROM tcurr INTO TABLE @DATA(ta_tcurr_finr)
+          FOR ALL ENTRIES IN @ta_t001
+          WHERE fcurr = @ta_t001-waers   AND
+                kurst = 'M'              AND
+                tcurr = 'INR'             AND
+        ( gdatu GE @gv_lday_c AND gdatu LE @gv_fday_c ).
+        IF sy-subrc = 0.
+          SORT ta_tcurr_finr BY fcurr.
+        ENDIF.
+        SELECT * FROM tcurr INTO TABLE @DATA(ta_tcurr_tinr)
+        FOR ALL ENTRIES IN @ta_t001
+        WHERE   tcurr =  @ta_t001-waers   AND
+                kurst = 'M'               AND
+                fcurr = 'INR'             AND
+               ( gdatu GE @gv_lday_c AND gdatu LE @gv_fday_c ).
+        IF sy-subrc = 0.
+          SORT ta_tcurr_tinr BY tcurr.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    LOOP AT ta_zfi_copa INTO DATA(wa_zfi_copa).
+      wa_zfi_copa_tmp = CORRESPONDING #( wa_zfi_copa ).
+      DATA(lv_len_awkey) = strlen( wa_zfi_copa-awkey ).
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : AWKEY+0(len-4) dumps (negative length) if AWKEY <= 4 chars.
+* Solution: skip such lines - they cannot be a material document key.
+      IF lv_len_awkey <= 4.
+        CONTINUE.
+      ENDIF.
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+      lv_len_awkey = lv_len_awkey - 4.
+      wa_zfi_copa_tmp-awkey_m = wa_zfi_copa-awkey+0(lv_len_awkey).
+      wa_zfi_copa_tmp-awkey_g = wa_zfi_copa-awkey+lv_len_awkey(4).
+      APPEND wa_zfi_copa_tmp TO ta_zfi_copa_tmp.
+      CLEAR wa_zfi_copa_tmp.
+    ENDLOOP.
+    IF ta_zfi_copa_tmp[] IS NOT INITIAL.
+      DATA(ta_zfi_copa_tmp1) = ta_zfi_copa_tmp[].
+      SORT ta_zfi_copa_tmp1 BY awkey_m awkey_g.
+      DELETE ADJACENT DUPLICATES FROM ta_zfi_copa_tmp1 COMPARING awkey_m awkey_g.
+      SELECT
+        mblnr,
+        mjahr,
+        zeile,
+        matnr,
+        werks,
+        charg,
+        shkzg,
+        dmbtr,
+        menge,
+        meins,
+        smbln,
+        sakto, " 15.07.2021
+        vbeln_im,
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : MSEG is obsolete in S/4HANA (compatibility view on MATDOC).
+* Solution: read MATDOC directly, RECORD_TYPE = 'MDOC' = MSEG line.
+*        vbelp_im FROM mseg INTO TABLE @DATA(ta_mseg)
+*              FOR ALL ENTRIES IN @ta_zfi_copa_tmp1
+*              WHERE mblnr = @ta_zfi_copa_tmp1-awkey_m  AND
+*      mjahr = @ta_zfi_copa_tmp1-awkey_g.
+        vbelp_im FROM matdoc INTO TABLE @DATA(ta_mseg)
+              FOR ALL ENTRIES IN @ta_zfi_copa_tmp1
+              WHERE mblnr = @ta_zfi_copa_tmp1-awkey_m  AND
+                    mjahr = @ta_zfi_copa_tmp1-awkey_g  AND
+                    record_type = 'MDOC'.
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+
+      IF ta_mseg[] IS NOT INITIAL.
+
+        DATA(ta_mseg_matnr) = ta_mseg[].
+        SORT ta_mseg_matnr BY matnr.
+        DELETE ADJACENT DUPLICATES FROM ta_mseg_matnr COMPARING matnr.
+
+
+        IF ta_mseg_matnr[] IS NOT INITIAL.
+          SELECT
+            matnr,
+            spras,
+            maktx FROM makt INTO TABLE @DATA(ta_maktx)
+                  FOR ALL ENTRIES IN @ta_mseg_matnr
+                  WHERE matnr = @ta_mseg_matnr-matnr AND
+          spras = 'E'.
+          IF sy-subrc = 0.
+            SORT ta_maktx BY matnr.
+          ENDIF.
+        ENDIF.
+        CLEAR ta_mseg_matnr[].
+        ta_mseg_matnr = ta_mseg[].
+        SORT ta_mseg_matnr BY matnr charg.
+        DELETE ADJACENT DUPLICATES FROM ta_mseg_matnr COMPARING matnr charg.
+
+        IF ta_mseg_matnr[] IS NOT INITIAL.
+          SELECT
+            matnr,
+            charg,
+            lifnr,
+            cuobj_bm  FROM mch1 INTO TABLE @DATA(ta_mch1)
+                      FOR ALL ENTRIES IN @ta_mseg_matnr
+                      WHERE matnr = @ta_mseg_matnr-matnr AND
+          charg = @ta_mseg_matnr-charg.
+          IF sy-subrc IS INITIAL.
+
+
+          ENDIF.
+
+          DATA(ta_mseg_ekbe) = ta_mseg[].
+          SORT ta_mseg_ekbe BY matnr werks charg.
+          DELETE ADJACENT DUPLICATES FROM ta_mseg_ekbe COMPARING matnr werks charg.
+          IF ta_mseg_ekbe[] IS NOT INITIAL.
+
+            SELECT
+              ebeln,
+              ebelp,
+              zekkn,
+              vgabe,
+              gjahr,
+              belnr,
+              buzei,
+              bewtp,
+              matnr,
+              werks,
+              charg FROM ekbe INTO TABLE @DATA(ta_ekbe)
+                    FOR ALL ENTRIES IN @ta_mseg_ekbe
+                    WHERE matnr = @ta_mseg_ekbe-matnr     AND
+*              werks = @ta_mseg_ekbe-werks     AND " changes 22.06.2021
+                          charg = @ta_mseg_ekbe-charg AND
+                          bewtp = 'E'
+
+* Code Remediation S4 2025_A **BEGIN OF CHANGE BY ABAP7 08.07.2026 FOR ATC
+*            %_HINTS MSSQLNT 'INDEX("EKBE""EKBE~ME")'.
+            .
+* **END OF CHANGE BY ABAP7 08.07.2026 FOR ATC
+
+
+            IF ta_ekbe[] IS NOT INITIAL.
+              DATA(ta_ekbe_tmp1) = ta_ekbe[].
+
+              SORT ta_ekbe_tmp1 BY gjahr belnr.
+
+              DELETE ADJACENT DUPLICATES FROM ta_ekbe_tmp1 COMPARING gjahr belnr.
+
+              IF ta_ekbe_tmp1[] IS NOT INITIAL.
+
+                SELECT
+                  mblnr,
+                  mjahr,
+                  zeile,
+                  matnr,
+                  charg,
+                  lifnr,
+                  bukrs,
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : MSEG is obsolete in S/4HANA (compatibility view on MATDOC).
+* Solution: read MATDOC directly, RECORD_TYPE = 'MDOC' = MSEG line.
+*                  kzzug FROM mseg INTO TABLE @DATA(ta_mseg_kzzug)
+*                        FOR ALL ENTRIES IN @ta_ekbe_tmp1
+*                        WHERE mblnr = @ta_ekbe_tmp1-belnr AND
+*                              mjahr = @ta_ekbe_tmp1-gjahr AND
+*                              bukrs IN @s_bukrs            AND
+*                kzzug = ''.
+                  kzzug FROM matdoc INTO TABLE @DATA(ta_mseg_kzzug)
+                        FOR ALL ENTRIES IN @ta_ekbe_tmp1
+                        WHERE mblnr = @ta_ekbe_tmp1-belnr AND
+                              mjahr = @ta_ekbe_tmp1-gjahr AND
+                              bukrs IN @s_bukrs            AND
+                              kzzug = ''                   AND
+                              record_type = 'MDOC'.
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+                IF sy-subrc = 0.
+                ENDIF.
+              ENDIF.
+
+              LOOP AT ta_ekbe ASSIGNING FIELD-SYMBOL(<fs_ekbe_chk>).
+                IF NOT line_exists( ta_mseg_kzzug[ mblnr = <fs_ekbe_chk>-belnr mjahr = <fs_ekbe_chk>-gjahr ] ).
+                  <fs_ekbe_chk>-belnr = abap_true.
+                  <fs_ekbe_chk>-matnr = abap_true.
+                  <fs_ekbe_chk>-charg = abap_true.
+                ENDIF.
+              ENDLOOP.
+              DELETE ta_ekbe WHERE belnr = abap_true AND matnr = abap_true AND charg = abap_true.
+* **BEGIN OF CHANGE 30.10.2026 - vendor determination
+* Issue   : TA_EKBE[ matnr charg ] takes the first row in database order
+*           (no ORDER BY; MSSQL index hint removed) -> on HANA a different
+*           goods receipt / vendor is picked than in the old system.
+* Solution: deterministic order - earliest goods receipt first.
+              SORT ta_ekbe BY matnr charg gjahr belnr buzei.
+* **END OF CHANGE 30.10.2026
+              """ SOC done by Sushil as on 22.06.2021 against ticket no. 800007120
+              DATA(ta_mseg_lifnr) = ta_mseg_kzzug[].
+              SORT ta_mseg_lifnr BY lifnr.
+              DELETE ADJACENT DUPLICATES FROM ta_mseg_lifnr COMPARING lifnr.
+              IF ta_mseg_lifnr[] IS NOT INITIAL.
+
+                SELECT
+                  lifnr,
+                  vbund FROM lfa1 INTO TABLE @DATA(ta_lfa1)
+                        FOR ALL ENTRIES IN @ta_mseg_lifnr
+                WHERE lifnr = @ta_mseg_lifnr-lifnr.
+                IF sy-subrc = 0.
+                  SORT ta_lfa1 BY lifnr.
+                ENDIF.
+
+              ENDIF.
+              """ EOC done by Sushil as on 22.06.2021 against ticket no. 800007120
+              "" Begin-COmmented as vendor detail require to process from mseg
+***data(ta_ekbe_tmp) = ta_ekbe[].
+***sort ta_ekbe_tmp by ebeln.
+***delete ADJACENT DUPLICATES FROM ta_ekbe_tmp COMPARING ebeln.
+***IF ta_ekbe_tmp[] IS NOT INITIAL.
+***SELECT
+***  ebeln,
+***  lifnr FROM ekko INTO TABLE @data(ta_ekko)
+***        FOR ALL ENTRIES IN @ta_ekbe_tmp
+***        WHERE ebeln = @ta_ekbe_tmp-ebeln.
+***IF ta_ekko[] IS NOT INITIAL.
+***data(ta_ekko_tmp) = ta_ekko[].
+***sort ta_ekko_tmp by lifnr.
+***delete ADJACENT DUPLICATES FROM ta_ekko_tmp COMPARING lifnr.
+***IF ta_ekko_tmp IS NOT INITIAL.
+***SELECT
+***  lifnr,
+***  vbund FROM lfa1 INTO TABLE @DATA(ta_lfa1)
+***        FOR ALL ENTRIES IN @ta_ekko_tmp
+***        WHERE LIFNR = @ta_ekko_tmp-LIFNR.
+***ENDIF.
+***
+***ENDIF.
+***ENDIF.
+              "" End-COmmented as vendor detail require to process from mseg
+            ENDIF.
+
+
+          ENDIF.
+
+          ta_ausp_objek[] = CORRESPONDING #( ta_mch1[] ).
+          SORT ta_ausp_objek BY cuobj_bm.
+          DELETE ADJACENT DUPLICATES FROM ta_ausp_objek COMPARING cuobj_bm.
+          LOOP AT ta_ausp_objek ASSIGNING FIELD-SYMBOL(<fs_ausp_objek>).
+            <fs_ausp_objek>-objek = <fs_ausp_objek>-cuobj_bm.
+          ENDLOOP.
+          IF ta_ausp_objek[] IS NOT INITIAL.
+
+            CALL FUNCTION 'CONVERSION_EXIT_ATINN_INPUT'
+              EXPORTING
+                input  = co_atinn
+              IMPORTING
+                output = gv_atinn.
+
+            SELECT
+              objek,
+              atinn,
+              atzhl,
+              mafid,
+              klart,
+              adzhl,
+              atwrt FROM ausp INTO TABLE @DATA(ta_ausp)
+                    FOR ALL ENTRIES IN @ta_ausp_objek
+                    WHERE objek = @ta_ausp_objek-objek AND
+            atinn = @gv_atinn.
+            IF sy-subrc = 0.
+              SORT ta_ausp BY objek.
+            ENDIF.
+          ENDIF.
+
+        ENDIF.
+        SELECT * FROM zco_upload_inv INTO TABLE @DATA(ta_zco_upload_inv)
+            FOR ALL ENTRIES IN @ta_mseg_matnr
+                WHERE matnr = @ta_mseg_matnr-matnr AND
+                      charg = @ta_mseg_matnr-charg.
+        IF sy-subrc = 0.
+          SORT ta_zco_upload_inv BY matnr charg.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+  ENDIF.
+
+
+  IF ta_zfi_copa_tmp[] IS NOT INITIAL.
+    DATA: lv_ftis_gjahr TYPE ftis_gjahr,
+          lv_ftis_monat TYPE ftis_monat.
+    SORT ta_zfi_copa_tmp BY racct awkey. " 15.07.2021
+    DELETE ADJACENT DUPLICATES FROM ta_zfi_copa_tmp COMPARING racct awkey."15.07.2021
+    SORT ta_mseg BY mblnr mjahr sakto.
+
+    LOOP AT ta_zfi_copa_tmp INTO wa_zfi_copa_tmp.
+      CALL FUNCTION 'FTI_FISCAL_YEAR_MONTH_GET'
+        EXPORTING
+          i_bukrs = wa_zfi_copa_tmp-rbukrs
+          i_budat = wa_zfi_copa_tmp-budat
+*         I_DZTERM       = FTIS_DATUM-INITIAL
+*         I_GJAHR = FTIS_GJAHR-INITIAL
+        IMPORTING
+          e_gjahr = lv_ftis_gjahr
+          e_monat = lv_ftis_monat.
+
+      wa_zco_pgi_rate-fp_gjahr     = |{ lv_ftis_gjahr }{ lv_ftis_monat }|.
+      wa_zco_pgi_rate-rbukrs    = wa_zfi_copa_tmp-rbukrs.
+      wa_zco_pgi_rate-awkey     = wa_zfi_copa_tmp-awkey_m.
+      wa_zco_pgi_rate-racct     = wa_zfi_copa_tmp-racct.
+
+      IF line_exists( ta_mseg[ mblnr = wa_zfi_copa_tmp-awkey_m mjahr = wa_zfi_copa_tmp-awkey_g sakto = wa_zfi_copa_tmp-racct ] )."15.07.2021
+        DATA(lv_ind) = line_index( ta_mseg[ mblnr = wa_zfi_copa_tmp-awkey_m mjahr = wa_zfi_copa_tmp-awkey_g sakto = wa_zfi_copa_tmp-racct ] ). "15.07.2021
+        LOOP AT ta_mseg FROM lv_ind INTO DATA(wa_mseg).
+          CLEAR: wa_zco_pgi_rate-tagging,
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue   : REVERSE / UKURS1 not cleared -> value of previous material
+*           document line carried to next line.
+* Solution: clear them for every line.
+                 wa_zco_pgi_rate-reverse,
+                 wa_zco_pgi_rate-ukurs1,
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+                 wa_zco_pgi_rate-objek,
+                 wa_zco_pgi_rate-maktx,
+                 wa_zco_pgi_rate-lifnr,
+                 wa_zco_pgi_rate-atwrt,
+                 wa_zco_pgi_rate-vbund,
+                 wa_zco_pgi_rate-waers.
+          IF wa_mseg-mblnr NE wa_zfi_copa_tmp-awkey_m OR
+             wa_mseg-mjahr NE wa_zfi_copa_tmp-awkey_g OR
+             wa_mseg-sakto NE wa_zfi_copa_tmp-racct.
+            EXIT.
+
+          ELSE.
+            wa_zco_pgi_rate-vbeln_im  = wa_mseg-vbeln_im.
+            wa_zco_pgi_rate-vbelp_im  = wa_mseg-vbelp_im.
+            wa_zco_pgi_rate-mblnr     = wa_mseg-mblnr.
+            wa_zco_pgi_rate-matnr     = wa_mseg-matnr.
+            wa_zco_pgi_rate-werks     = wa_mseg-werks.
+            wa_zco_pgi_rate-charg     = wa_mseg-charg.
+            wa_zco_pgi_rate-meins     = wa_mseg-meins.
+
+            IF wa_mseg-smbln IS NOT INITIAL.
+              wa_zco_pgi_rate-reverse   = abap_true.
+            ENDIF.
+
+            IF wa_mseg-shkzg = co_s.
+              wa_zco_pgi_rate-dmbtr = wa_mseg-dmbtr.
+              wa_zco_pgi_rate-quantity  = wa_mseg-menge.
+            ELSEIF wa_mseg-shkzg = co_h.
+              wa_zco_pgi_rate-dmbtr = wa_mseg-dmbtr * -1.
+              wa_zco_pgi_rate-quantity  = wa_mseg-menge * -1.
+
+            ENDIF.
+
+
+            IF line_exists( ta_maktx[ matnr = wa_mseg-matnr ] ).
+              DATA(wa_maktx) = ta_maktx[ matnr = wa_mseg-matnr ].
+
+              wa_zco_pgi_rate-maktx = wa_maktx-maktx.
+
+            ENDIF.
+
+            "" Logic for vendor update-begin
+            IF line_exists( ta_ekbe[ matnr = wa_mseg-matnr
+*                                   werks = wa_mseg-werks
+                                     charg = wa_mseg-charg ] ).
+              DATA(wa_ekbe) = ta_ekbe[ matnr = wa_mseg-matnr
+*                                     werks = wa_mseg-werks
+                                       charg = wa_mseg-charg ].
+
+              IF line_exists( ta_mseg_kzzug[ mblnr = wa_ekbe-belnr mjahr = wa_ekbe-gjahr bukrs = wa_zfi_copa_tmp-rbukrs ] ).
+                DATA(wa_mseg_kzzug) = ta_mseg_kzzug[ mblnr = wa_ekbe-belnr mjahr = wa_ekbe-gjahr bukrs = wa_zfi_copa_tmp-rbukrs ].
+                wa_zco_pgi_rate-lifnr = wa_mseg_kzzug-lifnr.
+
+              ENDIF.
+            ENDIF.
+            "" Logic for vendor update-end]
+
+            """ LOgic for tagging-begin
+            IF line_exists( ta_zco_upload_inv[ matnr = wa_mseg-matnr charg = wa_mseg-charg ] ).
+              DATA(wa_zco_ulpoad_inv) = ta_zco_upload_inv[ matnr = wa_mseg-matnr charg = wa_mseg-charg ].
+
+              IF wa_zco_pgi_rate-tagging IS INITIAL.
+                wa_zco_pgi_rate-tagging = wa_zco_ulpoad_inv-tagging.
+              ENDIF.
+            ELSEIF line_exists( ta_lfa1[ lifnr = wa_zco_pgi_rate-lifnr ] ).
+              DATA(wa_lfa1) = ta_lfa1[ lifnr = wa_zco_pgi_rate-lifnr ].
+              wa_zco_pgi_rate-vbund = wa_lfa1-vbund.
+
+              IF wa_lfa1-vbund IS NOT INITIAL.
+
+                IF wa_lfa1-vbund = co_3000 OR
+                   wa_lfa1-vbund = co_003000.
+
+                  wa_zco_pgi_rate-tagging = 1.
+
+                ELSE.
+                  wa_zco_pgi_rate-tagging = 2.
+                ENDIF.
+
+              ENDIF.
+            ENDIF.
+
+            IF line_exists( ta_mch1[ matnr = wa_mseg-matnr charg = wa_mseg-charg ] ).
+              DATA(wa_mch1) = ta_mch1[ matnr = wa_mseg-matnr charg = wa_mseg-charg ].
+              IF line_exists( ta_ausp_objek[ cuobj_bm = wa_mch1-cuobj_bm ] ).
+                DATA(wa_ausp_objek) = ta_ausp_objek[ cuobj_bm = wa_mch1-cuobj_bm ].
+
+                IF line_exists( ta_ausp[ objek = wa_ausp_objek-objek ] ).
+                  DATA(wa_ausp) = ta_ausp[ objek = wa_ausp_objek-objek ].
+
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 25.06.2026  FOR ATC
+*                  wa_zco_pgi_rate-objek = wa_ausp-objek.
+wa_zco_pgi_rate-objek = CONV #( wa_ausp-objek ) .
+" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 25.06.2026 FOR ATC
+                  wa_zco_pgi_rate-atwrt = wa_ausp-atwrt.
+
+                  IF wa_ausp-atwrt+0(4) CP co_plnt AND wa_zco_pgi_rate-tagging IS INITIAL.
+                    wa_zco_pgi_rate-tagging = 2.
+                  ENDIF.
+
+                ENDIF.
+              ENDIF.
+            ENDIF.
+
+
+
+            IF wa_zco_pgi_rate-tagging IS INITIAL.
+              wa_zco_pgi_rate-tagging = 1.
+            ENDIF.
+            CONDENSE wa_zco_pgi_rate-tagging.
+* Code Remediation S4 2025_A **BEGIN OF CHANGE 27.10.2026 - PGI rate issue after upgrade
+* Issue 1 : currency read with WA_ZFI_COPA-RBUKRS = last row of the
+*           earlier header loop, not the current row -> wrong currency
+*           and PGI rate when more than one company code is selected.
+* Solution: read T001 with WA_ZFI_COPA_TMP-RBUKRS (current row).
+* Issue 2 : ELSEIF branch (only INR -> FC rate maintained in OB08)
+*           looped at TA_TCURR_FINR (FC -> INR) instead of
+*           TA_TCURR_TINR -> no rows, UKURS1 stayed blank.
+* Solution: use TA_TCURR_TINR and invert the rate.
+* Issue 3 : LV_PGI_RATE_UKURS not reset on company code change -> rate
+*           of previous company code used if no rate found.
+* Solution: clear it when company code changes.
+* Issue 4 : indirect quotation (negative UKURS) and TFACT ignored, and
+*           daily rates summed in DEC 9,5 (overflow possible).
+* Solution: each TCURR row converted to INR per 1 unit of company
+*           code currency in DECFLOAT34, then averaged.
+*           Direct  : TO = FROM / FFACT * UKURS * TFACT
+*           Indirect: TO = FROM / FFACT / |UKURS| * TFACT
+*           For direct FC->INR with TFACT = 1 the result is the same
+*           as before (UKURS / FFACT).
+*            IF line_exists( ta_t001[ bukrs = wa_zfi_copa-rbukrs ] ).
+*              DATA(wa_t001) = ta_t001[ bukrs = wa_zfi_copa-rbukrs ].
+*              wa_zco_pgi_rate-waers = wa_t001-waers.
+
+*            ENDIF.
+
+*            IF wa_zco_pgi_rate-tagging = 1.
+*              IF wa_zco_pgi_rate-waers CP 'INR'.
+**              wa_zco_pgi_rate-ukurs = wa_zco_pgi_rate-dmbtr.
+
+*              ELSE.
+
+*                IF gv_bukrs IS INITIAL OR ( gv_bukrs NE wa_zco_pgi_rate-rbukrs ).
+*                  gv_bukrs = wa_zco_pgi_rate-rbukrs.
+
+*                  IF line_exists( ta_tcurr_finr[ fcurr = wa_zco_pgi_rate-waers ] ).
+
+*                    DATA(ta_tcurr_finr_tmp) = ta_tcurr_finr[].
+*                    DELETE ta_tcurr_finr_tmp WHERE fcurr NE wa_zco_pgi_rate-waers.
+*                    DESCRIBE TABLE ta_tcurr_finr_tmp LINES DATA(lv_count).
+
+*                    LOOP AT ta_tcurr_finr_tmp INTO DATA(wa_tcurr_finr_tmp).
+*                      gv_ukurs = gv_ukurs + wa_tcurr_finr_tmp-ukurs.
+*                      CLEAR wa_tcurr_finr_tmp.
+*                    ENDLOOP.
+*                    "SOC by Pooja Adupala for CR#8000007907
+*                    READ TABLE ta_tcurr_finr_tmp INTO wa_tcurr_finr_tmp INDEX 1.
+*                    IF sy-subrc = 0.
+*                      gv_ffact = wa_tcurr_finr_tmp-ffact.
+*                    ENDIF.
+*                    "EOC by Pooja Adupala for CR#8000007907
+
+*                    IF lv_count IS NOT INITIAL.
+*                      IF gv_ffact IS INITIAL.
+*                        gv_ffact = 1.
+*                      ENDIF.
+*                      lv_pgi_rate_ukurs = ( gv_ukurs / lv_count ).
+*                      lv_pgi_rate_ukurs =   ( lv_pgi_rate_ukurs / gv_ffact )."LOC added by Pooja Adupala for CR#8000007907
+*                      wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
+
+*                    ENDIF.
+
+*                    CLEAR: gv_ukurs,gv_ffact, lv_count, ta_tcurr_finr_tmp[].
+
+*                  ELSEIF line_exists( ta_tcurr_tinr[ tcurr = wa_zco_pgi_rate-waers ] ).
+
+*                    ta_tcurr_finr_tmp = ta_tcurr_finr[].
+*                    DELETE ta_tcurr_finr_tmp WHERE fcurr NE wa_zco_pgi_rate-waers.
+*                    DESCRIBE TABLE ta_tcurr_finr_tmp LINES lv_count.
+
+*                    LOOP AT ta_tcurr_finr_tmp INTO wa_tcurr_finr_tmp.
+*                      gv_ukurs = gv_ukurs + wa_tcurr_finr_tmp-ukurs.
+*                      CLEAR wa_tcurr_finr_tmp.
+*                    ENDLOOP.
+
+*                    "SOC added by Pooja Adupala for CR#8000007907
+*                    READ TABLE ta_tcurr_finr_tmp INTO wa_tcurr_finr_tmp INDEX 1.
+*                    IF sy-subrc = 0.
+*                      gv_ffact = wa_tcurr_finr_tmp-ffact.
+*                    ENDIF.
+*                    "EOC added by Pooja Adupala for CR#8000007907
+
+*                    IF lv_count IS NOT INITIAL.
+*                      IF gv_ffact IS INITIAL.
+*                        gv_ffact = 1.
+*                      ENDIF.
+*                      lv_pgi_rate_ukurs = ( gv_ukurs / lv_count ).
+*                      lv_pgi_rate_ukurs = ( lv_pgi_rate_ukurs / gv_ffact )."LOC added by Pooja Adupala for CR#8000007907
+*                      wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
+*                    ENDIF.
+
+*                    CLEAR: gv_ukurs, lv_count, ta_tcurr_finr_tmp[].
+*                  ENDIF.
+
+*                ELSEIF gv_bukrs EQ wa_zco_pgi_rate-rbukrs.
+
+*                  wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
+
+*                ENDIF.
+*              ENDIF.
+
+*            ENDIF.
+            IF line_exists( ta_t001[ bukrs = wa_zfi_copa_tmp-rbukrs ] ).
+              DATA(wa_t001) = ta_t001[ bukrs = wa_zfi_copa_tmp-rbukrs ].
+              wa_zco_pgi_rate-waers = wa_t001-waers.
+
+            ENDIF.
+
+            IF wa_zco_pgi_rate-tagging = 1.
+              IF wa_zco_pgi_rate-waers CP 'INR'.
+*              wa_zco_pgi_rate-ukurs = wa_zco_pgi_rate-dmbtr.
+
+              ELSE.
+
+                IF gv_bukrs IS INITIAL OR ( gv_bukrs NE wa_zco_pgi_rate-rbukrs ).
+                  gv_bukrs = wa_zco_pgi_rate-rbukrs.
+                  CLEAR: lv_pgi_rate_ukurs, gv_rate_sum, lv_count.
+
+                  " Average of the period's M rates, as INR per 1 unit of company code currency.
+                  " TCURR: direct  -> TO = FROM / FFACT * UKURS * TFACT
+                  "        indirect (UKURS < 0) -> TO = FROM / FFACT / |UKURS| * TFACT
+                  IF line_exists( ta_tcurr_finr[ fcurr = wa_zco_pgi_rate-waers ] ).
+                    LOOP AT ta_tcurr_finr INTO DATA(wa_tcurr_finr_tmp) WHERE fcurr = wa_zco_pgi_rate-waers
+                                                                         AND ukurs <> 0.
+                      gv_rate_ffact = COND #( WHEN wa_tcurr_finr_tmp-ffact IS INITIAL THEN 1 ELSE wa_tcurr_finr_tmp-ffact ).
+                      gv_rate_tfact = COND #( WHEN wa_tcurr_finr_tmp-tfact IS INITIAL THEN 1 ELSE wa_tcurr_finr_tmp-tfact ).
+                      IF wa_tcurr_finr_tmp-ukurs > 0.
+                        gv_rate_one = wa_tcurr_finr_tmp-ukurs * gv_rate_tfact / gv_rate_ffact.
+                      ELSE.
+                        gv_rate_one = gv_rate_tfact / ( abs( wa_tcurr_finr_tmp-ukurs ) * gv_rate_ffact ).
+                      ENDIF.
+                      gv_rate_sum = gv_rate_sum + gv_rate_one.
+                      lv_count = lv_count + 1.
+                    ENDLOOP.
+
+                  ELSEIF line_exists( ta_tcurr_tinr[ tcurr = wa_zco_pgi_rate-waers ] ).
+                    " Only INR -> FC maintained: invert it
+                    LOOP AT ta_tcurr_tinr INTO DATA(wa_tcurr_tinr_tmp) WHERE tcurr = wa_zco_pgi_rate-waers
+                                                                         AND ukurs <> 0.
+                      gv_rate_ffact = COND #( WHEN wa_tcurr_tinr_tmp-ffact IS INITIAL THEN 1 ELSE wa_tcurr_tinr_tmp-ffact ).
+                      gv_rate_tfact = COND #( WHEN wa_tcurr_tinr_tmp-tfact IS INITIAL THEN 1 ELSE wa_tcurr_tinr_tmp-tfact ).
+                      IF wa_tcurr_tinr_tmp-ukurs > 0.
+                        gv_rate_one = gv_rate_ffact / ( wa_tcurr_tinr_tmp-ukurs * gv_rate_tfact ).
+                      ELSE.
+                        gv_rate_one = abs( wa_tcurr_tinr_tmp-ukurs ) * gv_rate_ffact / gv_rate_tfact.
+                      ENDIF.
+                      gv_rate_sum = gv_rate_sum + gv_rate_one.
+                      lv_count = lv_count + 1.
+                    ENDLOOP.
+                  ENDIF.
+
+                  IF lv_count IS NOT INITIAL.
+                    lv_pgi_rate_ukurs = round( val = gv_rate_sum / lv_count dec = 5 ).
+                  ENDIF.
+                  wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
+                  CLEAR: gv_rate_sum, lv_count.
+
+                ELSEIF gv_bukrs EQ wa_zco_pgi_rate-rbukrs.
+
+                  wa_zco_pgi_rate-ukurs1 = lv_pgi_rate_ukurs.
+
+                ENDIF.
+              ENDIF.
+
+            ENDIF.
+
+* Code Remediation S4 2025_A **END OF CHANGE 27.10.2026
+
+            IF wa_zco_pgi_rate-waers = 'UGX'.
+              wa_zco_pgi_rate-dmbtr = wa_zco_pgi_rate-dmbtr * 100.
+            ENDIF.
+            lv_ind = lv_ind + 1.
+          ENDIF.
+          APPEND wa_zco_pgi_rate TO ta_zco_pgi_rate.
+          CLEAR:wa_zco_ulpoad_inv,
+                wa_ausp,
+                wa_ausp_objek,
+                wa_maktx.
+        ENDLOOP.
+        CLEAR:  lv_ind,
+                wa_zco_pgi_rate.
+      ENDIF.
+    ENDLOOP.
+    CLEAR lv_pgi_rate_ukurs.
+    """ Begin of commented section as separate program required to update ukurs.#12.07.2021#8000007120
+****IF ta_zco_pgi_rate[] IS NOT INITIAL.
+****data(ta_zco_pgi_rate_tmp) = ta_zco_pgi_rate[].
+****
+****DELETE ta_zco_pgi_rate_tmp WHERE tagging ne 1.
+****SORT ta_zco_pgi_rate_tmp by fp_gjahr rbukrs matnr tagging.
+****SORT ta_zco_pgi_rate     by fp_gjahr rbukrs matnr tagging.
+****delete ADJACENT DUPLICATES FROM ta_zco_pgi_rate_tmp COMPARING fp_gjahr rbukrs matnr tagging.
+****
+****
+****LOOP AT ta_zco_pgi_rate_tmp ASSIGNING FIELD-SYMBOL(<fs_zco_pgi_rate_tmp>).
+****CLEAR: <fs_zco_pgi_rate_tmp>-quantity,
+****       <fs_zco_pgi_rate_tmp>-dmbtr,
+****       <fs_zco_pgi_rate_tmp>-ukurs.
+****
+****lv_ind = line_index( ta_zco_pgi_rate[ fp_gjahr    = <fs_zco_pgi_rate_tmp>-fp_gjahr
+****                                         rbukrs   = <fs_zco_pgi_rate_tmp>-rbukrs
+****                                         matnr    = <fs_zco_pgi_rate_tmp>-matnr
+****                                         tagging  = <fs_zco_pgi_rate_tmp>-tagging ] ).
+****
+****LOOP AT ta_zco_pgi_rate INTO wa_zco_pgi_rate FROM lv_ind.
+****IF wa_zco_pgi_rate-fp_gjahr NE <fs_zco_pgi_rate_tmp>-fp_gjahr OR
+****   wa_zco_pgi_rate-rbukrs   NE <fs_zco_pgi_rate_tmp>-rbukrs   OR
+****   wa_zco_pgi_rate-matnr    NE <fs_zco_pgi_rate_tmp>-matnr    OR
+****   wa_zco_pgi_rate-tagging    NE <fs_zco_pgi_rate_tmp>-tagging.
+****    exit.
+****
+****else.
+****    <fs_zco_pgi_rate_tmp>-quantity = <fs_zco_pgi_rate_tmp>-quantity + wa_zco_pgi_rate-quantity.
+****    <fs_zco_pgi_rate_tmp>-dmbtr    = <fs_zco_pgi_rate_tmp>-dmbtr + wa_zco_pgi_rate-dmbtr.
+****lv_ind = lv_ind + 1.
+****ENDIF.
+****ENDLOOP.
+****
+****
+****IF <fs_zco_pgi_rate_tmp>-waers = 'INR' AND <fs_zco_pgi_rate_tmp>-quantity IS NOT INITIAL.
+****
+****
+****<fs_zco_pgi_rate_tmp>-ukurs =  ( <fs_zco_pgi_rate_tmp>-dmbtr / <fs_zco_pgi_rate_tmp>-quantity ) * 1000. " Multplid by 1000 as per instruction off Vicky
+****ELSEIF <fs_zco_pgi_rate_tmp>-waers = 'UGX' AND <fs_zco_pgi_rate_tmp>-quantity IS NOT INITIAL.
+****  <fs_zco_pgi_rate_tmp>-ukurs =  ( ( ( <fs_zco_pgi_rate_tmp>-dmbtr  ) / <fs_zco_pgi_rate_tmp>-quantity ) ) * ( <fs_zco_pgi_rate_tmp>-ukurs1 ) * 1000. " Multplid by 1000 as per instruction off Vicky
+****else.
+****IF <fs_zco_pgi_rate_tmp>-quantity IS NOT INITIAL.
+****<fs_zco_pgi_rate_tmp>-ukurs =  ( <fs_zco_pgi_rate_tmp>-dmbtr / <fs_zco_pgi_rate_tmp>-quantity ) * ( <fs_zco_pgi_rate_tmp>-ukurs1 ) * 1000. " Multplid by 1000 as per instruction off Vicky
+****ENDIF.
+****ENDIF.
+****
+****
+****DATA(lv_ind_upd) = line_index( ta_zco_pgi_rate[ fp_gjahr = <fs_zco_pgi_rate_tmp>-fp_gjahr
+****                                         rbukrs = <fs_zco_pgi_rate_tmp>-rbukrs
+****                                         matnr = <fs_zco_pgi_rate_tmp>-matnr ] ).
+****LOOP AT ta_zco_pgi_rate ASSIGNING FIELD-SYMBOL(<fs_zco_pgi_rate_upd>) FROM lv_ind_upd.
+****IF <fs_zco_pgi_rate_tmp>-fp_gjahr NE <fs_zco_pgi_rate_upd>-fp_gjahr OR
+****   <fs_zco_pgi_rate_tmp>-rbukrs   NE <fs_zco_pgi_rate_upd>-rbukrs   OR
+****   <fs_zco_pgi_rate_tmp>-matnr    NE <fs_zco_pgi_rate_upd>-matnr    OR
+****   <fs_zco_pgi_rate_tmp>-tagging  NE <fs_zco_pgi_rate_upd>-tagging.
+****    exit.
+****
+****else.
+****
+****<fs_zco_pgi_rate_upd>-ukurs = <fs_zco_pgi_rate_tmp>-ukurs.
+****
+****
+****ENDIF.
+****ENDLOOP.
+****CLEAR: <fs_zco_pgi_rate_tmp>-ukurs, lv_ind_upd.
+****ENDLOOP.
+****
+****
+****ENDIF.
+
+    """ End of commented section as separate program required to update ukurs.#12.07.2021#8000007120
+    IF ta_zco_pgi_rate[] IS NOT INITIAL.
+      "SOC by Pooja on 16.12.2022
+      DATA(ta_zco_pgi_rate1) = ta_zco_pgi_rate[].
+      DELETE ta_zco_pgi_rate1 WHERE tagging NE 1.
+
+      SELECT bukrs,waers
+      FROM t001 INTO TABLE @DATA(ta_t001_pur)
+      FOR ALL ENTRIES IN @ta_zco_pgi_rate
+      WHERE bukrs = @ta_zco_pgi_rate-rbukrs.
+
+      IF ta_t001_pur IS NOT INITIAL.
+        SORT ta_t001_pur BY bukrs.
+      ENDIF.
+
+      IF ta_zco_pgi_rate1 IS NOT INITIAL.
+        SORT ta_zco_pgi_rate1 BY matnr charg.
+        DELETE ADJACENT DUPLICATES FROM ta_zco_pgi_rate1 COMPARING  matnr charg.
+        SELECT ebeln,
+               ebelp,
+               zekkn,
+               vgabe,
+               gjahr,
+               belnr,
+               buzei,
+               matnr,
+               charg,
+               bwart,
+               budat,
+               menge,
+               bamng,
+               dmbtr
+             FROM
+          ekbe INTO TABLE @DATA(ta_ekbe_pur)
+          FOR ALL ENTRIES IN @ta_zco_pgi_rate1
+          WHERE matnr = @ta_zco_pgi_rate1-matnr AND
+                charg = @ta_zco_pgi_rate1-charg AND
+                bwart = '101'.
+
+        IF ta_ekbe_pur IS NOT INITIAL.
+
+          DELETE ta_ekbe_pur WHERE matnr IS INITIAL AND charg IS INITIAL.
+* **BEGIN OF CHANGE 30.10.2026 - optional purchase cut-off date
+          IF p_pudat IS NOT INITIAL.
+            DELETE ta_ekbe_pur WHERE budat > p_pudat.
+          ENDIF.
+* **END OF CHANGE 30.10.2026
+          "EOA by Gajanan - 22.12.2022 - CR#8000007907
+          IF NOT ta_ekbe_pur IS INITIAL.
+            SELECT ebeln,lifnr FROM ekko
+              INTO TABLE @DATA(ta_ekko)
+              FOR ALL ENTRIES IN @ta_ekbe_pur
+              WHERE ebeln = @ta_ekbe_pur-ebeln .
+
+            IF ta_ekko IS NOT INITIAL.
+              DELETE ta_ekko WHERE lifnr+0(4) CS 'PLNT'.
+              DELETE ta_ekko WHERE lifnr IS INITIAL.
+
+              DATA(ta_ekko1)  = ta_ekko[].
+              SORT ta_ekko1 BY lifnr.
+              DELETE ADJACENT DUPLICATES FROM ta_ekko1 COMPARING lifnr.
+
+              IF ta_ekko1 IS NOT INITIAL.
+                r_vbund-sign = 'I'.
+                r_vbund-option = 'EQ'.
+                r_vbund-low = ''.
+                APPEND r_vbund.
+
+                r_vbund-sign = 'I'.
+                r_vbund-option = 'EQ'.
+                r_vbund-low = '003000'.
+                APPEND r_vbund.
+
+                SELECT lifnr,vbund
+                  FROM lfa1
+                  INTO TABLE @DATA(ta_lfa1_pur)
+                  FOR ALL ENTRIES IN @ta_ekko1
+                  WHERE lifnr = @ta_ekko1-lifnr AND
+                        vbund NOT IN @r_vbund.
+              ENDIF.
+
+              IF ta_lfa1_pur IS NOT INITIAL.
+                LOOP AT ta_lfa1_pur INTO DATA(wa_lfa1_pur).
+                  r_lifnr-sign = co_i.
+                  r_lifnr-option = co_eq.
+                  r_lifnr-low = wa_lfa1_pur-lifnr.
+                  APPEND r_lifnr.
+                ENDLOOP.
+
+                IF r_lifnr IS NOT INITIAL.
+                  DELETE ta_ekko WHERE lifnr IN r_lifnr.
+                ENDIF.
+              ENDIF.
+
+              LOOP AT ta_ekko INTO DATA(wa_ekko).
+                r_ebeln-sign = co_i.
+                r_ebeln-option  = co_eq.
+                r_ebeln-low  = wa_ekko-ebeln.
+                APPEND r_ebeln.
+                CLEAR:wa_ekko.
+              ENDLOOP.
+
+              "SOC by Pooja on 02.01.2023
+              IF r_ebeln IS NOT INITIAL.
+                DELETE  ta_ekbe_pur WHERE ebeln NOT IN r_ebeln.
+
+* **BEGIN OF CHANGE 30.10.2026 - one goods receipt per posting date
+* Issue   : SORT by MATNR CHARG BUDAT only -> the row kept per date by
+*           DELETE ADJACENT DUPLICATES was database-order dependent; on
+*           HANA a zero-value (sample) GR could survive instead of the
+*           valued one -> wrong purchase qty/value and PGI rate.
+* Solution: within a date keep the GR with the highest value, then
+*           highest quantity, then lowest document key (deterministic).
+*                SORT ta_ekbe_pur BY matnr charg budat DESCENDING.
+                SORT ta_ekbe_pur BY matnr charg budat DESCENDING
+                                    dmbtr DESCENDING bamng DESCENDING
+                                    ebeln ebelp gjahr belnr buzei.
+* **END OF CHANGE 30.10.2026
+                DELETE ADJACENT DUPLICATES FROM ta_ekbe_pur COMPARING matnr charg budat.
+
+                IF ta_ekbe_pur IS NOT INITIAL.
+                  LOOP AT ta_ekbe_pur INTO DATA(wa_ekbe_pur).
+                    IF  wa_ekbe_pur-matnr NE lv_matnr OR wa_ekbe_pur-charg NE lv_charg.
+                      CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
+                        EXPORTING
+                          i_date         = wa_ekbe_pur-budat
+                          i_periv        = 'V3'
+                        IMPORTING
+                          e_buper        = lv_period
+                          e_gjahr        = lv_fy
+                        EXCEPTIONS
+                          input_false    = 1
+                          t009_notfound  = 2
+                          t009b_notfound = 3
+                          OTHERS         = 4.
+                      IF sy-subrc <> 0.
+* implement suitable error handling here
+                      ENDIF.
+                      lv_fy1 = lv_fy + 1.
+                      MOVE-CORRESPONDING wa_ekbe_pur TO wa_year.
+                      wa_year-budat_low =   |{ lv_fy }| & || & |{ '04' }| & || & |{ '01' }| .
+                      wa_year-budat_high =   |{ lv_fy1 }| & || & |{ '03' }| & || & |{ '31' }| .
+                      APPEND wa_year TO ta_year.
+                    ENDIF.
+                    lv_matnr = wa_ekbe_pur-matnr.
+                    lv_charg = wa_ekbe_pur-charg.
+                    CLEAR:wa_year,wa_ekbe_pur.
+                  ENDLOOP.
+
+                  IF ta_year IS NOT INITIAL.
+                    SORT ta_year BY matnr charg budat_low budat_high.
+                    DELETE ADJACENT DUPLICATES FROM ta_year COMPARING matnr charg budat_low budat_high.
+                    SORT ta_year BY matnr charg.
+                  ENDIF.
+
+                  LOOP AT ta_ekbe_pur INTO DATA(wa_pur).
+                    READ TABLE ta_year INTO DATA(wa_year1) WITH KEY matnr = wa_pur-matnr
+                                                                    charg = wa_pur-charg.
+                    IF sy-subrc = 0 AND wa_pur-budat GE wa_year1-budat_low AND wa_pur-budat LE wa_year1-budat_high.
+                      MOVE-CORRESPONDING wa_pur TO wa_ekbe_year1.
+                      APPEND wa_ekbe_year1 TO ta_ekbe_year1.
+                    ENDIF.
+                    CLEAR:wa_ekbe_year1,wa_year1,wa_pur.
+                  ENDLOOP.
+
+                  LOOP AT ta_ekbe_year1 INTO DATA(wa_ekbe_year2).
+                    MOVE-CORRESPONDING wa_ekbe_year2 TO wa_ekbe_pur1.
+                    COLLECT  wa_ekbe_pur1 INTO ta_ekbe_pur1.
+                    CLEAR:wa_ekbe_pur1,wa_ekbe_year2.
+                  ENDLOOP.
+                  IF ta_ekbe_pur1 IS NOT INITIAL.
+                    SORT ta_ekbe_pur1 BY matnr charg.
+                  ENDIF.
+                ENDIF.
+              ENDIF.
+            ENDIF.
+            "EOC by Pooja on 02.01.2023
+
+          ENDIF.
+        ENDIF.
+      ENDIF.
+
+      LOOP AT ta_zco_pgi_rate ASSIGNING FIELD-SYMBOL(<fs_pgi_rate>) WHERE tagging EQ '1'.
+        READ TABLE ta_ekbe_pur1 INTO DATA(wa_ekbe_pur2) WITH KEY matnr = <fs_pgi_rate>-matnr
+                                                                 charg = <fs_pgi_rate>-charg.
+        IF sy-subrc = 0.
+          <fs_pgi_rate>-amnt_cc = wa_ekbe_pur2-dmbtr.
+*          <fs_pgi_rate>-menge = wa_ekbe_pur2-menge."Commented by pooja on 11.07.2023
+          <fs_pgi_rate>-menge = wa_ekbe_pur2-bamng."Added by Pooja on 11.07.2023
+        ENDIF.
+        READ TABLE ta_t001_pur INTO DATA(wa_t001_pur) WITH KEY bukrs = <fs_pgi_rate>-rbukrs.
+        IF sy-subrc = 0.
+          <fs_pgi_rate>-waers_pur = wa_t001_pur-waers.
+        ENDIF.
+        CLEAR:wa_t001_pur.
+      ENDLOOP.
+
+      "EOC by Pooja on 16.12.2022
+      MODIFY zco_pgi_rate FROM TABLE ta_zco_pgi_rate.
+      MESSAGE s246(zfi).
+    ENDIF.
+  ENDIF.
