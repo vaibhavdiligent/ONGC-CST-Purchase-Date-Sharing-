@@ -1,0 +1,294 @@
+*&---------------------------------------------------------------------*
+*& Report  ZSD_S911_UPLOAD_DATA
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+REPORT zsd_s911_upload_data.
+*&---------------------------------------------------------------------*
+*& Structure Declaration
+*&---------------------------------------------------------------------*
+TYPES : BEGIN OF ty_upload,
+          ssour	     TYPE ssour,
+          vrsio	     TYPE vrsio,
+          spmon	     TYPE spmon,
+          sptag	     TYPE sptag,
+          spwoc	     TYPE spwoc,
+          spbup	     TYPE spbup,
+          vkorg	     TYPE vkorg,
+          vtweg	     TYPE vtweg,
+          fkart	     TYPE fkart,
+          inco1	     TYPE inco1,
+          kvgr1	     TYPE kvgr1,
+          pkunag     TYPE kunag,
+          matnr	     TYPE matnr,
+          ip_vend	   TYPE /irm/ip_vendor,
+          plaag_01   TYPE plaag,
+
+          periv	     TYPE periv,
+          vwdat	     TYPE vwdat,
+          vrkme	     TYPE vrkme,
+          waerk	     TYPE waerk,
+          stwae	     TYPE stwae,
+          basme	     TYPE meins,
+          werks	     TYPE werks_d,
+          vkbur	     TYPE vkbur,
+          kdgrp	     TYPE kdgrp,
+          plawe	     TYPE plawe,
+          kursk	     TYPE kursk,
+          sakn1	     TYPE saknr,
+          spart	     TYPE spart,
+          spara	     TYPE spart_ak,
+          katr3	     TYPE katr3,
+
+          katr4	     TYPE katr4,
+          fkimg	     TYPE fkimg,
+          netwr      TYPE netwr_fp,
+          skfbp	     TYPE skfbp,
+          wavwr	     TYPE wavwr,
+          mwsbp	     TYPE mwsbp,
+          umkzwi6	   TYPE mc_umkzwi6,
+          umkzwi5	   TYPE mc_umkzwi5,
+          fklmg	     TYPE fklmg,
+          "Code Remediations Begin of changes by ABAP7
+*          irm_slsamt TYPE /irm/br_totamt,
+          irm_slsamt TYPE BELWER,
+          "Code Remediations end of changes by ABAP7
+          umnet      TYPE /bev4/plumnet,
+        END OF ty_upload.
+
+*&---------------------------------------------------------------------*
+*& Internal Table Declaration
+*&---------------------------------------------------------------------*
+DATA : t_upload TYPE STANDARD TABLE OF ty_upload INITIAL SIZE 0.
+DATA : it_intern LIKE alsmex_tabline OCCURS 0 WITH HEADER LINE.
+DATA : t_s911 TYPE STANDARD TABLE OF s911 INITIAL SIZE 0.
+*&---------------------------------------------------------------------*
+*& Work Area Declaration
+*&---------------------------------------------------------------------*
+DATA : w_upload TYPE ty_upload.
+DATA : w_s911 TYPE s911.
+*&---------------------------------------------------------------------*
+*& Global Data Declaration
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& Selection Screen Declaration
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+PARAMETERS : p_fname TYPE rlgrap-filename OBLIGATORY,
+             P_INDIC TYPE CHAR1.
+SELECTION-SCREEN : END OF BLOCK b1.
+*&---------------------------------------------------------------------*
+*& At Selection Screen Declaration
+*&---------------------------------------------------------------------*
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = 'P_FNAME'
+    IMPORTING
+      file_name     = p_fname.
+*&---------------------------------------------------------------------*
+*& Initialization Declaration
+*&---------------------------------------------------------------------*
+
+
+*&---------------------------------------------------------------------*
+*& Start of selection Declaration
+*&---------------------------------------------------------------------*
+START-OF-SELECTION.
+  PERFORM sub_read_upload_data.
+
+  PERFORM sub_transfer_data.
+
+  PERFORM sub_process_data.
+
+*&---------------------------------------------------------------------*
+*&      Form  SUB_READ_UPLOAD_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sub_read_upload_data .
+  CALL FUNCTION 'ALSM_EXCEL_TO_INTERNAL_TABLE'
+    EXPORTING
+      filename                = p_fname
+      i_begin_col             = 1
+      i_begin_row             = 2
+      i_end_col               = 41
+      i_end_row               = 999999
+    TABLES
+      intern                  = it_intern
+    EXCEPTIONS
+      inconsistent_parameters = 1
+      upload_ole              = 2
+      OTHERS                  = 3.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  SUB_TRANSFER_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sub_transfer_data .
+  LOOP AT it_intern.
+    CASE it_intern-col.
+      WHEN '0001'.
+        w_upload-ssour = it_intern-value.
+      WHEN '0002'.
+        w_upload-vrsio = it_intern-value.
+      WHEN '0003'.
+        CALL FUNCTION 'CONVERSION_EXIT_BCVMN_INPUT'
+          EXPORTING
+            input  = it_intern-value
+*           IV_DATFM       =
+          IMPORTING
+            output = w_upload-spmon.
+
+*        w_upload-spmon = it_intern-value.
+      WHEN '0004'.
+        w_upload-sptag = it_intern-value.
+      WHEN '0005'.
+        w_upload-spwoc = it_intern-value.
+      WHEN '0006'.
+        w_upload-spbup = it_intern-value.
+      WHEN '0007'.
+        w_upload-vkorg = it_intern-value.
+      WHEN '0008'.
+        w_upload-vtweg = it_intern-value.
+
+      WHEN '0009'.
+        w_upload-fkart = it_intern-value.
+      WHEN '0010'.
+        w_upload-inco1 = it_intern-value.
+      WHEN '0011'.
+        w_upload-kvgr1 = it_intern-value.
+      WHEN '0012'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = it_intern-value
+          IMPORTING
+            output = w_upload-pkunag.
+
+*        w_upload-pkunag = it_intern-value.
+      WHEN '0013'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = it_intern-value
+          IMPORTING
+            output = w_upload-matnr.
+*        w_upload-matnr = it_intern-value.
+      WHEN '0014'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = it_intern-value
+          IMPORTING
+            output = w_upload-ip_vend.
+*        w_upload-ip_vend = it_intern-value.
+      WHEN '0015'.
+        w_upload-plaag_01 = it_intern-value.
+      WHEN '0016'.
+        w_upload-periv = it_intern-value.
+      WHEN '0017'.
+        w_upload-vwdat = it_intern-value.
+      WHEN '0018'.
+        w_upload-vrkme = it_intern-value.
+
+
+      WHEN '0019'.
+        w_upload-waerk = it_intern-value.
+      WHEN '0020'.
+        w_upload-stwae = it_intern-value.
+      WHEN '0021'.
+        w_upload-basme = it_intern-value.
+      WHEN '0022'.
+        w_upload-werks = it_intern-value.
+      WHEN '0023'.
+        w_upload-vkbur = it_intern-value.
+      WHEN '0024'.
+        w_upload-kdgrp = it_intern-value.
+      WHEN '0025'.
+        w_upload-plawe = it_intern-value.
+      WHEN '0026'.
+        w_upload-kursk = it_intern-value.
+      WHEN '0027'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = it_intern-value
+          IMPORTING
+            output = w_upload-sakn1.
+*        w_upload-sakn1 = it_intern-value.
+      WHEN '0028'.
+        w_upload-spart = it_intern-value.
+
+      WHEN '0029'.
+        w_upload-spara = it_intern-value.
+      WHEN '0030'.
+        w_upload-katr3 = it_intern-value.
+      WHEN '0031'.
+        w_upload-katr4 = it_intern-value.
+      WHEN '0032'.
+        w_upload-fkimg = it_intern-value.
+      WHEN '0033'.
+        w_upload-netwr = it_intern-value.
+      WHEN '0034'.
+        w_upload-skfbp = it_intern-value.
+      WHEN '0035'.
+        w_upload-wavwr = it_intern-value.
+      WHEN '0036'.
+        w_upload-mwsbp = it_intern-value.
+      WHEN '0037'.
+        w_upload-umkzwi6 = it_intern-value.
+      WHEN '0038'.
+        w_upload-umkzwi5 = it_intern-value.
+
+      WHEN '0039'.
+        w_upload-fklmg = it_intern-value.
+      WHEN '0040'.
+        w_upload-irm_slsamt = it_intern-value.
+      WHEN '0040'.
+        w_upload-umnet = it_intern-value.
+    ENDCASE.
+    AT END OF row.
+      APPEND w_upload TO t_upload.
+      CLEAR w_upload.
+    ENDAT.
+  ENDLOOP.
+  DELETE ADJACENT DUPLICATES FROM t_upload COMPARING ALL FIELDS.
+ENDFORM.
+
+
+*&---------------------------------------------------------------------*
+*&      Form  SUB_PROCESS_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sub_process_data .
+  DATA : lv_count(5) TYPE n.
+  LOOP AT t_upload INTO w_upload.
+    lv_count = lv_count + 1.
+    MOVE-CORRESPONDING w_upload TO w_s911.
+    CONCATENATE p_indic lv_count INTO w_s911-spwoc.
+    CONDENSE w_S911-spwoc.
+    w_s911-mandt = sy-mandt.
+    MODIFY s911 FROM w_s911.
+    CLEAR w_s911.
+    MESSAGE 'Data update successfully' TYPE 'S'.
+  ENDLOOP.
+ENDFORM.
