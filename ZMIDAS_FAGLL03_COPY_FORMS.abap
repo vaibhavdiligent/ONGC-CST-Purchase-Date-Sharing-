@@ -875,44 +875,23 @@ FORM get_glset.
       OTHERS         = 4.
 
   IF lv_fy IS NOT INITIAL AND r_midas3_gl_pc IS NOT INITIAL AND r_midas3_cc_pc IS NOT INITIAL.
-    SELECT  ryear
-            objnr00
-            objnr01
-            objnr02
-            objnr03
-            objnr04
-            objnr05
-            objnr06
-            objnr07
-            objnr08
-            drcrk
-            rpmax
-            racct
-            rbukrs
-            prctr
-            hsl01
-            hsl02
-            hsl03
-            hsl04
-            hsl05
-            hsl06
-            hsl07
-            hsl08
-            hsl09
-            hsl10
-            hsl11
-            hsl12
 * **BEGIN OF CHANGE 01.11.2026 - S/4HANA: FAGLFLEXT is obsolete, read its
-* replacement object (compatibility view on ACDOCA, same field names).
-* Check SE11 -> FAGLFLEXT -> Replacement Object = FGL_FAGLFLEXT.
-*           FROM faglflext
-           FROM fgl_faglflext
+* replacement object FGL_FAGLFLEXT (CDS compatibility view on ACDOCA,
+* same field names). A CDS view needs the new Open SQL syntax
+* (comma list, @host variables); the old list form gives a syntax error.
+* SE11 -> FAGLFLEXT -> Replacement Object = FGL_FAGLFLEXT.
+    SELECT ryear, objnr00, objnr01, objnr02, objnr03, objnr04,
+           objnr05, objnr06, objnr07, objnr08, drcrk, rpmax,
+           racct, rbukrs, prctr,
+           hsl01, hsl02, hsl03, hsl04, hsl05, hsl06,
+           hsl07, hsl08, hsl09, hsl10, hsl11, hsl12
+      FROM fgl_faglflext
+      WHERE ryear  = @lv_fy
+        AND rldnr  = '0L'
+        AND racct  IN @r_midas3_gl_pc
+        AND rbukrs IN @r_midas3_cc_pc
+      INTO CORRESPONDING FIELDS OF TABLE @ta_fagl.
 * **END OF CHANGE 01.11.2026
-           INTO  TABLE ta_fagl
-           WHERE ryear = lv_fy
-           AND   rldnr = '0L'
-           AND racct IN r_midas3_gl_pc
-           AND rbukrs IN r_midas3_cc_pc.
 
     IF ta_fagl IS NOT INITIAL.
       SORT ta_fagl BY racct prctr rbukrs.
