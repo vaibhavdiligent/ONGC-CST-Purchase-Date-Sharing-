@@ -204,41 +204,105 @@ FORM sub_transfer_data .
           IMPORTING
             output = w_upload-spmon.
       WHEN '0004'.
-        PERFORM sub_conv_date USING    is_cell TYPE alsmex_tabline
-                   CHANGING cv_date TYPE any.       " DATS or NUMC/CHAR 8 (VWDAT)
-  DATA : lv_val  TYPE string,
-         lv_ext  TYPE c LENGTH 10,
-         lv_date TYPE d.
-
-  lv_val = is_cell-value.
-  CONDENSE lv_val NO-GAPS.
-  CLEAR cv_date.
-  IF lv_val IS INITIAL.
-    RETURN.
-  ENDIF.
-  IF strlen( lv_val ) = 8 AND lv_val CO '0123456789'.
-    cv_date = lv_val.
-    RETURN.
-  ENDIF.
-  lv_ext = lv_val.
-  CALL FUNCTION 'CONVERT_DATE_TO_INTERNAL'
-    EXPORTING
-      date_external            = lv_ext
-    IMPORTING
-      date_internal            = lv_date
-    EXCEPTIONS
-      date_external_is_invalid = 1
-      OTHERS                   = 2.
-  IF sy-subrc = 0.
-    cv_date = lv_date.
-  ELSE.
-    CLEAR cv_date.
-    w_err-row  = is_cell-row.
-    w_err-col  = is_cell-col.
-    w_err-val  = is_cell-value.
-    w_err-text = 'Not a valid date'.
-    APPEND w_err TO t_err.
-  ENDIF.
+        PERFORM sub_conv_date USING w_intern CHANGING w_upload-sptag.
+      WHEN '0005'.
+        w_upload-spwoc = w_intern-value.
+      WHEN '0006'.
+        w_upload-spbup = w_intern-value.
+      WHEN '0007'.
+        w_upload-vkorg = w_intern-value.
+      WHEN '0008'.
+        w_upload-vtweg = w_intern-value.
+      WHEN '0009'.
+        w_upload-fkart = w_intern-value.
+      WHEN '0010'.
+        w_upload-inco1 = w_intern-value.
+      WHEN '0011'.
+        w_upload-kvgr1 = w_intern-value.
+      WHEN '0012'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = w_intern-value
+          IMPORTING
+            output = w_upload-pkunag.
+      WHEN '0013'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = w_intern-value
+          IMPORTING
+            output = w_upload-matnr.
+      WHEN '0014'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = w_intern-value
+          IMPORTING
+            output = w_upload-ip_vend.
+      WHEN '0015'.
+        w_upload-plaag_01 = w_intern-value.
+      WHEN '0016'.
+        w_upload-periv = w_intern-value.
+      WHEN '0017'.
+        PERFORM sub_conv_date USING w_intern CHANGING w_upload-vwdat.
+      WHEN '0018'.
+        w_upload-vrkme = w_intern-value.
+      WHEN '0019'.
+        w_upload-waerk = w_intern-value.
+      WHEN '0020'.
+        w_upload-stwae = w_intern-value.
+      WHEN '0021'.
+        w_upload-basme = w_intern-value.
+      WHEN '0022'.
+        w_upload-werks = w_intern-value.
+      WHEN '0023'.
+        w_upload-vkbur = w_intern-value.
+      WHEN '0024'.
+        w_upload-kdgrp = w_intern-value.
+      WHEN '0025'.
+        w_upload-plawe = w_intern-value.
+      WHEN '0026'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-kursk.
+      WHEN '0027'.
+        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+          EXPORTING
+            input  = w_intern-value
+          IMPORTING
+            output = w_upload-sakn1.
+      WHEN '0028'.
+        w_upload-spart = w_intern-value.
+      WHEN '0029'.
+        w_upload-spara = w_intern-value.
+      WHEN '0030'.
+        w_upload-katr3 = w_intern-value.
+      WHEN '0031'.
+        w_upload-katr4 = w_intern-value.
+      WHEN '0032'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-fkimg.
+      WHEN '0033'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-netwr.
+      WHEN '0034'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-skfbp.
+      WHEN '0035'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-wavwr.
+      WHEN '0036'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-mwsbp.
+      WHEN '0037'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-umkzwi6.
+      WHEN '0038'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-umkzwi5.
+      WHEN '0039'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-fklmg.
+      WHEN '0040'.
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-irm_slsamt.
+      WHEN '0041'.                      " was WHEN '0040' twice -> UMNET never filled
+        PERFORM sub_conv_num USING w_intern CHANGING w_upload-umnet.
+    ENDCASE.
+    AT END OF row.
+      APPEND w_upload TO t_upload.
+      CLEAR w_upload.
+    ENDAT.
+  ENDLOOP.
+  SORT t_upload.
+  DELETE ADJACENT DUPLICATES FROM t_upload COMPARING ALL FIELDS.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -276,9 +340,10 @@ ENDFORM.
 *  Accepts YYYYMMDD or the user's display format (e.g. 31.12.2025).
 *----------------------------------------------------------------------*
 FORM sub_conv_date USING    is_cell TYPE alsmex_tabline
-                   CHANGING cv_date TYPE d.
-  DATA : lv_val TYPE string,
-         lv_ext TYPE c LENGTH 10.
+                   CHANGING cv_date TYPE any.       " DATS or NUMC/CHAR 8 (VWDAT)
+  DATA : lv_val  TYPE string,
+         lv_ext  TYPE c LENGTH 10,
+         lv_date TYPE d.
 
   lv_val = is_cell-value.
   CONDENSE lv_val NO-GAPS.
@@ -295,11 +360,13 @@ FORM sub_conv_date USING    is_cell TYPE alsmex_tabline
     EXPORTING
       date_external            = lv_ext
     IMPORTING
-      date_internal            = cv_date
+      date_internal            = lv_date
     EXCEPTIONS
       date_external_is_invalid = 1
       OTHERS                   = 2.
-  IF sy-subrc <> 0.
+  IF sy-subrc = 0.
+    cv_date = lv_date.
+  ELSE.
     CLEAR cv_date.
     w_err-row  = is_cell-row.
     w_err-col  = is_cell-col.
