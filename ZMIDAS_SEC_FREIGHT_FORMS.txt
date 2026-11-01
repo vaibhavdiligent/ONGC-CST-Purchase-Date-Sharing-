@@ -1,0 +1,772 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZMIDAS_SEC_FREIGHT_FORMS
+*&---------------------------------------------------------------------*
+*&Title             : Midas 3 ( BU P&L Automation )
+*& Program           : ZMIDAS_SEC_FREIGHT_FORMS
+*& Tcode             : ZMIDAS_SEC_FREIGHT_FORMS
+*& Author            : Pooja Adupala
+*& Functional Design : Shashank Sharma
+*& Technical Design  : Pooja Adupala
+*& Creation Date     : 13.04.2022
+*& Transport Request : CRDK982563
+*& Change request    : 8000007907
+*& Description       : Program to Update Custom Table-ZMIDAS_SEC_FRGHT
+*&---------------------------------------------------------------------*
+FORM get_data .
+
+  "Get GL accounts from SETLEAF Table:
+  SELECT * FROM setleaf INTO TABLE @DATA(ta_setleaf)
+  WHERE setname IN  ( @co_rx, @co_common, @co_rx_gx ,@co_gl_sf_cc ).
+
+  IF ta_setleaf IS NOT INITIAL.
+    "GL Account Range for Secondary Freight - Common
+    DATA(ta_common) = ta_setleaf.
+    DELETE ta_common WHERE setname <> co_common.
+
+    IF ta_common IS NOT INITIAL.
+      LOOP AT ta_common INTO DATA(wa_common).
+        r_common-sign = wa_common-valsign.
+        r_common-option = wa_common-valoption.
+        r_common-low = wa_common-valfrom.
+        r_common-high = wa_common-valto .
+        APPEND r_common.
+        CLEAR wa_common.
+      ENDLOOP.
+      REFRESH ta_common[].
+    ENDIF.
+
+    "GL Account Range for Secondary Freight - Rx
+    DATA(ta_rx) = ta_setleaf.
+    DELETE ta_rx WHERE setname <> co_rx.
+
+    IF ta_rx IS NOT INITIAL.
+      LOOP AT ta_rx INTO DATA(wa_rx).
+        r_rx-sign = wa_rx-valsign.
+        r_rx-option = wa_rx-valoption.
+        r_rx-low = wa_rx-valfrom.
+        r_rx-high = wa_rx-valto .
+        APPEND r_rx.
+        CLEAR wa_rx.
+      ENDLOOP.
+      REFRESH ta_rx[].
+    ENDIF.
+
+    DATA(ta_rx_gx) = ta_setleaf.
+    DELETE ta_rx_gx WHERE setname <> co_rx_gx.
+
+    "GL Account Range for Secondary Freight -Rx & GX
+    IF ta_rx_gx IS NOT INITIAL.
+      LOOP AT ta_rx_gx INTO DATA(wa_rx_gx).
+        r_rx_gx-sign = wa_rx_gx-valsign.
+        r_rx_gx-option = wa_rx_gx-valoption.
+        r_rx_gx-low = wa_rx_gx-valfrom.
+        r_rx_gx-high = wa_rx_gx-valto .
+        APPEND r_rx_gx.
+        CLEAR wa_rx_gx.
+      ENDLOOP.
+      REFRESH ta_rx_gx[].
+    ENDIF.
+
+    "COMPANY CODE
+    DATA(ta_gl_sf_cc) = ta_setleaf.
+    DELETE ta_gl_sf_cc WHERE setname <> co_gl_sf_cc.
+
+    IF ta_gl_sf_cc IS NOT INITIAL.
+      LOOP AT ta_gl_sf_cc INTO DATA(wa_gl_sf_cc).
+        r_gl_sf_cc-sign = wa_gl_sf_cc-valsign.
+        r_gl_sf_cc-option = wa_gl_sf_cc-valoption.
+        r_gl_sf_cc-low = wa_gl_sf_cc-valfrom.
+        r_gl_sf_cc-high = wa_gl_sf_cc-valto .
+        APPEND r_gl_sf_cc.
+        CLEAR wa_gl_sf_cc.
+      ENDLOOP.
+      REFRESH ta_gl_sf_cc[].
+    ENDIF.
+  ENDIF.
+
+  "Get Salesgroup Range for Zone Rx:
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_resp.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_acute.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_vitalis.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_emerging.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_uro_imp.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_optimus.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_allied.
+  APPEND r_rx_salesgrp.
+
+  CLEAR r_rx_salesgrp.
+  r_rx_salesgrp-sign = co_i.
+  r_rx_salesgrp-option = co_eq.
+  r_rx_salesgrp-low = co_commonrx.
+  APPEND r_rx_salesgrp.
+
+  "Range for Zone_1
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_gx.
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_api .
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_domesticapi .
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_cga.
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_chl.
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_sa .
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_ssa .
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_em .
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_eu .
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_na.
+  APPEND r_zone_all.
+
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_corporate.
+  APPEND r_zone_all.
+
+  "SOA by Gajanan - 19.02.2025 - CR#8000003569
+  CLEAR r_zone_all.
+  r_zone_all-sign = co_i.
+  r_zone_all-option = co_eq.
+  r_zone_all-low = co_north_africa.
+  APPEND r_zone_all.
+  "EOA by Gajanan - 19.02.2025 - CR#8000003569
+
+  SELECT
+*         actualbudget "Commented by Gajanan - 21.10.2024 - CR#8000003569
+         spmon
+         ent_tag "Added by Gajanan - 21.10.2024 - CR#8000003569
+         expenses
+         final_tag
+         sales_grp
+         katr4
+         zone_1
+         add_drill_down
+         add_drill_down2
+         vkorg
+         werks
+         cost_plant
+         matnr
+         fkart
+         sakn1 "Added by Gajanan - 21.10.2024 - CR#8000003569
+         sales_cc_curr
+    FROM zsd_s911_consol
+    INTO TABLE ta_s911_consol
+    WHERE spmon = p_spmon
+    AND expenses NE co_expenses
+*    AND katr4 = 'IC'
+*    AND vkorg = '1000'.
+    AND zone_1 NE co_corporate
+    AND vkorg IN r_gl_sf_cc.
+
+  r_sales_grp-sign = co_i.
+  r_sales_grp-option = co_eq.
+  r_sales_grp-low = 'FI Provision'.
+  APPEND  r_sales_grp.
+  CLEAR:r_sales_grp.
+
+  r_sales_grp-sign = co_i.
+  r_sales_grp-option = co_eq.
+  r_sales_grp-low = 'RxNA'.
+  APPEND  r_sales_grp.
+  CLEAR:r_sales_grp.
+
+  r_sales_grp-sign = co_i.
+  r_sales_grp-option = co_eq.
+  r_sales_grp-low = 'RxOTHERS'.
+  APPEND  r_sales_grp.
+  CLEAR:r_sales_grp.
+
+  r_sales_grp-sign = co_i.
+  r_sales_grp-option = co_eq.
+  r_sales_grp-low = 'RxRx-Common'.
+  APPEND  r_sales_grp.
+  CLEAR:r_sales_grp.
+
+ENDFORM.
+
+FORM get_final.
+
+  IF ta_s911_consol IS NOT INITIAL.
+    LOOP AT ta_s911_consol ASSIGNING FIELD-SYMBOL(<fs_consol>).
+*      IF <fs_consol>-sales_grp IN r_sales_grp. "Commented by Gajanan - 25.02.2025 - CR#8000003569
+      <fs_consol>-sales_grp = 'RX_COMMON'.
+*      ELSEIF <fs_consol>-sales_grp = 'RxInstitution'. "Commented by Gajanan - 25.02.2025 - CR#8000003569
+*        <fs_consol>-sales_grp = 'RxALLIED'. "Commented by Gajanan - 25.02.2025 - CR#8000003569
+*    ENDIF.
+    ENDLOOP.
+
+    DATA(ta_bukrs_con) = ta_s911_consol[].
+    SORT ta_bukrs_con BY vkorg.
+    DELETE ADJACENT DUPLICATES FROM ta_bukrs_con COMPARING vkorg.
+    "With Filter Zone = Rx and subtotal at Sales group
+    ta_zone = CORRESPONDING #( ta_s911_consol ).
+    DELETE ta_zone WHERE zone_1 <> 'Rx'.
+    SORT ta_zone BY vkorg zone_1 .
+
+
+    IF ta_zone IS NOT INITIAL.
+      LOOP AT ta_zone INTO DATA(wa_zone).
+        MOVE-CORRESPONDING  wa_zone TO wa_finalrx.
+        COLLECT wa_finalrx INTO ta_finalrx.
+        CLEAR wa_finalrx.
+      ENDLOOP.
+
+      IF ta_finalrx IS NOT INITIAL.
+        LOOP AT ta_finalrx INTO wa_finalrx.
+          MOVE-CORRESPONDING wa_finalrx TO wa_finalrx1.
+          COLLECT wa_finalrx1 INTO ta_finalrx1.
+          CLEAR:wa_finalrx1.
+        ENDLOOP.
+      ENDIF.
+
+      SORT ta_finalrx1 BY vkorg.
+    ENDIF.
+
+    "Remove filter zone = Rx and subtotal at Zone level.
+    ta_zone_all = CORRESPONDING #( ta_s911_consol ).
+    SORT ta_zone_all BY zone_1.
+    LOOP AT ta_zone_all ASSIGNING FIELD-SYMBOL(<fs_zone_api>).
+      IF <fs_zone_api>-zone_1 = co_domesticapi.
+        <fs_zone_api>-zone_1 = co_api.
+      ENDIF.
+    ENDLOOP.
+    SORT ta_zone_all BY zone_1.
+    DELETE ta_zone_all WHERE zone_1 NOT IN r_zone_all[].
+
+    IF ta_zone_all IS NOT INITIAL.
+      LOOP AT ta_zone_all INTO wa_zone_all.
+        MOVE-CORRESPONDING wa_zone_all TO  wa_finalall.
+        COLLECT wa_finalall INTO ta_finalall.
+        CLEAR wa_finalall.
+      ENDLOOP.
+
+      SORT ta_finalall BY vkorg.
+      LOOP AT ta_finalall INTO wa_finalall.
+        MOVE-CORRESPONDING wa_finalall TO  wa_finalall1.
+        COLLECT wa_finalall1 INTO ta_finalall1.
+        CLEAR wa_finalall1.
+      ENDLOOP.
+
+      "Only GX sales CC Curr Sum
+      DATA(ta_final_gx) = ta_finalall.
+      DELETE ta_final_gx WHERE zone_1 <> 'GX'.
+
+      LOOP AT ta_final_gx INTO DATA(wa_final_gx).
+        MOVE-CORRESPONDING wa_final_gx TO wa_final_gx1.
+        COLLECT wa_final_gx1 INTO ta_final_gx1.
+        CLEAR:wa_final_gx1.
+      ENDLOOP.
+
+      SORT ta_final_gx1 BY vkorg.
+
+      "Both Rx and GX sales CC Curr Sum :
+      LOOP AT ta_finalrx1 INTO wa_finalrx1.
+        wa_final_rxgx-vkorg =  wa_finalrx1-vkorg.
+        READ TABLE ta_final_gx1 INTO wa_final_gx1 WITH KEY vkorg = wa_finalrx1-vkorg.
+        IF sy-subrc = 0.
+          wa_final_rxgx-sales_cc_curr =  wa_final_gx1-sales_cc_curr + wa_finalrx1-sales_cc_curr.
+        ELSE.
+          wa_final_rxgx-sales_cc_curr = wa_finalrx1-sales_cc_curr.
+        ENDIF.
+        APPEND wa_final_rxgx TO ta_final_rxgx.
+        CLEAR:wa_finalrx1,wa_final_rxgx.
+      ENDLOOP.
+
+      "Sum of All(Rx,GX and Other zones) Sales CC Curr
+      LOOP AT ta_finalall1 INTO wa_finalall1.
+        wa_total_all-vkorg = wa_finalall1-vkorg.
+        READ TABLE ta_finalrx1 INTO wa_finalrx1 WITH KEY vkorg = wa_finalall1-vkorg.
+        IF sy-subrc = 0.
+          wa_total_all-sales_cc_curr = wa_finalrx1-sales_cc_curr + wa_finalall1-sales_cc_curr.
+        ELSE.
+          wa_total_all-sales_cc_curr = wa_finalall1-sales_cc_curr.
+        ENDIF.
+        APPEND wa_total_all TO ta_total_all.
+        CLEAR:wa_total_all.
+      ENDLOOP.
+
+    ENDIF.
+
+    "Get period from Date:
+    CONCATENATE  p_spmon+0(4) p_spmon+4(2) '01' INTO lv_date.
+    "Calculate Period
+    CALL FUNCTION 'DATE_TO_PERIOD_CONVERT'
+      EXPORTING
+        i_date         = lv_date
+        i_periv        = 'V3'
+      IMPORTING
+        e_buper        = lv_period
+        e_gjahr        = lv_fy
+      EXCEPTIONS
+        input_false    = 1
+        t009_notfound  = 2
+        t009b_notfound = 3
+        OTHERS         = 4.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    lv_fisper = lv_period.
+
+    "Get GL Balance from FM  " BAPI_GL_GETGLACCPERIODBALANCES
+    "For Secondary Freight - RX & GX
+    IF r_rx_gx[] IS NOT INITIAL.
+" " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*      SELECT ktopl,
+*             saknr  FROM ska1
+*        INTO TABLE @DATA(ta_ska1)
+*        WHERE saknr IN @r_rx_gx[].
+ SELECT  CHARTOFACCOUNTS AS KTOPL , GLACCOUNT AS SAKNR FROM
+I_GLACCOUNTINCHARTOFACCOUNTS WHERE GLACCOUNT IN @R_RX_GX[] INTO TABLE
+@DATA(TA_SKA1).
+" " Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+    ENDIF.
+
+    IF r_common[] IS NOT INITIAL.
+" " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*      SELECT ktopl,
+*             saknr  FROM ska1
+*            INTO TABLE @DATA(ta_ska1_common)
+*            WHERE saknr IN @r_common[].
+ SELECT  CHARTOFACCOUNTS AS KTOPL , GLACCOUNT AS SAKNR FROM
+I_GLACCOUNTINCHARTOFACCOUNTS WHERE GLACCOUNT IN @R_COMMON[] INTO TABLE
+@DATA(TA_SKA1_COMMON).
+" " Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+    ENDIF.
+
+    IF r_rx[] IS NOT INITIAL.
+" " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*      SELECT ktopl,
+*             saknr  FROM ska1
+*            INTO TABLE @DATA(ta_ska1_rx)
+*            WHERE saknr IN @r_rx[].
+ SELECT  CHARTOFACCOUNTS AS KTOPL , GLACCOUNT AS SAKNR FROM
+I_GLACCOUNTINCHARTOFACCOUNTS WHERE GLACCOUNT IN @R_RX[] INTO TABLE
+@DATA(TA_SKA1_RX).
+" " Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+    ENDIF.
+
+    CLEAR:lv_sales_rx_gx.
+    LOOP AT ta_bukrs_con INTO DATA(wa_bukrs_con).
+      lv_cocd = wa_bukrs_con-vkorg.
+      LOOP AT ta_ska1 INTO DATA(wa_ska1).
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+        CALL FUNCTION 'BAPI_GL_GETGLACCPERIODBALANCES'"#EC CI_USAGE_OK[2628704]
+" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+          EXPORTING
+            companycode      = lv_cocd
+            glacct           = wa_ska1-saknr
+            fiscalyear       = lv_fy
+            currencytype     = co_currtype
+          TABLES
+            account_balances = ta_acc_bal[].
+        APPEND LINES OF ta_acc_bal TO ta_acc_bal_rxgx.
+        CLEAR wa_ska1.
+      ENDLOOP.
+
+      SORT ta_acc_bal_rxgx BY fis_period.
+      DELETE ta_acc_bal_rxgx WHERE fis_period <>  lv_fisper .
+
+      CLEAR wa_acc_bal.
+      LOOP AT ta_acc_bal_rxgx INTO wa_acc_bal.
+        AT LAST.
+          SUM.
+          lv_sales_rx_gx = wa_acc_bal-per_sales.
+        ENDAT.
+        CLEAR wa_acc_bal.
+      ENDLOOP.
+      wa_cocd_salesrxgx-vkorg = wa_bukrs_con-vkorg.
+      wa_cocd_salesrxgx-sales = lv_sales_rx_gx.
+      APPEND wa_cocd_salesrxgx TO ta_cocd_salesrxgx.
+      CLEAR:wa_cocd_salesrxgx.
+
+      "For Secondary Freight - Common
+      LOOP AT ta_ska1_common INTO DATA(wa_common1).
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+        CALL FUNCTION 'BAPI_GL_GETGLACCPERIODBALANCES'"#EC CI_USAGE_OK[2628704]
+" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+          EXPORTING
+            companycode      = lv_cocd
+            glacct           = wa_common1-saknr
+            fiscalyear       = lv_fy
+            currencytype     = co_currtype
+          TABLES
+            account_balances = ta_acc_bal[].
+        APPEND LINES OF ta_acc_bal TO ta_acc_bal_common.
+        CLEAR wa_common1.
+      ENDLOOP.
+
+      SORT ta_acc_bal_common BY fis_period.
+      DELETE ta_acc_bal_common WHERE fis_period <>  lv_fisper .
+      CLEAR wa_acc_bal.
+      LOOP AT ta_acc_bal_common INTO wa_acc_bal.
+        AT LAST.
+          SUM.
+          lv_sales_common =  wa_acc_bal-per_sales.
+        ENDAT.
+        CLEAR wa_acc_bal.
+      ENDLOOP.
+
+      wa_cocd_salescommon-vkorg = wa_bukrs_con-vkorg.
+      wa_cocd_salescommon-sales = lv_sales_common.
+      APPEND wa_cocd_salescommon TO ta_cocd_salescommon.
+      CLEAR:wa_cocd_salescommon.
+
+      "For Secondary Freight - RX
+*      LOOP AT r_rx INTO DATA(wa_rx1).
+      LOOP AT ta_ska1_rx INTO DATA(wa_rx1).
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+        CALL FUNCTION 'BAPI_GL_GETGLACCPERIODBALANCES'"#EC CI_USAGE_OK[2628704]
+" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+          EXPORTING
+            companycode      = lv_cocd
+            glacct           = wa_rx1-saknr
+            fiscalyear       = lv_fy
+            currencytype     = co_currtype
+          TABLES
+            account_balances = ta_acc_bal[].
+        APPEND LINES OF ta_acc_bal TO ta_acc_bal_rx.
+        CLEAR wa_rx1.
+      ENDLOOP.
+
+      SORT ta_acc_bal_rx BY fis_period.
+      DELETE ta_acc_bal_rx WHERE fis_period <>  lv_fisper .
+      CLEAR wa_acc_bal.
+      LOOP AT ta_acc_bal_rx INTO wa_acc_bal.
+        AT LAST.
+          SUM.
+          lv_sales_rx = wa_acc_bal-per_sales.
+        ENDAT.
+        CLEAR wa_acc_bal.
+      ENDLOOP.
+
+
+      wa_cocd_salesrx-vkorg = wa_bukrs_con-vkorg.
+      wa_cocd_salesrx-sales = lv_sales_rx.
+      APPEND wa_cocd_salesrx TO ta_cocd_salesrx.
+      CLEAR:wa_cocd_salesrx,lv_sales_rx_gx,lv_sales_rx,lv_sales_common.
+      REFRESH:ta_acc_bal_rxgx[],ta_acc_bal_rx[],ta_acc_bal_common[].
+    ENDLOOP.
+
+    SORT ta_finalrx1 BY vkorg.
+    SORT ta_finalrx BY vkorg.
+    SORT ta_cocd_salesrx BY vkorg.
+    SORT ta_cocd_salescommon BY vkorg.
+    CLEAR:lv_sales_rx.
+    LOOP AT ta_finalrx1 INTO wa_finalrx1.
+      "Entry for Secondary Freight - Rx :
+      wa_final-actualbudget = 'ACTUAL'.
+      wa_final-spmon = p_spmon.
+      wa_final-expenses = 'S&D' .
+      wa_final-final_tag = '54'.
+      wa_final-katr4 = ''.
+      wa_final-add_drill_down = 'Common'.
+      wa_final-bukrs = wa_finalrx1-vkorg.
+      wa_salesgrp_rx-vkorg = wa_finalrx1-vkorg.
+      lv_total_rx = wa_finalrx1-sales_cc_curr.
+
+      READ TABLE ta_cocd_salesrx INTO DATA(wa_cocd_salesrx1) WITH KEY vkorg = wa_finalrx1-vkorg.
+      IF sy-subrc = 0.
+        lv_sales_rx = wa_cocd_salesrx1-sales.
+      ENDIF.
+
+      IF lv_sales_rx IS NOT INITIAL.
+        wa_final-amnt_total = lv_sales_rx.
+      ENDIF.
+
+      READ TABLE ta_finalrx TRANSPORTING NO FIELDS WITH KEY vkorg = wa_finalrx1-vkorg.
+      IF sy-subrc = 0 AND   lv_sales_rx IS NOT INITIAL AND lv_total_rx IS NOT INITIAL.
+        LOOP AT ta_finalrx INTO wa_finalrx FROM sy-tabix.
+          IF wa_finalrx-vkorg <> wa_finalrx1-vkorg.
+            EXIT.
+          ELSE.
+            IF wa_finalrx-sales_grp = co_resp .
+              wa_final-rx_respi = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_respi = wa_finalrx-sales_cc_curr.
+            ELSEIF wa_finalrx-sales_grp = co_acute .
+              wa_final-rx_acute  = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_acute = wa_finalrx-sales_cc_curr.
+            ELSEIF wa_finalrx-sales_grp = co_vitalis .
+              wa_final-rx_vitalis  = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_vitalis = wa_finalrx-sales_cc_curr.
+            ELSEIF wa_finalrx-sales_grp = co_emerging.
+              wa_final-rx_emerging  = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_emerging = wa_finalrx-sales_cc_curr.
+            ELSEIF wa_finalrx-sales_grp = co_uro_imp.
+              wa_final-rx_uro_imp = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_uro_imp = wa_finalrx-sales_cc_curr.
+            ELSEIF wa_finalrx-sales_grp = co_optimus.
+              wa_final-rx_optimus  = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_optimus = wa_finalrx-sales_cc_curr .
+            ELSEIF wa_finalrx-sales_grp = co_allied.
+              wa_final-rx_allied  = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_allied = wa_finalrx-sales_cc_curr .
+            ELSEIF wa_finalrx-sales_grp = 'RX_COMMON'.
+              wa_final-rx_common  = wa_finalrx-sales_cc_curr * lv_sales_rx / lv_total_rx.
+              wa_salesgrp_rx-rx_common = wa_finalrx-sales_cc_curr.
+            ENDIF.
+            CLEAR wa_finalrx.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+      APPEND wa_final TO ta_final.
+      APPEND wa_salesgrp_rx TO ta_salesgrp_rx.
+      CLEAR wa_final.
+      CLEAR:wa_finalrx1,wa_salesgrp_rx.
+    ENDLOOP.
+
+    SORT ta_salesgrp_rx BY vkorg.
+    SORT ta_cocd_salesrxgx BY vkorg.
+
+    CLEAR:lv_sales_rx_gx.
+    "Entry for Secondary Freight - Rx & Gx:
+    LOOP AT ta_final_rxgx INTO wa_final_rxgx.
+      wa_final-actualbudget = 'ACTUAL'.
+      wa_final-spmon = p_spmon.
+      wa_final-expenses = 'S&D' .
+      wa_final-final_tag = '53'.
+      wa_final-katr4 = ''.
+      wa_final-add_drill_down = 'Common'.
+      wa_final-bukrs = wa_final_rxgx-vkorg.
+
+      READ TABLE ta_cocd_salesrxgx INTO DATA(wa_cocd_salesrxgx1) WITH KEY vkorg = wa_final_rxgx-vkorg.
+      IF sy-subrc = 0.
+        lv_sales_rx_gx = wa_cocd_salesrxgx1-sales.
+      ENDIF.
+
+      IF lv_sales_rx_gx IS NOT INITIAL.
+        wa_final-amnt_total = lv_sales_rx_gx.
+      ENDIF.
+
+      lv_total_rxgx = wa_final_rxgx-sales_cc_curr.
+
+      READ TABLE ta_final_gx1 INTO DATA(wa_finalgx1) WITH KEY vkorg = wa_final_rxgx-vkorg.
+      IF sy-subrc = 0 .
+        IF lv_sales_rx_gx IS NOT INITIAL AND lv_total_rxgx IS NOT INITIAL.
+          wa_final-gx = wa_finalgx1-sales_cc_curr * lv_sales_rx_gx / lv_total_rxgx.
+        ENDIF.
+
+        wa_salesgrp_gx-gx = wa_finalgx1-sales_cc_curr.
+        wa_salesgrp_gx-vkorg  = wa_finalgx1-vkorg.
+        APPEND wa_salesgrp_gx TO ta_salesgrp_gx.
+        CLEAR:wa_finalgx1,wa_salesgrp_gx.
+      ENDIF.
+
+
+      IF lv_sales_rx_gx IS NOT INITIAL AND lv_total_rxgx IS NOT INITIAL.
+        READ TABLE ta_salesgrp_rx INTO DATA(wa_salesgrp_rx1) WITH KEY vkorg = wa_final_rxgx-vkorg.
+
+        IF sy-subrc = 0.
+          wa_final-rx_respi  = wa_salesgrp_rx1-rx_respi * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_acute =  wa_salesgrp_rx1-rx_acute * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_vitalis = wa_salesgrp_rx1-rx_vitalis * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_emerging = wa_salesgrp_rx1-rx_emerging * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_uro_imp =  wa_salesgrp_rx1-rx_uro_imp * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_optimus = wa_salesgrp_rx1-rx_optimus * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_allied = wa_salesgrp_rx1-rx_allied * lv_sales_rx_gx / lv_total_rxgx.
+          wa_final-rx_common = wa_salesgrp_rx1-rx_common * lv_sales_rx_gx / lv_total_rxgx.
+        ENDIF.
+      ENDIF.
+
+      APPEND wa_final TO ta_final.
+      CLEAR: wa_final,wa_final_rxgx,lv_sales_rx_gx.
+    ENDLOOP.
+    SORT ta_salesgrp_gx BY vkorg.
+
+    CLEAR:lv_sales_common.
+    LOOP AT ta_total_all INTO wa_total_all.
+      "Entry for Secondary Freight - Common:
+      wa_final-actualbudget = 'ACTUAL'.
+      wa_final-spmon = p_spmon.
+      wa_final-expenses = 'S&D' .
+      wa_final-final_tag = '52'.
+      wa_final-katr4 = ''.
+      wa_final-add_drill_down = 'Common'.
+      wa_final-bukrs = wa_total_all-vkorg.
+
+      READ TABLE ta_cocd_salescommon INTO DATA(wa_cocd_salescommon1) WITH KEY vkorg = wa_total_all-vkorg.
+      IF sy-subrc = 0.
+        lv_sales_common = wa_cocd_salescommon1-sales.
+      ENDIF.
+
+      IF lv_sales_common IS NOT INITIAL.
+        wa_final-amnt_total = lv_sales_common.
+      ENDIF.
+
+      lv_total_common = wa_total_all-sales_cc_curr.
+
+      IF lv_sales_common IS NOT INITIAL AND lv_total_common IS NOT INITIAL.
+
+        READ TABLE ta_salesgrp_rx INTO wa_salesgrp_rx WITH KEY vkorg = wa_total_all-vkorg.
+        IF sy-subrc = 0.
+          wa_final-rx_respi  = wa_salesgrp_rx-rx_respi * lv_sales_common / lv_total_common.
+          wa_final-rx_acute = wa_salesgrp_rx-rx_acute * lv_sales_common / lv_total_common.
+          wa_final-rx_vitalis = wa_salesgrp_rx-rx_vitalis * lv_sales_common / lv_total_common.
+          wa_final-rx_emerging = wa_salesgrp_rx-rx_emerging * lv_sales_common / lv_total_common.
+          wa_final-rx_uro_imp = wa_salesgrp_rx-rx_uro_imp * lv_sales_common / lv_total_common.
+          wa_final-rx_optimus = wa_salesgrp_rx-rx_optimus * lv_sales_common / lv_total_common.
+          wa_final-rx_allied = wa_salesgrp_rx-rx_allied * lv_sales_common / lv_total_common.
+          wa_final-rx_common = wa_salesgrp_rx-rx_common * lv_sales_common / lv_total_common.
+          "SOA by Gajanan - 19.02.2025 - CR#8000003569
+          wa_final-rx_common = wa_final-rx_common + wa_final-rx_respi + wa_final-rx_acute + wa_final-rx_vitalis + wa_final-rx_emerging +
+                               wa_final-rx_uro_imp + wa_final-rx_optimus + wa_final-rx_allied.
+          CLEAR: wa_final-rx_respi,wa_final-rx_acute,wa_final-rx_vitalis,wa_final-rx_emerging,wa_final-rx_uro_imp,
+                 wa_final-rx_optimus,wa_final-rx_allied.
+          "EOA by Gajanan - 19.02.2025 - CR#8000003569
+        ENDIF.
+
+        READ TABLE ta_salesgrp_gx INTO DATA(wa_salesgrp_gx1) WITH KEY vkorg = wa_total_all-vkorg.
+        IF sy-subrc = 0.
+          wa_final-gx = wa_salesgrp_gx1-gx * lv_sales_common / lv_total_common.
+        ENDIF.
+
+        READ TABLE ta_finalall TRANSPORTING NO FIELDS WITH KEY vkorg = wa_total_all-vkorg.
+        IF sy-subrc = 0.
+          LOOP AT ta_finalall INTO wa_finalall FROM sy-tabix.
+            IF wa_finalall-vkorg <> wa_total_all-vkorg.
+              EXIT.
+            ELSE.
+              IF wa_finalall-zone_1 = co_api.
+                wa_final-api = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_cga.
+                wa_final-cga = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_chl.
+                wa_final-chl = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common..
+              ELSEIF wa_finalall-zone_1 = co_sa.
+                wa_final-sa = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_ssa.
+                wa_final-ssa =  wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_em.
+                wa_final-em = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_eu.
+                wa_final-eu = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_na.
+                wa_final-na =  wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+              ELSEIF wa_finalall-zone_1 = co_corporate.
+                wa_final-corporate = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+                "SOA by Gajanan - 19.02.2025 - CR#8000003569
+              ELSEIF wa_finalall-zone_1 = co_north_africa.
+                wa_final-north_africa = wa_finalall-sales_cc_curr * lv_sales_common / lv_total_common.
+                "EOA by Gajanan - 19.02.2025 - CR#8000003569
+              ENDIF.
+            ENDIF.
+            CLEAR wa_finalall.
+          ENDLOOP.
+        ENDIF.
+      ENDIF.
+      APPEND wa_final TO ta_final.
+      CLEAR:wa_final,lv_sales_common.
+    ENDLOOP.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPDATE_TABLE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM update_table .
+  MODIFY zmidas_sec_frght FROM TABLE ta_final.
+  IF sy-subrc = 0.
+    COMMIT WORK.
+    MESSAGE text-s02 TYPE co_s. "Table ZMIDAS_SEC_FRGHT updated successfully
+  ELSE.
+    ROLLBACK WORK.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  REFRESH_TAB
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM refresh_tab .
+  REFRESH:r_common[],r_rx[],r_rx_gx[],r_rx_salesgrp[],
+  r_zone_all[],ta_s911_consol,ta_zone,ta_finalrx,ta_zone_all,
+  ta_finalall,ta_acc_bal[],ta_acc_bal_rx,ta_acc_bal_rxgx,ta_acc_bal_common,ta_finalrxgx,ta_final.
+
+  CLEAR :lv_total_rx,lv_total_rxgx,lv_total_gx,lv_total_common,lv_sales_rx,lv_sales_rx_gx,lv_sales_common,
+  wa_finalall,wa_finalrxgx,wa_finalrx,wa_final,wa_acc_bal.
+
+ENDFORM.

@@ -1,0 +1,178 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZMIDAS_SEC_FREIGHT_DEC
+*& Title             : Midas 3 ( BU P&L Automation )
+*& Program           : ZMIDAS_SEC_FREIGHT_DEC
+*& Tcode             : ZMIDAS_SEC_FREIGHT_DEC
+*& Author            : Pooja Adupala
+*& Functional Design : Shashank Sharma
+*& Technical Design  : Pooja Adupala
+*& Creation Date     : 13.04.2022
+*& Transport Request : CRDK982563
+*& Change request    : 8000007907
+*& Description       : Program to Update Custom Table-ZMIDAS_SEC_FRGHT
+*&---------------------------------------------------------------------*
+TABLES:zsd_s911_consol.
+
+TYPES:BEGIN OF ty_s911_consol,
+*        actualbudget    TYPE zsd_s911_consol-actualbudget, "Commented by Gajanan - 21.10.2024 - CR#8000003569
+        spmon           TYPE zsd_s911_consol-spmon,
+        ent_tag         TYPE zsd_s911_consol-ent_tag, "Added by Gajanan - 21.10.2024 - CR#8000003569
+        expenses        TYPE zsd_s911_consol-expenses,
+        final_tag       TYPE zsd_s911_consol-final_tag,
+        sales_grp       TYPE zsd_s911_consol-sales_grp,
+        katr4           TYPE zsd_s911_consol-katr4,
+        zone_1          TYPE zsd_s911_consol-zone_1,
+        add_drill_down  TYPE zsd_s911_consol-add_drill_down,
+        add_drill_down2 TYPE zsd_s911_consol-add_drill_down2,
+        vkorg           TYPE zsd_s911_consol-vkorg,
+        werks           TYPE zsd_s911_consol-werks,
+        cost_plant      TYPE zsd_s911_consol-cost_plant,
+        matnr           TYPE zsd_s911_consol-matnr,
+        fkart           TYPE zsd_s911_consol-fkart,
+        sakn1           TYPE zsd_s911_consol-sakn1, "Added by Gajanan - 21.10.2024 - CR#8000003569
+        sales_cc_curr   TYPE zsd_s911_consol-sales_cc_curr,
+      END OF ty_s911_consol,
+
+      BEGIN OF ty_zone,
+        vkorg         TYPE zsd_s911_consol-vkorg,
+        sales_grp     TYPE zsd_s911_consol-sales_grp,
+        zone_1        TYPE zsd_s911_consol-zone_1,
+        sales_cc_curr TYPE zsd_s911_consol-sales_cc_curr,
+      END OF ty_zone,
+
+      BEGIN OF ty_zone_all,
+        vkorg         TYPE zsd_s911_consol-vkorg,
+        zone_1        TYPE zsd_s911_consol-zone_1,
+        sales_cc_curr TYPE zsd_s911_consol-sales_cc_curr,
+      END OF ty_zone_all,
+
+      BEGIN OF ty_zone_all1,
+        vkorg         TYPE zsd_s911_consol-vkorg,
+        sales_cc_curr TYPE zsd_s911_consol-sales_cc_curr,
+      END OF ty_zone_all1,
+
+      BEGIN OF ty_salesgrp_rx,
+        vkorg       TYPE zsd_s911_consol-vkorg,
+        rx_respi    TYPE zmidas_sec_frght-rx_respi,
+        rx_acute    TYPE zmidas_sec_frght-rx_acute,
+        rx_vitalis  TYPE zmidas_sec_frght-rx_vitalis,
+        rx_emerging TYPE zmidas_sec_frght-rx_emerging,
+        rx_uro_imp  TYPE zmidas_sec_frght-rx_uro_imp,
+        rx_optimus  TYPE zmidas_sec_frght-rx_optimus,
+        rx_allied   TYPE zmidas_sec_frght-rx_allied,
+        rx_common   TYPE zmidas_sec_frght-rx_common,
+      END OF ty_salesgrp_rx,
+
+      BEGIN OF ty_salesgrp_gx,
+        vkorg TYPE zsd_s911_consol-vkorg,
+        gx    TYPE zmidas_sec_frght-gx,
+      END OF ty_salesgrp_gx,
+
+      BEGIN OF ty_cocd_sales,
+        vkorg TYPE zsd_s911_consol-vkorg,
+        sales TYPE bapi1028_4-per_sales,
+      END OF ty_cocd_sales.
+
+
+
+DATA:lv_sales_common     TYPE bapi1028_4-per_sales,
+     lv_sales_rx_gx      TYPE bapi1028_4-per_sales,
+     lv_sales_rx         TYPE bapi1028_4-per_sales,
+     lv_period           TYPE t009b-poper,
+     lv_fy               TYPE t009b-bdatj,
+     lv_date             TYPE sy-datum,
+     ta_acc_bal          TYPE TABLE OF bapi1028_4,
+     wa_acc_bal          TYPE  bapi1028_4,
+     ta_acc_bal_common   TYPE TABLE OF bapi1028_4,
+     ta_acc_bal_rx       TYPE TABLE OF bapi1028_4,
+     ta_acc_bal_rxgx     TYPE TABLE OF bapi1028_4,
+     lv_fisper           TYPE bapi1028_4-fis_period,
+     lv_total_rx         TYPE zsd_s911_consol-sales_cc_curr,
+     lv_total_rxgx       TYPE zsd_s911_consol-sales_cc_curr,
+     lv_total_gx         TYPE zsd_s911_consol-sales_cc_curr,
+     lv_total_common     TYPE zsd_s911_consol-sales_cc_curr,
+     ta_s911_consol      TYPE TABLE OF ty_s911_consol,
+     wa_s911_consol      TYPE ty_s911_consol,
+     ta_finalrx          TYPE TABLE OF ty_zone,
+     ta_finalrx1         TYPE TABLE OF ty_zone_all,
+     wa_finalrx          TYPE ty_zone,
+     wa_finalrx1         TYPE ty_zone_all,
+     ta_finalrxgx        TYPE TABLE OF ty_zone_all,
+     wa_finalrxgx        TYPE ty_zone_all,
+     ta_finalall         TYPE TABLE OF ty_zone_all,
+     wa_finalall         TYPE ty_zone_all,
+     ta_finalall1        TYPE TABLE OF ty_zone_all1,
+     wa_finalall1        TYPE ty_zone_all1,
+     ta_final_gx1        TYPE TABLE OF ty_zone_all1,
+     ta_final_rxgx       TYPE TABLE OF ty_zone_all1,
+     wa_final_rxgx       TYPE  ty_zone_all1,
+     wa_final_gx1        TYPE  ty_zone_all1,
+     wa_total_all        TYPE ty_zone_all1,
+     ta_total_all        TYPE TABLE OF  ty_zone_all1,
+     ta_zone             TYPE TABLE OF ty_zone,
+     wa_zone             TYPE ty_zone,
+     ta_zone_all         TYPE TABLE OF ty_zone_all,
+     wa_zone_all         TYPE ty_zone_all,
+     ta_zone_rxgx        TYPE TABLE OF  ty_zone_all,
+     wa_zone_rxgx        TYPE ty_zone_all,
+     wa_final            TYPE zmidas_sec_frght,
+     ta_final            TYPE TABLE OF zmidas_sec_frght,
+     ta_salesgrp_rx      TYPE TABLE OF ty_salesgrp_rx,
+     wa_salesgrp_rx      TYPE  ty_salesgrp_rx,
+     wa_salesgrp_gx      TYPE  ty_salesgrp_gx,
+     ta_salesgrp_gx      TYPE TABLE OF   ty_salesgrp_gx,
+     ta_cocd_salesrx     TYPE TABLE OF ty_cocd_sales,
+     wa_cocd_salesrx     TYPE ty_cocd_sales,
+     wa_cocd_salesrxgx   TYPE ty_cocd_sales,
+     ta_cocd_salesrxgx   TYPE TABLE OF ty_cocd_sales,
+     ta_cocd_salescommon TYPE TABLE OF ty_cocd_sales,
+     wa_cocd_salescommon TYPE  ty_cocd_sales,
+     lv_cocd             TYPE bapi1028_0-comp_code.
+
+
+CONSTANTS:co_resp         TYPE zsd_s911_consol-sales_grp VALUE 'RxRESPIRATORY',
+          co_acute        TYPE zsd_s911_consol-sales_grp VALUE 'RxACUTE',
+          co_vitalis      TYPE zsd_s911_consol-sales_grp VALUE 'RxVITALIS',
+          co_emerging     TYPE zsd_s911_consol-sales_grp VALUE 'RxEMERGING',
+          co_uro_imp      TYPE zsd_s911_consol-sales_grp VALUE 'RxURO+IMPULSE',
+          co_optimus      TYPE zsd_s911_consol-sales_grp VALUE 'RxOPTIMUS',
+          co_allied       TYPE zsd_s911_consol-sales_grp VALUE 'RxALLIED',
+          co_commonrx     TYPE zsd_s911_consol-sales_grp VALUE 'RxRx-Common',
+          co_gx           TYPE zsd_s911_consol-zone_1 VALUE 'GX',
+          co_api          TYPE zsd_s911_consol-zone_1 VALUE 'API',
+          co_domesticapi  TYPE zsd_s911_consol-zone_1 VALUE 'Domestic API',
+          co_cga          TYPE zsd_s911_consol-zone_1 VALUE 'Cipla Global Access',
+          co_expenses     TYPE zsd_s911_consol-expenses VALUE 'EXPORT INCENTIV',
+          co_chl          TYPE zsd_s911_consol-zone_1 VALUE 'CHL',
+          co_sa           TYPE zsd_s911_consol-zone_1 VALUE 'South Africa',
+          co_ssa          TYPE zsd_s911_consol-zone_1 VALUE 'Sub-Saharan',
+          co_em           TYPE zsd_s911_consol-zone_1 VALUE 'Emerging Markets',
+          co_eu           TYPE zsd_s911_consol-zone_1 VALUE 'Europe',
+          co_na           TYPE zsd_s911_consol-zone_1 VALUE 'North America',
+          co_corporate    TYPE zsd_s911_consol-zone_1 VALUE 'Corporate',
+          co_north_africa TYPE zsd_s911_consol-zone_1 VALUE 'North Africa',
+          co_rx           TYPE setleaf-setname VALUE 'GL_SF_RX',
+          co_common       TYPE  setleaf-setname VALUE 'GL_SF_COMMON',
+          co_rx_gx        TYPE  setleaf-setname VALUE 'GL_SF_RX_GX ',
+          co_gl_sf_cc     TYPE setleaf-setname VALUE 'GL_SF_CC ',
+*          co_cocd      TYPE bapi1028_0-comp_code VALUE '1000',
+          co_currtype     TYPE bapi1028_5-curr_type VALUE '10',
+          co_s(1)         VALUE 'S',
+          co_e(1)         VALUE 'E',
+          co_i(1)         VALUE 'I',
+          co_eq(2)        VALUE 'EQ'.
+
+RANGES:       r_common FOR bapi1028_0-gl_account,
+r_rx          FOR bapi1028_0-gl_account,
+r_rx_gx       FOR bapi1028_0-gl_account,
+r_rx_salesgrp FOR zsd_s911_consol-sales_grp,
+r_zone_all    FOR zsd_s911_consol-zone_1,
+r_gl_sf_cc FOR zsd_s911_consol-vkorg,
+r_sales_grp FOR zsd_s911_consol-sales_grp.
+*&---------------------------------------------------------------------*
+*& S E L E C T I O N  S C R E E N
+*&---------------------------------------------------------------------*
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-s01.
+PARAMETERS: p_date  TYPE d OBLIGATORY, "Added by Gajanan - 04.03.2025 - CR#8000003569
+            p_spmon TYPE zsd_s911_consol-spmon. "Period to analyze - month
+SELECTION-SCREEN END OF BLOCK b1.
