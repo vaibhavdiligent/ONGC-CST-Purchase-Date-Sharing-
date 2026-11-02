@@ -100,3 +100,29 @@ T-code access: e.g. `YCIS_L4` → YCIS_VET, `YCIS_L5` → YCIS_APPRV5,
 | 3 | Zero-value / no rebate order lines must not go to L4 | L3 closes such lines (`GROUP OK`, WF_STATUS 70) instead of forwarding; L4 is e-mailed only for real rebate orders. Lines forwarded earlier are closed automatically when L4/L5/L6 is opened | YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |
 | 4 | Text on expense GL line | After L6 posting the G/L lines of the accounting document get text `INVOICE <reference>` (e.g. `INVOICE CIS 26-27 JUNE DISCO`) via FI_DOCUMENT_CHANGE – no manual YRFR126 step. BSEG-SGTXT must be changeable (OB32) | YCIS_DISBURSE |
 | 5 | Approval note: no L6 details; fixed statements L1–L5 | Layout: L1/L2 statements above the Sales-Office table, L3/L4/L5 statement above each block, L6 block removed; driver no longer fills L6 | ZCIS_PSD_APPR_NOTE_layout.XDP, YCIS_REBATE_REPORT |
+
+## UAT observations 02.11.2026 – changes
+
+| # | Observation | Change | Object(s) |
+|---|---|---|---|
+| SMD-1 | Name as per scheme | Option renamed *Strategic Monthly Discount for May'26 and June'26* | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-2 | Raffia / other bifurcation | Output columns Raffia Grades Qty, Raffia Rate, Other Grades Qty, Other Rate, Total Amount (Rs.) | YRVG004_QAIS_EXECUTE_N1 |
+| WF-1 | Approval note amount ≠ YRVG052 | Note showed 10× the value (WRITE … CURRENCY on a 3-decimal field) – now written with 2 decimals | YCIS_REBATE_REPORT |
+| WF-2 | Note shows cases pending at L3 | Only cases finally approved at L5 (WF_STATUS 60/70, L5 user filled) are printed | YCIS_REBATE_REPORT |
+| WF-4 | Reminder to L1/L2 after 2 working days | New report YCIS_REMINDER (daily job) + table YCIS_DISC_REL | YCIS_REMINDER |
+
+### New table YCIS_DISC_REL – CIS discount release by PMG (SE11, delivery class A, table maintenance SM30)
+
+| Field | Key | Data element / type | Description |
+|---|---|---|---|
+| MANDT | X | MANDT | Client |
+| SCHEME_TYPE | X | CHAR 1 (same as YCIS_APPRVL-SCHEME_TYPE) | M = Monthly, T = Strategic Monthly, A = Annual, C = Annual Consistency |
+| PERIOD_FROM | X | DATUM | CIS period from |
+| PERIOD_TO | X | DATUM | CIS period to |
+| REL_DATE | | DATUM | Date the discount was released by PMG |
+| LAST_REMIND | | DATUM | Last reminder sent (filled by YCIS_REMINDER) |
+| CREATED_BY | | UNAME | Created by |
+| CREATED_ON | | DATUM | Created on |
+| REMARKS | | CHAR 100 | Remarks |
+
+CPC maintains one row per release (SM30). Schedule `YCIS_REMINDER` daily in SM36 (variant: working days 2, factory calendar of GAIL, e.g. `IN`).

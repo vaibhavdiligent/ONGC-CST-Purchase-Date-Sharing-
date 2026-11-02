@@ -227,6 +227,12 @@ DATA: BEGIN OF it_data_monthly OCCURS 0 ,
         p_sc_ind     TYPE yrva_qais_data-p_sc_indicator,
         waiver_1     TYPE yrva_qais_data-waiver_1,
         waiver_2     TYPE yrva_qais_data-waiver_2,
+*       Strategic Monthly Discount May/Jun'26 (GAIL 02.11.2026): Raffia-grade
+*       and other-grade lifting with their rates
+        raf_qty      TYPE p DECIMALS 3,
+        raf_rate     TYPE p DECIMALS 2,
+        oth_qty      TYPE p DECIMALS 3,
+        oth_rate     TYPE p DECIMALS 2,
       END OF it_data_monthly,
 *SOC by Kunal/Priyanka on 11/12/2018 for MQAIS Extend Group Change
       wa_data_monthly   LIKE LINE OF it_data_monthly,
@@ -650,7 +656,8 @@ AT SELECTION-SCREEN OUTPUT.
 ****SOC BY SURBHI AND PRIYANKA SINGH ON 06-05-2019 FOR DEFINING RANGE FOR PIPE AND ROTO
 
 INITIALIZATION.
-  c_addmj = 'Additional discount for May / June'.
+* GAIL 02.11.2026: name as per the discount scheme
+  c_addmj = 'Strategic Monthly Discount for May''26 and June''26'.
 
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
   SELECT * FROM yrva_prs_grades INTO TABLE @DATA(lt_yrva_prs_grades).
@@ -2745,6 +2752,12 @@ FORM additional_mj_discount.
       ENDIF.
       lv_qty = lv_qty + ls_s-ummenge.
       lv_val = lv_val + ls_s-ummenge * lv_rate.
+*     bifurcation shown on the output (GAIL 02.11.2026)
+      IF lv_rate = 4000.
+        it_data_monthly-raf_qty = it_data_monthly-raf_qty + ls_s-ummenge.
+      ELSE.
+        it_data_monthly-oth_qty = it_data_monthly-oth_qty + ls_s-ummenge.
+      ENDIF.
       it_data_monthly-vkbur = ls_s-vkbur.
       IF ls_s-kvgr2 IS NOT INITIAL.
         it_data_monthly-kvgr2 = ls_s-kvgr2.
@@ -2761,6 +2774,8 @@ FORM additional_mj_discount.
     it_data_monthly-ind_lift_qty = lv_qty.
     it_data_monthly-tot_elgl_qty = lv_qty.
     it_data_monthly-value        = lv_val.
+    it_data_monthly-raf_rate     = 4000.
+    it_data_monthly-oth_rate     = 3000.
 *   GAIL DVR test 27.10.2026: MCQ and MCQ % were blank. MCQ = the customer's
 *   committed qty for the run month (COMMITED_QTY_M1 = April ... M12 = March).
 *   These customers joined CIS in Jun/Jul 2026, so a May (or June) month can
@@ -11563,6 +11578,58 @@ FORM create_field_catalog .
 *    ENDIF.
 ******************************EOC by Sachin Kaul(TCS) n Atul Singhal on 12.1.16*******************************
 
+* Strategic Monthly Discount May/Jun'26 (GAIL 02.11.2026): Raffia grades /
+* rate, other grades / rate, then the total amount
+  IF r_addmj = 'X'.
+    gt_fieldcat-fieldname = 'RAF_QTY'.
+    gt_fieldcat-outputlen    =  15.
+    gt_fieldcat-just         =  'R' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Raffia Grades Qty'.
+    gt_fieldcat-seltext_m    = 'Raffia Grades Qty'.
+    gt_fieldcat-seltext_l    = 'Raffia Grades Qty'.
+    gt_fieldcat-ddictxt      = 'L'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+    gt_fieldcat-fieldname = 'RAF_RATE'.
+    gt_fieldcat-outputlen    =  15.
+    gt_fieldcat-just         =  'R' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Raffia Rate (Rs./MT)'.
+    gt_fieldcat-seltext_m    = 'Raffia Rate (Rs./MT)'.
+    gt_fieldcat-seltext_l    = 'Raffia Rate (Rs./MT)'.
+    gt_fieldcat-ddictxt      = 'L'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+    gt_fieldcat-fieldname = 'OTH_QTY'.
+    gt_fieldcat-outputlen    =  15.
+    gt_fieldcat-just         =  'R' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Other Grades Qty'.
+    gt_fieldcat-seltext_m    = 'Other Grades Qty'.
+    gt_fieldcat-seltext_l    = 'Other Grades Qty'.
+    gt_fieldcat-ddictxt      = 'L'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+    gt_fieldcat-fieldname = 'OTH_RATE'.
+    gt_fieldcat-outputlen    =  15.
+    gt_fieldcat-just         =  'R' .
+    gt_fieldcat-col_pos      =  w_sr.
+    gt_fieldcat-seltext_s    = 'Other Rate (Rs./MT)'.
+    gt_fieldcat-seltext_m    = 'Other Rate (Rs./MT)'.
+    gt_fieldcat-seltext_l    = 'Other Rate (Rs./MT)'.
+    gt_fieldcat-ddictxt      = 'L'.
+    gt_fieldcat-do_sum       = space.
+    APPEND gt_fieldcat.
+    CLEAR gt_fieldcat.
+    w_sr = w_sr  + 1  .
+  ENDIF.
   gt_fieldcat-fieldname = 'VALUE'.
 
   gt_fieldcat-outputlen    =  25.
@@ -11594,12 +11661,10 @@ FORM create_field_catalog .
   ELSEIF r_addmj = 'X'.
 *   GAIL 26.10.2026: description of the Strategic (additional CIS linked)
 *   discount column, e.g. 'Addnl.CIS Linked PSD May 26'
+*   GAIL 02.11.2026: with the Raffia / other bifurcation the amount column
+*   is the total amount
     DATA lv_addmj_hdr TYPE char40.
-    CASE s_sptag-low+4(2).
-      WHEN '05'. lv_addmj_hdr = 'Addnl.CIS Linked PSD May 26'.
-      WHEN '06'. lv_addmj_hdr = 'Addnl.CIS Linked PSD June 26'.
-      WHEN OTHERS. lv_addmj_hdr = 'Addnl.CIS Linked PSD May/Jun 26'.
-    ENDCASE.
+    lv_addmj_hdr = 'Total Amount (Rs.)'.
     gt_fieldcat-seltext_m  = lv_addmj_hdr.
     gt_fieldcat-seltext_l  = lv_addmj_hdr.
     gt_fieldcat-reptext_ddic = lv_addmj_hdr.

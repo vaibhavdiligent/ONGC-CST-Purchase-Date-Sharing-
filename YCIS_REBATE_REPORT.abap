@@ -573,13 +573,19 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
     MESSAGE 'No approval record found for this rebate order' TYPE 'I'.
     RETURN.
   ENDIF.
+* GAIL UAT 02.11.2026: only the cases FINALLY APPROVED at L5 go on the note
+* (pending L6 '60' or completed '70', approved by L5) - lines still pending
+* at L1-L5 or returned are not printed.
   SELECT * FROM ycis_apprvl INTO TABLE lt_appr
     WHERE purch_no    = ls_key-purch_no
       AND period_from = ls_key-period_from
       AND period_to   = ls_key-period_to
-      AND scheme_type = ls_key-scheme_type.
+      AND scheme_type = ls_key-scheme_type
+      AND wf_status   IN ('60','70')
+      AND l5_user     <> space.
   IF lt_appr IS INITIAL.
-    lt_appr = VALUE #( ( ls_key ) ).
+    MESSAGE 'No cases finally approved at L5 yet for this reference - Approval Note not printed' TYPE 'I'.
+    RETURN.
   ENDIF.
 
 *   representative row = the one that has progressed furthest (highest
@@ -611,7 +617,7 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
   LOOP AT lt_appr INTO ls_appr.
     lv_total = lv_total + ls_appr-rebate_val.
     IF lv_have = 'X' AND ls_appr-sales_off <> ls_office-sales_off.
-      WRITE lv_otot TO ls_office-disc_value CURRENCY lv_waers.
+      WRITE lv_otot TO ls_office-disc_value DECIMALS 2.
       CONDENSE ls_office-disc_value.
       APPEND ls_office TO lt_office.
       CLEAR: ls_office, lv_have.
@@ -635,13 +641,17 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
     lv_waers = ls_appr-waers.
   ENDLOOP.
   IF lv_have = 'X'.
-    WRITE lv_otot TO ls_office-disc_value CURRENCY lv_waers.
+    WRITE lv_otot TO ls_office-disc_value DECIMALS 2.
     CONDENSE ls_office-disc_value.
     APPEND ls_office TO lt_office.
   ENDIF.
 
 *   grand total = sum of all offices (CPC Topic 2 Q8)
-  WRITE lv_total TO ls_note-disc_total_value CURRENCY ls_rep-waers.
+* GAIL UAT 02.11.2026: the note showed 10 x the value (86,70,000 instead of
+* 8,67,000). REBATE_VAL is a plain decimal field with 3 decimals, and WRITE
+* ... CURRENCY 'INR' (2 decimals) shifts the decimal point of a non-currency
+* field. Amounts are now written with 2 decimals, without CURRENCY.
+  WRITE lv_total TO ls_note-disc_total_value DECIMALS 2.
   CONDENSE ls_note-disc_total_value.
   ls_note-grand_total = ls_note-disc_total_value.
 
