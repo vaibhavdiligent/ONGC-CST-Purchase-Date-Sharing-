@@ -1154,9 +1154,9 @@ FORM get_glset.
   ENDIF.
 
 
-*           after 89 sec). The rows are now read by key table in
+* **BEGIN OF CHANGE 01.11.2026 - package processing (see FORM process_packages)
 * Issue   : whole month read at once -> memory dump in S/4 (job cancelled
-*           after 89 sec). The rows are now fetched with a cursor in
+*           after 89 sec). The rows are now read by key table in
 *           packages inside FORM process_packages.
 *  SELECT * FROM zmidas_fagll03
 *    INTO TABLE ta_fagll03
