@@ -42,17 +42,11 @@
 *&                   export incentive set, rest revenue).
 *&---------------------------------------------------------------------*
 
-* package-level data (02.11.2026)
-DATA: ta_eu_sales_type TYPE TABLE OF setleaf.          " was local in FINAL_TAB
-CONSTANTS: co_pkg_size TYPE i VALUE 50000.
-CONSTANTS: co_type_rx  TYPE c LENGTH 3 VALUE 'RX',
-           co_type_exp TYPE c LENGTH 3 VALUE 'EXP',
-           co_type_rev TYPE c LENGTH 3 VALUE 'REV'.
-
 *&---------------------------------------------------------------------*
 *&      Form  GET_DATA
 *&---------------------------------------------------------------------*
 FORM get_data.
+  CONSTANTS co_pkg_size TYPE i VALUE 50000.           " rows per package
   DATA: lv_cursor TYPE cursor,
         lt_pkg    TYPE STANDARD TABLE OF zsd_s911_line_it,
         lv_rows   TYPE i.
@@ -210,8 +204,8 @@ FORM build_ranges.
     ENDIF.
 
 ***SOA by Gajanan - 09.02.2026 - CR#8000004821***
-    ta_eu_sales_type = ta_setleaf.
-    DELETE ta_eu_sales_type WHERE setname NE co_eu_sales_type.
+*   EU sales type: read directly from TA_SETLEAF (setname = co_eu_sales_type)
+*   in FORM fill_final_row (02.11.2026) - no separate copy needed
 ***EOA by Gajanan - 09.02.2026 - CR#8000004821***
 
 ***SOA by Gajanan - 11.11.2024 - CR#8000003569***
@@ -292,14 +286,16 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM summarize_package USING it_pkg TYPE STANDARD TABLE.
   FIELD-SYMBOLS <fs_zsd_s911> TYPE zsd_s911_line_it.
+* row type passed to fill_final_row: 'RX' RX provision GL, 'EXP' export
+* incentive GL, 'REV' revenue (all other GLs)
 
   LOOP AT it_pkg ASSIGNING <fs_zsd_s911>.
     IF r_sakn1[] IS NOT INITIAL AND <fs_zsd_s911>-sakn1 IN r_sakn1.
-      PERFORM fill_final_row USING <fs_zsd_s911> co_type_rx.
+      PERFORM fill_final_row USING <fs_zsd_s911> 'RX'.
     ELSEIF r_sakn1_exp_inc[] IS NOT INITIAL AND <fs_zsd_s911>-sakn1 IN r_sakn1_exp_inc.
-      PERFORM fill_final_row USING <fs_zsd_s911> co_type_exp.
+      PERFORM fill_final_row USING <fs_zsd_s911> 'EXP'.
     ELSE.
-      PERFORM fill_final_row USING <fs_zsd_s911> co_type_rev.
+      PERFORM fill_final_row USING <fs_zsd_s911> 'REV'.
     ENDIF.
   ENDLOOP.
 ENDFORM.
@@ -320,9 +316,9 @@ FORM fill_final_row USING is_item TYPE zsd_s911_line_it
   wa_final-actualbudget = co_actual.
   wa_final-spmon = p_spmon.
   CASE iv_type.
-    WHEN co_type_rx.
+    WHEN 'RX'.
       wa_final-expenses = 'RX_provision_GL'.
-    WHEN co_type_exp.
+    WHEN 'EXP'.
       wa_final-expenses = 'Export Incentive'.
     WHEN OTHERS.
       wa_final-expenses = co_revenue.
@@ -341,7 +337,7 @@ FORM fill_final_row USING is_item TYPE zsd_s911_line_it
   wa_final-variable_cost = is_item-api_vc_cc_curr + is_item-for_vc_cc_curr.
   MOVE-CORRESPONDING is_item TO wa_final.
   CLEAR:wa_final-sales_cc_curr.
-  IF iv_type = co_type_exp.
+  IF iv_type = 'EXP'.
     wa_final-sales_cc_curr = is_item-sales_cc_curr.          " export incentive: always
   ELSEIF is_item-sakn1 NE co_sakn1."Summarization logic for sales_cc_curr
     wa_final-sales_cc_curr = is_item-sales_cc_curr.
@@ -471,7 +467,8 @@ FORM fill_final_row USING is_item TYPE zsd_s911_line_it
   IF wa_final-zone_1 = 'Europe'.
     lv_pkunag = |{ is_item-pkunag ALPHA = OUT }|.
 
-    READ TABLE ta_eu_sales_type INTO lwa_eu_sales_type WITH KEY valfrom = lv_pkunag.
+    READ TABLE ta_setleaf INTO lwa_eu_sales_type WITH KEY setname = co_eu_sales_type
+                                                           valfrom = lv_pkunag.
     IF sy-subrc = 0.
       wa_final-sales_grp = lwa_eu_sales_type-valto.
     ELSE.
