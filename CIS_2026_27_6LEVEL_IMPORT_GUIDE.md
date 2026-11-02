@@ -111,18 +111,32 @@ T-code access: e.g. `YCIS_L4` → YCIS_VET, `YCIS_L5` → YCIS_APPRV5,
 | WF-2 | Note shows cases pending at L3 | Only cases finally approved at L5 (WF_STATUS 60/70, L5 user filled) are printed | YCIS_REBATE_REPORT |
 | WF-4 | Reminder to L1/L2 after 2 working days | New report YCIS_REMINDER (daily job) + table YCIS_DISC_REL | YCIS_REMINDER |
 
-### New table YCIS_DISC_REL – CIS discount release by PMG (SE11, delivery class A, table maintenance SM30)
+### New table YCIS_DISC_REL – CIS Discount Release by PMG (SE11)
 
-| Field | Key | Data element / type | Description |
-|---|---|---|---|
-| MANDT | X | MANDT | Client |
-| SCHEME_TYPE | X | CHAR 1 (same as YCIS_APPRVL-SCHEME_TYPE) | M = Monthly, T = Strategic Monthly, A = Annual, C = Annual Consistency |
-| PERIOD_FROM | X | DATUM | CIS period from |
-| PERIOD_TO | X | DATUM | CIS period to |
-| REL_DATE | | DATUM | Date the discount was released by PMG |
-| LAST_REMIND | | DATUM | Last reminder sent (filled by YCIS_REMINDER) |
-| CREATED_BY | | UNAME | Created by |
-| CREATED_ON | | DATUM | Created on |
-| REMARKS | | CHAR 100 | Remarks |
+Delivery class **C**, Display/Maintenance allowed, data class **APPL2**, size category 0, buffering not allowed.
 
-CPC maintains one row per release (SM30). Schedule `YCIS_REMINDER` daily in SM36 (variant: working days 2, factory calendar of GAIL, e.g. `IN`).
+| Field | Key | Initial values | Data element | Type | Description |
+|---|---|---|---|---|---|
+| MANDT | X | X | MANDT | CLNT 3 | Client |
+| SCHEME_TYPE | X | X | YCIS_STYPE | CHAR 1 | M = Monthly, T = Strategic Monthly, A = Annual, C = Annual Consistency |
+| PERIOD_FROM | X | X | BEGDA | DATS 8 | CIS period from |
+| PERIOD_TO | X | X | ENDDA | DATS 8 | CIS period to |
+| REL_DATE | | | DATUM | DATS 8 | Release date by PMG |
+| LAST_REMIND | | | DATUM | DATS 8 | Last reminder sent (filled by YCIS_REMINDER) |
+| CREATED_BY | | | UNAME | CHAR 12 | Created by |
+| CREATED_ON | | | DATUM | DATS 8 | Created on |
+| REMARKS | | | YCIS_REMARK | CHAR | Remarks |
+
+Table maintenance generator: function group e.g. `YCIS_DISC_REL`, one-step; T-code (SE93) e.g. `YCIS_DISC_REL` for SM30.
+CPC enters one row per PMG release, e.g. `M | 01.10.2026 | 31.10.2026 | 05.11.2026`. LAST_REMIND is left blank.
+
+### New report YCIS_REMINDER – L1/L2 reminder (daily job)
+
+* Create the table above first, then program `YCIS_REMINDER` (type 1, executable) and activate.
+* Selection: Sales Office (optional), Working days after release (default 2), Factory calendar (GAIL calendar ID), Test run (no e-mail).
+* Logic: for every release in YCIS_DISC_REL older than the working-day limit, each zonal sales office with CIS customers in the period is checked in YCIS_APPRVL:
+  * nothing confirmed at L1 / returned to L1 (WF_STATUS 10) → reminder **to L1** of the office;
+  * pending at L2 (WF_STATUS 20) → reminder **to L2** of the office;
+  * copies to **L3, L4, L5** (sales office `0001` in YCIS_WF_APPR).
+* One reminder per office per day (LAST_REMIND), repeated daily until L1/L2 is completed; the job log lists the reminders sent.
+* Schedule in SM36 daily (e.g. 09:00) with a variant: working days 2, factory calendar = GAIL calendar.
