@@ -58,6 +58,8 @@
 *                   (memory). Month processed in packages of 20,000 rows
 *                   (FORM process_packages / get_pkg_lookups / save_pc_rows
 *                   / clear_pkg); FAGLFLEXT read via FGL_FAGLFLEXT.
+* 02.11.2026 package read by key table instead of held cursor
+*                   (DBSQL_INVALID_CURSOR after COMMIT WORK on HANA).
 *                   Business logic in GET_DATA / UPDATE_TAB unchanged.
 *----------------------------------------------------------------------*
 FORM refresh_tab.
@@ -1430,30 +1432,63 @@ FORM save_pc_rows.
   ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
-*&      Form  PROCESS_PACKAGES       (new 01.11.2026)
+*&      Form  PROCESS_PACKAGES       (new 01.11.2026, reworked 02.11.2026)
 *&---------------------------------------------------------------------*
-*  Reads the ZMIDAS_FAGLL03 rows of the period with a held cursor in
-*  packages and runs the unchanged GET_DATA / UPDATE_TAB per package.
-*  UPDATE_TAB commits per package (cursor opened WITH HOLD).
+*  Processes the ZMIDAS_FAGLL03 rows of the period in packages and runs
+*  the unchanged GET_DATA / UPDATE_TAB per package.
+*  02.11.2026: the first version used OPEN CURSOR WITH HOLD. The COMMIT
+*  WORK that UPDATE_TAB executes per package closed the cursor on the
+*  CRS HANA system (dump DBSQL_INVALID_CURSOR, job 10552200, 2nd FETCH).
+*  Now the keys of all rows are read once into a small key table and
+*  each package is selected by its keys, so no database cursor stays
+*  open across the commit.
 *----------------------------------------------------------------------*
 FORM process_packages.
   CONSTANTS lc_pkg TYPE i VALUE 20000.
-  DATA: lv_cursor TYPE cursor,
-        lv_total  TYPE i.
+  TYPES: BEGIN OF lty_key,
+           spmon TYPE zmidas_fagll03-spmon,
+           bukrs TYPE zmidas_fagll03-bukrs,
+           belnr TYPE zmidas_fagll03-belnr,
+           hkont TYPE zmidas_fagll03-hkont,
+           buzei TYPE zmidas_fagll03-buzei,
+         END OF lty_key.
+  DATA: lt_keys  TYPE STANDARD TABLE OF lty_key,
+        lt_pkg   TYPE STANDARD TABLE OF lty_key,
+        lv_lines TYPE i,
+        lv_from  TYPE i,
+        lv_to    TYPE i,
+        lv_total TYPE i.
 
-  OPEN CURSOR WITH HOLD @lv_cursor FOR
-    SELECT * FROM zmidas_fagll03
-      WHERE spmon = @p_spmon
-        AND bukrs IN @s_bukrs
-        AND belnr IN @s_belnr
-        AND hkont IN @s_hkont
-      ORDER BY PRIMARY KEY.
+  SELECT spmon, bukrs, belnr, hkont, buzei
+    FROM zmidas_fagll03
+    WHERE spmon = @p_spmon
+      AND bukrs IN @s_bukrs
+      AND belnr IN @s_belnr
+      AND hkont IN @s_hkont
+    ORDER BY PRIMARY KEY
+    INTO TABLE @lt_keys.
+  lv_lines = lines( lt_keys ).
 
-  DO.
+  WHILE lv_from < lv_lines.
+    lv_to = lv_from + lc_pkg.
+    IF lv_to > lv_lines.
+      lv_to = lv_lines.
+    ENDIF.
+    CLEAR lt_pkg.
+    APPEND LINES OF lt_keys FROM lv_from + 1 TO lv_to TO lt_pkg.
+    lv_from = lv_to.
+
     PERFORM clear_pkg.
-    FETCH NEXT CURSOR @lv_cursor INTO TABLE @ta_fagll03 PACKAGE SIZE @lc_pkg.
-    IF sy-subrc <> 0.
-      EXIT.
+    SELECT * FROM zmidas_fagll03
+      FOR ALL ENTRIES IN @lt_pkg
+      WHERE spmon = @lt_pkg-spmon
+        AND bukrs = @lt_pkg-bukrs
+        AND belnr = @lt_pkg-belnr
+        AND hkont = @lt_pkg-hkont
+        AND buzei = @lt_pkg-buzei
+      INTO TABLE @ta_fagll03.
+    IF ta_fagll03 IS INITIAL.
+      CONTINUE.
     ENDIF.
     SORT ta_fagll03 BY spmon bukrs belnr hkont.
     DELETE ta_fagll03 WHERE remark = 'Updated by ZMIDAS_TAGG_UPLOAD'. "Added by Gajanan - 29.03.2024 - CR#8000003569
@@ -1464,8 +1499,8 @@ FORM process_packages.
     PERFORM get_pkg_lookups.
     PERFORM get_data.
     PERFORM update_tab.
-  ENDDO.
-  CLOSE CURSOR @lv_cursor.
+  ENDWHILE.
+  FREE: lt_keys, lt_pkg.
   PERFORM clear_pkg.
 
   IF lv_total = 0.
