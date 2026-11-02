@@ -44,7 +44,6 @@
 
 * package-level data (02.11.2026)
 DATA: ta_eu_sales_type TYPE TABLE OF setleaf.          " was local in FINAL_TAB
-TYPES: tt_line_it TYPE STANDARD TABLE OF zsd_s911_line_it WITH DEFAULT KEY.
 CONSTANTS: co_pkg_size TYPE i VALUE 50000.
 CONSTANTS: co_type_rx  TYPE c LENGTH 3 VALUE 'RX',
            co_type_exp TYPE c LENGTH 3 VALUE 'EXP',
@@ -55,7 +54,7 @@ CONSTANTS: co_type_rx  TYPE c LENGTH 3 VALUE 'RX',
 *&---------------------------------------------------------------------*
 FORM get_data.
   DATA: lv_cursor TYPE cursor,
-        lt_pkg    TYPE tt_line_it,
+        lt_pkg    TYPE STANDARD TABLE OF zsd_s911_line_it,
         lv_rows   TYPE i.
 
 * 1. distinct keys of the period - small tables, replaces the full load
@@ -291,8 +290,10 @@ ENDFORM.
 *  loops did: GL in RX_PROVISION_GL set -> RX provision, else GL in
 *  EXPORT_INCENTIVES set -> export incentive, else revenue.
 *----------------------------------------------------------------------*
-FORM summarize_package USING it_pkg TYPE tt_line_it.
-  LOOP AT it_pkg ASSIGNING FIELD-SYMBOL(<fs_zsd_s911>).
+FORM summarize_package USING it_pkg TYPE STANDARD TABLE.
+  FIELD-SYMBOLS <fs_zsd_s911> TYPE zsd_s911_line_it.
+
+  LOOP AT it_pkg ASSIGNING <fs_zsd_s911>.
     IF r_sakn1[] IS NOT INITIAL AND <fs_zsd_s911>-sakn1 IN r_sakn1.
       PERFORM fill_final_row USING <fs_zsd_s911> co_type_rx.
     ELSEIF r_sakn1_exp_inc[] IS NOT INITIAL AND <fs_zsd_s911>-sakn1 IN r_sakn1_exp_inc.
