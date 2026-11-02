@@ -135,7 +135,8 @@ DATA: gt_loc_ctp     TYPE TABLE OF ty_loc_ctp,
       gt_header_alv  TYPE TABLE OF ty_header_alv,
       go_alv         TYPE REF TO cl_salv_table,
       go_dock        TYPE REF TO cl_gui_docking_container,
-      gv_show_header TYPE abap_bool VALUE abap_false.
+      gv_show_header TYPE abap_bool VALUE abap_false,
+      gv_rebuild     TYPE abap_bool VALUE abap_false.
 
 CONSTANTS: gc_btn_item   TYPE salv_de_function VALUE 'ITEM_DATA',
            gc_btn_header TYPE salv_de_function VALUE 'HEADER_DATA'.
@@ -154,11 +155,15 @@ CLASS lcl_handler IMPLEMENTATION.
     CASE e_salv_function.
       WHEN gc_btn_item.
         gv_show_header = abap_false.
-        PERFORM switch_alv_data.
       WHEN gc_btn_header.
         gv_show_header = abap_true.
-        PERFORM switch_alv_data.
+      WHEN OTHERS.
+        RETURN.
     ENDCASE.
+    " SALV data cannot be replaced inside its own event handler, so the
+    " ALV is rebuilt in the next PBO of screen 1001
+    gv_rebuild = abap_true.
+    cl_gui_cfw=>set_new_ok_code( 'REFR' ).
   ENDMETHOD.
 ENDCLASS.
 
@@ -202,7 +207,7 @@ AT SELECTION-SCREEN OUTPUT.
       ENDLOOP.
     WHEN '1001'.
       PERFORM hide_1001_toolbar.
-      IF go_dock IS INITIAL.
+      IF go_dock IS INITIAL OR gv_rebuild = abap_true.
         PERFORM display_alv.
       ENDIF.
   ENDCASE.
@@ -518,6 +523,11 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM display_alv.
 
+  IF go_dock IS BOUND.
+    go_dock->free( ).
+  ENDIF.
+  CLEAR: go_dock, go_alv, gv_rebuild.
+
   CREATE OBJECT go_dock
     EXPORTING
       repid     = sy-repid
@@ -531,10 +541,17 @@ FORM display_alv.
   ENDIF.
 
   TRY.
-      cl_salv_table=>factory(
-        EXPORTING r_container  = go_dock
-        IMPORTING r_salv_table = go_alv
-        CHANGING  t_table      = gt_item_alv ).
+      IF gv_show_header = abap_true.
+        cl_salv_table=>factory(
+          EXPORTING r_container  = go_dock
+          IMPORTING r_salv_table = go_alv
+          CHANGING  t_table      = gt_header_alv ).
+      ELSE.
+        cl_salv_table=>factory(
+          EXPORTING r_container  = go_dock
+          IMPORTING r_salv_table = go_alv
+          CHANGING  t_table      = gt_item_alv ).
+      ENDIF.
 
       go_alv->get_functions( )->set_all( abap_true ).
 
@@ -555,33 +572,15 @@ FORM display_alv.
       CREATE OBJECT go_handler.
       SET HANDLER go_handler->on_user_command FOR go_alv->get_event( ).
 
-      PERFORM set_item_columns.
+      IF gv_show_header = abap_true.
+        go_alv->get_columns( )->set_optimize( abap_true ).
+      ELSE.
+        PERFORM set_item_columns.
+      ENDIF.
       go_alv->display( ).
 
     CATCH cx_salv_msg cx_salv_existing cx_salv_wrong_call INTO DATA(lx_salv).
       MESSAGE lx_salv->get_text( ) TYPE 'E'.
-  ENDTRY.
-
-ENDFORM.
-
-*&---------------------------------------------------------------------*
-*&      Form switch_alv_data
-*&  Toggle the ALV between item and header data
-*&---------------------------------------------------------------------*
-FORM switch_alv_data.
-
-  TRY.
-      IF gv_show_header = abap_true.
-        go_alv->set_data( CHANGING t_table = gt_header_alv ).
-        go_alv->get_columns( )->set_optimize( abap_true ).
-      ELSE.
-        go_alv->set_data( CHANGING t_table = gt_item_alv ).
-        PERFORM set_item_columns.
-      ENDIF.
-      go_alv->refresh( refresh_mode = if_salv_c_refresh=>full ).
-
-    CATCH cx_salv_no_new_data_allowed INTO DATA(lx_salv).
-      MESSAGE lx_salv->get_text( ) TYPE 'S' DISPLAY LIKE 'E'.
   ENDTRY.
 
 ENDFORM.
