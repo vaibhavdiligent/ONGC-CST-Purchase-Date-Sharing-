@@ -1,0 +1,92 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZSD_S911_CONSOL_TOP
+*&---------------------------------------------------------------------*
+*& Title             : Midas 3 ( BU P&L Automation )
+*& Program           : ZSD_S911_CONSOL
+*& Tcode             : ZSD_S911_CONSOL
+*& Author            : Pooja Adupala
+*& Functional Design : Shashank Sharma
+*& Technical Design  : Pooja Adupala
+*& Creation Date     : 21.03.2022
+*& Transport Request : CRDK982307
+*& Change request    : 8000007907
+*& Description       : To summerise data from table ZSD_S911_LINE_IT
+*&---------------------------------------------------------------------*
+*& G L O B A L  V A R I A B L E S
+*&---------------------------------------------------------------------*
+TABLES: zsd_s911_line_it.
+DATA:
+  ta_final      TYPE TABLE OF zsd_s911_consol,
+  wa_final      TYPE zsd_s911_consol,
+  ta_zsd_s911   TYPE TABLE OF zsd_s911_line_it,
+  ta_setleaf    TYPE TABLE OF setleaf,
+  wa_zsd_s911   TYPE  zsd_s911_line_it,
+***SOA by Gajanan - 13.11.2024 - CR#8000003569
+  ta_s911_gl    TYPE TABLE OF zsd_s911_gl,
+  wa_s911_gl    TYPE zsd_s911_gl,
+  ta_s911_plant TYPE TABLE OF zsd_s911_plant,
+  wa_s911_plant TYPE zsd_s911_plant,
+  ta_man_plant  TYPE TABLE OF zsd_man_plant,
+  wa_man_plant  TYPE zsd_man_plant,
+  ta_plant_trd  TYPE TABLE OF zsd_plant_trd,
+  wa_plant_trd  TYPE zsd_plant_trd,
+  lv_mat        TYPE mara-matnr,
+  lv_fkart      TYPE zsd_s911_consol-fkart,
+  lv_remark     TYPE zsd_s911_consol-remark,
+***EOA by Gajanan - 13.11.2024 - CR#8000003569
+  ta_fieldcat   TYPE slis_t_fieldcat_alv,
+  gv_pos        TYPE i.
+
+*&---------------------------------------------------------------------*
+*& L O C A L  V A R I A B L E S
+*&---------------------------------------------------------------------*
+DATA:lv_enttag TYPE zsd_s911_line_it-ent_tag,
+     lv_vkorg  TYPE vkorg,
+     lv_zone   TYPE zzone_1.
+
+*&---------------------------------------------------------------------*
+*& G L O B A L  C O N S T A N T S
+*&---------------------------------------------------------------------*
+CONSTANTS: co_s(1)          VALUE 'S',
+           co_e(1)          VALUE 'E',
+           co_actual(6)     VALUE 'ACTUAL',
+           co_revenue(7)    VALUE 'REVENUE',
+           co_zm1           TYPE fkart VALUE 'ZM1',
+           co_zmf2          TYPE fkart VALUE 'ZMF2',
+           co_zfoc          TYPE fkart VALUE 'ZFOC',
+           co_sakn1         TYPE zsd_s911_line_it-sakn1 VALUE '0004060005',
+           co_gl_rx_prov    TYPE setleaf-setname VALUE 'RX_PROVISION_GL',
+           co_gl_exp_inc    TYPE setleaf-setname VALUE 'EXPORT_INCENTIVES',
+           co_plant_trd     TYPE setleaf-setname VALUE 'PLANT_TRD', "Added by Gajanan - 13.11.2024 - CR#8000003569
+           co_mat_mor_em    TYPE setleaf-setname VALUE 'MAT_MOR_EM', "Added by Gajanan - 13.11.2024 - CR#8000003569
+           co_mat_14        TYPE setleaf-setname VALUE 'MAT_14', "Added by Gajanan - 26.11.2024 - CR#8000003569
+           co_eu_sales_type TYPE setleaf-setname VALUE 'EU_SALES_TYPE'. "Added by Gajanan - 09.02.2026 - CR#8000004821
+
+
+RANGES:r_sakn1 FOR zsd_s911_line_it-sakn1,
+       r_sakn1_exp_inc FOR zsd_s911_line_it-sakn1,
+       r_plant_trd FOR zsd_s911_gl-remark, "Added by Gajanan - 13.11.2024 - CR#8000003569
+       r_mat_mor_em FOR zsd_s911_consol-matnr, "Added by Gajanan - 13.11.2024 - CR#8000003569
+       r_mat_14 FOR zsd_s911_consol-matnr, "Added by Gajanan - 26.11.2024 - CR#8000003569
+       r_mat_14_fin FOR zsd_s911_consol-matnr, "Added by Gajanan - 26.11.2024 - CR#8000003569
+       r_eu_sales_type FOR kna1-telf2. "Added by Gajanan - 09.02.2026 - CR#8000004821
+*&---------------------------------------------------------------------*
+*& S E L E C T I O N  S C R E E N
+*&---------------------------------------------------------------------*
+
+SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE text-s01.
+PARAMETERS: p_dt    TYPE d OBLIGATORY, "Date
+            p_spmon TYPE spmon. "Period to analyze - month
+
+SELECT-OPTIONS:s_enttag FOR lv_enttag, "Entry Tag
+               s_ipvend FOR zsd_s911_line_it-ip_vend,"Added by Gajanan - 28.11.2024 - CR#8000003569
+               s_werks FOR zsd_s911_line_it-werks,"Added by Gajanan - 28.11.2024 - CR#8000003569
+               s_vkorg FOR lv_vkorg, "Sales Org
+               s_zone FOR lv_zone, "Zone
+               s_sakn1 FOR zsd_s911_line_it-sakn1,"Added by Gajanan - 28.11.2024 - CR#8000003569
+               s_matnr FOR zsd_s911_line_it-matnr."Added by Gajanan - 28.11.2024 - CR#8000003569
+SELECTION-SCREEN END OF BLOCK b1.
+
+AT SELECTION-SCREEN.
+  CLEAR p_spmon.
+  CONCATENATE p_dt+0(4) p_dt+4(2)  INTO p_spmon.
