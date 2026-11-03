@@ -16,7 +16,8 @@ Code: `src/zcl_fincs_cdm_reverse_badi.clas.abap` (BAdI implementation) and
 | CXA0 | Runs report `FICRVS00` (package FC00), "Mass Reversal" of group journal entries |
 | `FINCS_JRNLENTR_POST_SRV` | OData service behind the Fiori app *Post Group Journal Entries*. That app has a **Reverse** action for single entries |
 
-The BAdI's interface and method signature is **not published** outside the system
+IMG path for the BAdI: *SAP S/4HANA for Group Reporting > BAdIs for Group Reporting > BAdI: Custom Task for Data Monitor*.
+The BAdI's interface, method signature and task-status values are **not published** outside the system
 (SAP Help and KBAs on support.sap.com need an S-user login). Read it in SE18/SE19.
 
 ## 2. Options for doing the reversal
@@ -38,8 +39,9 @@ The BAdI's interface and method signature is **not published** outside the syste
 ## 3. Checklist before activating
 1. **SE18 `BADI_FINCS_CUST_DATAMON`**: read the interface, method and parameters, and the status values for `CONSOLIDATIONTASKSTATUS`.
 2. **SE19**: create the implementation with filter `CONSOLIDATIONTASK = <task>`. Keep the generated method and put the *mapping block* from `ZCL_FINCS_CDM_REVERSE_BADI` into it.
-3. **SE11 ACDOCU**: check field names (`RLDNR, RDIMEN, RVERS, RYEAR, POPER, RBUNIT, DOCTY, DOCCT, DOCNR`). Add the "already reversed / is reversal" filter in `GET_DOCUMENTS`.
-4. **SE38 FICRVS00**: copy the selection-screen names into the `GC_SEL` constants. Run CXA0 once by hand with the same values, compare, and save a variant.
+3. **ACDOCU** (done): the filter uses `RVSDOCNR = space` (not yet reversed) and `ORNDOCNR = space` (not itself a reversal). These names come from published ACDOCU field lists. `REVYEAR` holds the reversal year.
+4. **FICRVS00 selection names**: these are not published online. Run the task once in **test mode**. `CHECK_SELNAMES` reads the real screen with `RS_REPORTSELECTIONS_INFO`. If any `GC_SEL` name is wrong, it stops and logs every real field name with its text. Copy the correct names into `GC_SEL`.
+   Known from sapdatasheet.org: FICRVS00 is an EC-CS program (package FC00). Its screen comes from include `FICRVS0S` plus generic includes `FICLST0B/0C`. It uses fields for consolidation group (`RCONGR`) and for the reversal year and period (`FC05TAB-RVSRYEAR`, `RVSPERID`). Add these if CXA0 needs them.
 5. Set `GC_DOCTYPE_TO_REVERSE`, `GC_LEDGER` and `GC_DIMENSION`.
 6. Handle **extension versions**: only reverse in the version that owns the document, or the second call will find nothing (harmless) or reverse twice.
 7. Test with a test run first. Then run it for real and check in *Display Group Journal Entries*.

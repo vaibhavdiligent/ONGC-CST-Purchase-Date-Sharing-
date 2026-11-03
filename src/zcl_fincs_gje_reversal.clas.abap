@@ -8,11 +8,19 @@
 "! and document links are applied exactly as in CXA0.
 "!
 "! ---------------------------------------------------------------------------
-"! BEFORE ACTIVATING - verify in YOUR system (release dependent):
-"!  1. ACDOCU field names used in GET_DOCUMENTS (SE11 -> ACDOCU).
-"!  2. Selection-screen names of FICRVS00 (SE38 -> FICRVS00 -> Display ->
-"!     Goto -> Text elements -> Selection texts, or F1 -> Technical info on
-"!     each CXA0 field). Put them into the GC_SEL constants below.
+"! ACDOCU reversal fields RVSDOCNR / ORNDOCNR / REVYEAR are taken from the
+"! published ACDOCU field lists.
+"!
+"! FICRVS00 selection-screen names are NOT published anywhere online. The
+"! screen comes from include FICRVS0S plus the generic includes FICLST0B/0C
+"! (FC00_S_SEL_SCREEN_FDESCR), so names can differ by release.
+"! CHECK_SELNAMES reads the real screen at runtime (RS_REPORTSELECTIONS_INFO).
+"! If a GC_SEL name is wrong, nothing is submitted and the log lists every
+"! real FICRVS00 field with its text, so do ONE test run and copy the
+"! correct names into GC_SEL.
+"! Known FICRVS00 data (sapdatasheet.org): it also has reversal fiscal year /
+"! period fields (FC05TAB-RVSRYEAR / RVSPERID) and a consolidation group
+"! (RCONGR). Add them to GC_SEL / BUILD_SELTAB if your screen requires them.
 "! ---------------------------------------------------------------------------
 CLASS zcl_fincs_gje_reversal DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
@@ -59,7 +67,7 @@ CLASS zcl_fincs_gje_reversal DEFINITION
 
   PRIVATE SECTION.
     "-- Selection-screen element names of FICRVS00 (CXA0).
-    "-- !!! VERIFY each name in SE38 for your release !!!
+    "-- Placeholders: CHECK_SELNAMES validates them; fix from the test-run log
     CONSTANTS:
       BEGIN OF gc_sel,
         version  TYPE rsscr_name VALUE 'P_RVERS',   " Version
@@ -82,6 +90,12 @@ CLASS zcl_fincs_gje_reversal DEFINITION
     METHODS submit_mass_reversal
       IMPORTING it_seltab   TYPE rsparams_tt
       CHANGING  ct_messages TYPE bapiret2_t
+      RETURNING VALUE(rv_ok) TYPE abap_bool.
+
+    "! Checks the GC_SEL names against FICRVS00's real selection screen.
+    "! On mismatch, writes all real names + texts to the log and returns false.
+    METHODS check_selnames
+      CHANGING  ct_messages  TYPE bapiret2_t
       RETURNING VALUE(rv_ok) TYPE abap_bool.
 
     METHODS add_msg
@@ -116,6 +130,11 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
                        iv_text = |{ lines( lt_doc ) } document(s) of type { ms_sel-docty } selected for reversal|
              CHANGING  ct_messages = et_messages ).
 
+    IF check_selnames( CHANGING ct_messages = et_messages ) = abap_false.
+      rv_ok = abap_false.
+      RETURN.
+    ENDIF.
+
     rv_ok = submit_mass_reversal( EXPORTING it_seltab   = build_seltab( lt_doc )
                                   CHANGING  ct_messages = et_messages ).
   ENDMETHOD.
@@ -124,8 +143,10 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
   METHOD get_documents.
     " Original (not yet reversed, not itself a reversal) documents of the
     " given document type.
-    " !!! VERIFY in SE11: field names for "reversed" / "reversal of" in ACDOCU
-    " !!! (e.g. REVERSED / REVDOCNR / REFDOCNR). Adjust the WHERE clause.
+    " ACDOCU reversal fields (published ACDOCU field lists):
+    "   RVSDOCNR = number of the reversal document (filled => already reversed)
+    "   ORNDOCNR = number of the reversed document (filled => this IS a reversal)
+    "   REVYEAR  = fiscal year of the reversal / reversed document
     SELECT DISTINCT rldnr, rdimen, ryear, docct, docnr,
                     rvers, poper, rbunit, docty
       FROM acdocu
@@ -136,8 +157,8 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
         AND poper  =  @ms_sel-poper
         AND rbunit IN @ms_sel-rbunit
         AND docty  =  @ms_sel-docty
-*       AND reversed = @abap_false          " <-- uncomment / rename after SE11 check
-*       AND revdocnr = @space               " <-- doc is not itself a reversal
+        AND rvsdocnr = @space               " not yet reversed
+        AND orndocnr = @space               " not itself a reversal document
       INTO CORRESPONDING FIELDS OF TABLE @rt_doc.
   ENDMETHOD.
 
@@ -208,6 +229,55 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
                                            THEN |Test run completed, nothing posted|
                                            ELSE |Reversal of document type { ms_sel-docty } completed| )
                CHANGING  ct_messages = ct_messages ).
+    ENDIF.
+  ENDMETHOD.
+
+
+  METHOD check_selnames.
+    DATA: lt_info  TYPE STANDARD TABLE OF rsel_info,
+          lt_texts TYPE STANDARD TABLE OF textpool.
+
+    rv_ok = abap_true.
+
+    " Real selection-screen elements of FICRVS00 (incl. dynamically built ones)
+    CALL FUNCTION 'RS_REPORTSELECTIONS_INFO'
+      EXPORTING  report      = gc_report
+      TABLES     field_info  = lt_info
+      EXCEPTIONS no_selections = 1
+                 report_not_existent = 2
+                 subroutine_pool = 3
+                 OTHERS      = 4.
+    IF sy-subrc <> 0.
+      add_msg( EXPORTING iv_type = 'E'
+                         iv_text = |Selection screen of { gc_report } could not be read (RC { sy-subrc })|
+               CHANGING  ct_messages = ct_messages ).
+      rv_ok = abap_false.
+      RETURN.
+    ENDIF.
+
+    DATA(lt_wanted) = VALUE string_table(
+      ( CONV #( gc_sel-version ) ) ( CONV #( gc_sel-ryear ) ) ( CONV #( gc_sel-poper ) )
+      ( CONV #( gc_sel-dimen ) ) ( CONV #( gc_sel-cons_unit ) ) ( CONV #( gc_sel-doc_type ) )
+      ( CONV #( gc_sel-doc_nr ) ) ( CONV #( gc_sel-test_run ) ) ).
+
+    LOOP AT lt_wanted INTO DATA(lv_name).
+      IF NOT line_exists( lt_info[ name = lv_name ] ).
+        rv_ok = abap_false.
+        add_msg( EXPORTING iv_type = 'E'
+                           iv_text = |{ lv_name } is not a selection field of { gc_report } - adjust GC_SEL|
+                 CHANGING  ct_messages = ct_messages ).
+      ENDIF.
+    ENDLOOP.
+
+    IF rv_ok = abap_false.
+      " List the real names with their selection texts, so GC_SEL can be fixed
+      READ TEXTPOOL gc_report INTO lt_texts LANGUAGE sy-langu.
+      LOOP AT lt_info INTO DATA(ls_info).
+        DATA(lv_txt) = VALUE #( lt_texts[ id = 'S' key = ls_info-name ]-entry OPTIONAL ).
+        add_msg( EXPORTING iv_type = 'I'
+                           iv_text = |{ gc_report } field { ls_info-name } ({ ls_info-kind }): { condense( lv_txt ) }|
+                 CHANGING  ct_messages = ct_messages ).
+      ENDLOOP.
     ENDIF.
   ENDMETHOD.
 
