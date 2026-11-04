@@ -1,7 +1,7 @@
 *&---------------------------------------------------------------------*
 *& Report YGMS_ONGC_CST_PUR
 *& Description: ONGC CST Purchase Data Upload Program (Excel)
-*& Version: 5.4 - Aligned with new YRGA_CST_B2B_1 structure (TIME_STAMP key)
+*& Version: 5.5 - Latest CV from YRXA_CMDATA by YYTIMESTAMP
 *&---------------------------------------------------------------------*
 REPORT ygms_ongc_cst_pur.
 *----------------------------------------------------------------------*
@@ -952,6 +952,7 @@ FORM fetch_gcv_ncv.
           gas_day     TYPE datum,
           gcv         TYPE ygms_de_gcv,
           ncv         TYPE ygms_de_ncv,
+          timestamp   TYPE yrxa_cmdata-yytimestamp,
         END OF ls_cmdata,
         lt_cmdata LIKE TABLE OF ls_cmdata.
   CLEAR gt_gcv_errors.
@@ -961,12 +962,15 @@ FORM fetch_gcv_ncv.
     COLLECT ls_loc_day INTO lt_loc_day.
   ENDLOOP.
   IF lt_loc_day IS NOT INITIAL.
-    SELECT yybus_location yydate yyavg_gcv yyavg_ncv
+    SELECT yybus_location yydate yyavg_gcv yyavg_ncv yytimestamp
       FROM yrxa_cmdata
       INTO TABLE lt_cmdata
       FOR ALL ENTRIES IN lt_loc_day
       WHERE yybus_location = lt_loc_day-location_id
         AND yydate     = lt_loc_day-gas_day.
+    " Keep only the latest CV per Location ID + Gas Day
+    SORT lt_cmdata BY location_id gas_day timestamp DESCENDING.
+    DELETE ADJACENT DUPLICATES FROM lt_cmdata COMPARING location_id gas_day.
   ENDIF.
   LOOP AT lt_loc_day INTO ls_loc_day.
     CLEAR: lv_gcv, lv_ncv.
