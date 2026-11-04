@@ -81,11 +81,6 @@
 *     25.02.2026 / 02.03.2026, are otherwise included because they fall
 *     in the same fiscal year). Blank = unchanged behaviour.
 *  Changes are marked BEGIN/END OF CHANGE 30.10.2026.
-*  D. 04.11.2026 - new optional checkbox P_ALLGR: when set, every external
-*     goods receipt of the batch is summed (several on one day and
-*     zero-value receipts included) instead of one valued receipt per
-*     posting date. Requested by FIN (mail 04.11.2026, material 32042899 /
-*     batch ND1618: expected 129,368 / 14,536,480). Unchecked = as before.
 *----------------------------------------------------------------------*
 
 
@@ -242,14 +237,6 @@ SELECT-OPTIONS: s_cpudt FOR   gv_sel_cpudt               OBLIGATORY.
 * (blank = all, as before). Use the production run date to reconcile.
 PARAMETERS:     p_pudat TYPE  ekbe-budat.
 * **END OF CHANGE 30.10.2026
-* **BEGIN OF CHANGE 04.11.2026 - purchase quantity rule (FIN request)
-* P_ALLGR = ' ' : one valued goods receipt per material/batch/posting
-*                 date (rule since 02.01.2023, CR#8000007907) - as before.
-* P_ALLGR = 'X' : every external goods receipt (mvt 101) of the batch is
-*                 summed, also several on one day and zero-value ones
-*                 (equals MB51 total of the external POs).
-PARAMETERS:     p_allgr TYPE  abap_bool AS CHECKBOX DEFAULT space.
-* **END OF CHANGE 04.11.2026
 SELECTION-SCREEN: END OF BLOCK abc.
 SELECTION-SCREEN: BEGIN OF BLOCK abd.
 PARAMETERS:     p_rd1 RADIOBUTTON GROUP ab USER-COMMAND ac DEFAULT 'X',
@@ -1250,11 +1237,7 @@ wa_zco_pgi_rate-objek = CONV #( wa_ausp-objek ) .
                                     dmbtr DESCENDING bamng DESCENDING
                                     ebeln ebelp gjahr belnr buzei.
 * **END OF CHANGE 30.10.2026
-* **BEGIN OF CHANGE 04.11.2026 - keep all receipts of a day if requested
-                IF p_allgr IS INITIAL.
-                  DELETE ADJACENT DUPLICATES FROM ta_ekbe_pur COMPARING matnr charg budat.
-                ENDIF.
-* **END OF CHANGE 04.11.2026
+                DELETE ADJACENT DUPLICATES FROM ta_ekbe_pur COMPARING matnr charg budat.
 
                 IF ta_ekbe_pur IS NOT INITIAL.
                   LOOP AT ta_ekbe_pur INTO DATA(wa_ekbe_pur).
