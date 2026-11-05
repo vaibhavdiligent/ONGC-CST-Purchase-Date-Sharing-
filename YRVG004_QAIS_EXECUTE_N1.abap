@@ -2675,17 +2675,19 @@ FORM additional_mj_discount.
         lv_fld  TYPE char30.
   FIELD-SYMBOLS <lv_cq> TYPE any.
 
-* GAIL 26.10.2026: remarks per run month, e.g. 'CIS ADDL DISC MAY 2026' /
-* 'CIS ADDL DISC JUNE 2026' (becomes the reference no. of the rebate order)
+* GAIL QAR 05.11.2026: remarks per run month 'SMD May-2026' / 'SMD June-2026'
+* (Strategic Monthly Discount; becomes the reference no. of the rebate order)
   CASE s_sptag-low+4(2).
-    WHEN '01'. lv_mon = 'JANUARY'.   WHEN '02'. lv_mon = 'FEBRUARY'.
-    WHEN '03'. lv_mon = 'MARCH'.     WHEN '04'. lv_mon = 'APRIL'.
-    WHEN '05'. lv_mon = 'MAY'.       WHEN '06'. lv_mon = 'JUNE'.
-    WHEN '07'. lv_mon = 'JULY'.      WHEN '08'. lv_mon = 'AUGUST'.
-    WHEN '09'. lv_mon = 'SEPTEMBER'. WHEN '10'. lv_mon = 'OCTOBER'.
-    WHEN '11'. lv_mon = 'NOVEMBER'.  WHEN '12'. lv_mon = 'DECEMBER'.
+    WHEN '01'. lv_mon = 'January'.   WHEN '02'. lv_mon = 'February'.
+    WHEN '03'. lv_mon = 'March'.     WHEN '04'. lv_mon = 'April'.
+    WHEN '05'. lv_mon = 'May'.       WHEN '06'. lv_mon = 'June'.
+    WHEN '07'. lv_mon = 'July'.      WHEN '08'. lv_mon = 'August'.
+    WHEN '09'. lv_mon = 'September'. WHEN '10'. lv_mon = 'October'.
+    WHEN '11'. lv_mon = 'November'.  WHEN '12'. lv_mon = 'December'.
   ENDCASE.
-  CONCATENATE 'CIS ADDL DISC' lv_mon s_sptag-low(4) INTO lv_rem SEPARATED BY space.
+  DATA lv_yr TYPE char4.
+  lv_yr  = s_sptag-low(4).
+  lv_rem = |SMD { lv_mon }-{ lv_yr }|.
 
 * GAIL DVR test 27.10.2026: Raffia-sector grades (Rs. 4000/MT) = the MPGs
 * (S922-KONDM) listed by GAIL for the circular's grades W50/T50/Y50/E36/E24:
@@ -2899,23 +2901,31 @@ ENDFORM.                    " ADDITIONAL_MJ_DISCOUNT
 *&      Form  mat_family   (material without its grade suffix)
 *&---------------------------------------------------------------------*
 *   W50A009A / W50A009B / W50A009OG -> W50A009 ; Y50A010U A / Y50A010U OG
-*   -> Y50A010U ; B52A003NA -> B52A003. Used to treat the A, B, OG and NA
-*   variants of a grade alike (Strategic Monthly Discount May/Jun'26).
+*   -> Y50A010U ; B52A003NA -> B52A003 ; W55A004NA / W55A004NOG -> W55A004
+*   (NOG = off-grade of the NA grade, GAIL QAR 05.11.2026). Used to treat the
+*   A, B, NA, OG and NOG variants of a grade alike (Strategic Monthly
+*   Discount May/Jun'26).
 *&---------------------------------------------------------------------*
 FORM mat_family USING    p_matnr TYPE matnr
                 CHANGING p_fam   TYPE matnr.
-  DATA lv_len TYPE i.
+  DATA: lv_len TYPE i,
+        lv_off TYPE i.
   p_fam = p_matnr.
   CONDENSE p_fam.
   lv_len = strlen( p_fam ).
-  IF lv_len > 3.
-    lv_len = lv_len - 2.
-    IF p_fam+lv_len(2) = 'OG' OR p_fam+lv_len(2) = 'NA'.
-      p_fam = p_fam(lv_len).
+  IF lv_len > 4.
+    lv_off = lv_len - 3.
+    IF p_fam+lv_off(3) = 'NOG'.
+      p_fam = p_fam(lv_off).
     ELSE.
-      lv_len = lv_len + 1.
-      IF p_fam+lv_len(1) = 'A' OR p_fam+lv_len(1) = 'B'.
-        p_fam = p_fam(lv_len).
+      lv_off = lv_len - 2.
+      IF p_fam+lv_off(2) = 'OG' OR p_fam+lv_off(2) = 'NA'.
+        p_fam = p_fam(lv_off).
+      ELSE.
+        lv_off = lv_len - 1.
+        IF p_fam+lv_off(1) = 'A' OR p_fam+lv_off(1) = 'B'.
+          p_fam = p_fam(lv_off).
+        ENDIF.
       ENDIF.
     ENDIF.
   ENDIF.
