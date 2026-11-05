@@ -462,7 +462,8 @@ ENDFORM.
 FORM display_alv.
   gs_layout-colwidth_optimize = 'X'.
   gs_layout-zebra             = 'X'.
-  gs_layout-box_fieldname     = 'SEL'.   " row-select tick box
+* GAIL UAT 04.11.2026: only the 'Print' tick-box column is used - the extra
+* ALV row-selection box (box_fieldname) showed a second selection box.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid
@@ -576,13 +577,23 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
 * GAIL UAT 02.11.2026: only the cases FINALLY APPROVED at L5 go on the note
 * (pending L6 '60' or completed '70', approved by L5) - lines still pending
 * at L1-L5 or returned are not printed.
+* GAIL UAT 04.11.2026: batch-wise note - when L5 approves two different sets
+* of rebate orders (two separate L5 approvals), each set gets its own note
+* with its own remarks. A batch = the rows approved in the same L5 action
+* (same L5 user, date and time as the ticked rebate order).
+  IF ls_key-l5_user IS INITIAL OR ls_key-wf_status < '60'.
+    MESSAGE 'This rebate order is not yet finally approved at L5 - Approval Note not printed' TYPE 'I'.
+    RETURN.
+  ENDIF.
   SELECT * FROM ycis_apprvl INTO TABLE lt_appr
     WHERE purch_no    = ls_key-purch_no
       AND period_from = ls_key-period_from
       AND period_to   = ls_key-period_to
       AND scheme_type = ls_key-scheme_type
       AND wf_status   IN ('60','70')
-      AND l5_user     <> space.
+      AND l5_user     = ls_key-l5_user
+      AND l5_date     = ls_key-l5_date
+      AND l5_time     = ls_key-l5_time.
   IF lt_appr IS INITIAL.
     MESSAGE 'No cases finally approved at L5 yet for this reference - Approval Note not printed' TYPE 'I'.
     RETURN.

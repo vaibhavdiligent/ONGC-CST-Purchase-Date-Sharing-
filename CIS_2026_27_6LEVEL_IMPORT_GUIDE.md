@@ -140,3 +140,14 @@ CPC enters one row per PMG release, e.g. `M | 01.10.2026 | 31.10.2026 | 05.11.20
   * copies to **L3, L4, L5** (sales office `0001` in YCIS_WF_APPR).
 * One reminder per office per day (LAST_REMIND), repeated daily until L1/L2 is completed; the job log lists the reminders sent.
 * Schedule in SM36 daily (e.g. 09:00) with a variant: working days 2, factory calendar = GAIL calendar.
+
+## UAT observations 04.11.2026 – changes
+
+| # | Observation | Change | Program |
+|---|---|---|---|
+| SMD-1 | Group selection not working | Strategic run now respects Customer Group 2 (and Sales Office) selection | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-2 | Group MCQ % split per member | One MCQ % per group = group lifting / group MCQ, shown on every member; Grp Lifted Qty = group total | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-3 | CIS entry month | New column *CIS Entry Month* (MoU begin, e.g. JUNE 2026) before MCQ | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-4 | OG grades not counted (W55 OG – 32906, Y50 OG – 33870) | Raffia MPGs always applicable; A / B / OG / NA variants of an applicable grade (same material family in MVKE) are applicable too | YRVG004_QAIS_EXECUTE_N1 |
+| WF-6 | Two selection boxes (YRVG004_F, YRVG052) | Extra ALV row-selection box removed – only the Select / Print tick-box column | YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE, YCIS_REBATE_REPORT |
+| WF-7 | Approval note clubbed for two L5 batches | Note printed per L5 approval batch (same L5 user/date/time); L5 stamps one time for the whole batch | YCIS_REBATE_REPORT, YCIS_APPRV5 |

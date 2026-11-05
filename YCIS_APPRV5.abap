@@ -280,9 +280,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM display_alv.
   gs_layout-zebra         = 'X'.
-  IF p_exec IS INITIAL.
-    gs_layout-box_fieldname = 'SEL'.
-  ENDIF.
+* GAIL UAT 04.11.2026: only the 'Select' tick-box column is used - the extra
+* ALV row-selection box (box_fieldname) showed a second selection box.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid
@@ -401,7 +400,9 @@ FORM process_selected USING p_action TYPE char1.
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_ans    TYPE c,
-        lv_off    TYPE vkbur.
+        lv_off    TYPE vkbur,
+        lv_l5date TYPE sy-datum,
+        lv_l5time TYPE sy-uzeit.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -428,6 +429,10 @@ FORM process_selected USING p_action TYPE char1.
     ENDIF.
   ENDIF.
 
+* one approval stamp for the whole batch approved in this action - the
+* Approval Note (YRVG052) is printed per L5 batch (GAIL UAT 04.11.2026)
+  lv_l5date = sy-datum.
+  lv_l5time = sy-uzeit.
   LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
     READ TABLE gt_appr INTO gs_appr
          WITH KEY qais_no     = gs_out-qais_no
@@ -439,8 +444,8 @@ FORM process_selected USING p_action TYPE char1.
       gs_appr-wf_status = '60'.            " Pending L6 (CPC Finance - Disbursement)
       gs_appr-status    = 'P'.
       gs_appr-l5_user   = sy-uname.
-      gs_appr-l5_date   = sy-datum.
-      gs_appr-l5_time   = sy-uzeit.
+      gs_appr-l5_date   = lv_l5date.
+      gs_appr-l5_time   = lv_l5time.
       gs_appr-rem_l5    = lv_remark.                 " L5 approval remark (prints on note)
       gs_appr-remarks   = 'L5 final approved'.
       lv_appr = lv_appr + 1.

@@ -330,9 +330,8 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 FORM display_alv.
   gs_layout-zebra         = 'X'.
-  IF p_exec IS INITIAL.
-    gs_layout-box_fieldname = 'SEL'.
-  ENDIF.
+* GAIL UAT 04.11.2026: only the 'Select' tick-box column is used - the extra
+* ALV row-selection box (box_fieldname) showed a second selection box.
   CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
     EXPORTING
       i_callback_program       = sy-repid

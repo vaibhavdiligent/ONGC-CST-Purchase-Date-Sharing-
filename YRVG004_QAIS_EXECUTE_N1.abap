@@ -233,6 +233,7 @@ DATA: BEGIN OF it_data_monthly OCCURS 0 ,
         raf_rate     TYPE p DECIMALS 2,
         oth_qty      TYPE p DECIMALS 3,
         oth_rate     TYPE p DECIMALS 2,
+        cis_month    TYPE char15,        " CIS entry month (MoU begin), e.g. JUNE 2026
       END OF it_data_monthly,
 *SOC by Kunal/Priyanka on 11/12/2018 for MQAIS Extend Group Change
       wa_data_monthly   LIKE LINE OF it_data_monthly,
@@ -2712,6 +2713,33 @@ FORM additional_mj_discount.
     ls_hl-sign = 'I'. ls_hl-option = 'EQ'. ls_hl-low = ls_grd-kondm.
     APPEND ls_hl TO lt_hl.
   ENDLOOP.
+* GAIL QAR test 04.11.2026: Off-grade lifting (e.g. W55 OG for GWL 32906,
+* Y50 OG for 33870) was not counted - their MPGs are not in the grade tables.
+* The scheme applies to all A, B and Off-grades, so (1) the Raffia MPGs are
+* always applicable and (2) every grade of the same material family as an
+* applicable grade (A / B / OG / NA variant, e.g. W55A...A -> W55A...OG) is
+* applicable too. Families are taken from the material master (MVKE).
+  APPEND LINES OF lt_raf TO lt_hl.
+  SORT lt_hl BY low.
+  DELETE ADJACENT DUPLICATES FROM lt_hl COMPARING low.
+  SELECT matnr, kondm FROM mvke
+    WHERE vkorg = '5000'
+      AND kondm <> @space
+    INTO TABLE @DATA(lt_mv).
+  DATA: lt_fam TYPE SORTED TABLE OF matnr WITH UNIQUE KEY table_line,
+        lv_fam TYPE matnr.
+  LOOP AT lt_mv INTO DATA(ls_mv) WHERE kondm IN lt_hl.
+    PERFORM mat_family USING ls_mv-matnr CHANGING lv_fam.
+    INSERT lv_fam INTO TABLE lt_fam.
+  ENDLOOP.
+  LOOP AT lt_mv INTO ls_mv WHERE kondm NOT IN lt_hl.
+    PERFORM mat_family USING ls_mv-matnr CHANGING lv_fam.
+    READ TABLE lt_fam TRANSPORTING NO FIELDS WITH TABLE KEY table_line = lv_fam.
+    IF sy-subrc = 0.
+      ls_hl-sign = 'I'. ls_hl-option = 'EQ'. ls_hl-low = ls_mv-kondm.
+      APPEND ls_hl TO lt_hl.
+    ENDIF.
+  ENDLOOP.
   SORT lt_hl BY low.
   DELETE ADJACENT DUPLICATES FROM lt_hl COMPARING low.
 
@@ -2720,7 +2748,9 @@ FORM additional_mj_discount.
     WHERE mou_begda GE '20260601'
       AND mou_begda LE '20260731'
       AND mou_endda GE '20260930'
-      AND kunnr IN @s_pkunag.
+      AND kunnr IN @s_pkunag
+      AND kvgr2 IN @s_kvgr2          " GAIL QAR 04.11.2026: group selection
+      AND vkbur IN @s_vkbur.
   IF lt_elig IS INITIAL OR lt_hl IS INITIAL.
     RETURN.
   ENDIF.
@@ -2814,9 +2844,83 @@ FORM additional_mj_discount.
     ENDIF.
     it_data_monthly-remarks      = lv_rem.
     CLEAR it_data_monthly-sale_order.    " GAIL 26.10.2026: Sales Order column blank
+*   GAIL QAR 04.11.2026: CIS entry month (eligibility: entry in June / July)
+    CASE ls_elig-mou_begda+4(2).
+      WHEN '01'. lv_mon = 'JANUARY'.   WHEN '02'. lv_mon = 'FEBRUARY'.
+      WHEN '03'. lv_mon = 'MARCH'.     WHEN '04'. lv_mon = 'APRIL'.
+      WHEN '05'. lv_mon = 'MAY'.       WHEN '06'. lv_mon = 'JUNE'.
+      WHEN '07'. lv_mon = 'JULY'.      WHEN '08'. lv_mon = 'AUGUST'.
+      WHEN '09'. lv_mon = 'SEPTEMBER'. WHEN '10'. lv_mon = 'OCTOBER'.
+      WHEN '11'. lv_mon = 'NOVEMBER'.  WHEN '12'. lv_mon = 'DECEMBER'.
+    ENDCASE.
+    CONCATENATE lv_mon ls_elig-mou_begda(4) INTO it_data_monthly-cis_month
+      SEPARATED BY space.
     APPEND it_data_monthly.
   ENDLOOP.
+
+* GAIL QAR 04.11.2026: a group customer gets ONE MCQ % - the group's lifting
+* (all members of the customer group / Grp Co.) against the group MCQ - on
+* every member line, instead of a split % per member.
+  TYPES: BEGIN OF ty_grp,
+           kvgr2 TYPE kvgr2,
+           lift  TYPE p DECIMALS 3,
+           mcq   TYPE p DECIMALS 3,
+         END OF ty_grp.
+  DATA: lt_grp TYPE SORTED TABLE OF ty_grp WITH UNIQUE KEY kvgr2,
+        ls_grp TYPE ty_grp.
+  FIELD-SYMBOLS <ls_grp> TYPE ty_grp.
+  LOOP AT it_data_monthly WHERE kvgr2 IS NOT INITIAL.
+    READ TABLE lt_grp ASSIGNING <ls_grp> WITH TABLE KEY kvgr2 = it_data_monthly-kvgr2.
+    IF sy-subrc <> 0.
+      CLEAR ls_grp.
+      ls_grp-kvgr2 = it_data_monthly-kvgr2.
+      INSERT ls_grp INTO TABLE lt_grp ASSIGNING <ls_grp>.
+    ENDIF.
+    <ls_grp>-lift = <ls_grp>-lift + it_data_monthly-ind_lift_qty.
+    IF it_data_monthly-commited_qty > <ls_grp>-mcq.
+      <ls_grp>-mcq = it_data_monthly-commited_qty.   " group MCQ
+    ENDIF.
+  ENDLOOP.
+  LOOP AT it_data_monthly WHERE kvgr2 IS NOT INITIAL.
+    READ TABLE lt_grp INTO ls_grp WITH TABLE KEY kvgr2 = it_data_monthly-kvgr2.
+    CHECK sy-subrc = 0.
+    it_data_monthly-grp_lift_qty = ls_grp-lift.
+    it_data_monthly-commited_qty = ls_grp-mcq.
+    IF ls_grp-mcq > 0.
+      it_data_monthly-mcq_perc = ls_grp-lift / ls_grp-mcq * 100.
+    ELSE.
+      CLEAR it_data_monthly-mcq_perc.
+    ENDIF.
+    MODIFY it_data_monthly.
+  ENDLOOP.
 ENDFORM.                    " ADDITIONAL_MJ_DISCOUNT
+
+*&---------------------------------------------------------------------*
+*&      Form  mat_family   (material without its grade suffix)
+*&---------------------------------------------------------------------*
+*   W50A009A / W50A009B / W50A009OG -> W50A009 ; Y50A010U A / Y50A010U OG
+*   -> Y50A010U ; B52A003NA -> B52A003. Used to treat the A, B, OG and NA
+*   variants of a grade alike (Strategic Monthly Discount May/Jun'26).
+*&---------------------------------------------------------------------*
+FORM mat_family USING    p_matnr TYPE matnr
+                CHANGING p_fam   TYPE matnr.
+  DATA lv_len TYPE i.
+  p_fam = p_matnr.
+  CONDENSE p_fam.
+  lv_len = strlen( p_fam ).
+  IF lv_len > 3.
+    lv_len = lv_len - 2.
+    IF p_fam+lv_len(2) = 'OG' OR p_fam+lv_len(2) = 'NA'.
+      p_fam = p_fam(lv_len).
+    ELSE.
+      lv_len = lv_len + 1.
+      IF p_fam+lv_len(1) = 'A' OR p_fam+lv_len(1) = 'B'.
+        p_fam = p_fam(lv_len).
+      ENDIF.
+    ENDIF.
+  ENDIF.
+  CONDENSE p_fam.
+ENDFORM.                    " MAT_FAMILY
 *&---------------------------------------------------------------------*
 *&      Form  FORMAT_DATA
 *&---------------------------------------------------------------------*
@@ -11351,6 +11455,21 @@ FORM create_field_catalog .
 
 *  ELSEIF r_month = 'X' OR r_month1 EQ 'X' OR r_rpd EQ 'X' .
 **EOC by ujjjwal/priyanka on charm 4000002906 on 10-10-2020 to create new additional MQAIS link discount
+* GAIL QAR 04.11.2026: CIS entry month before MCQ (Strategic discount)
+    IF r_addmj = 'X'.
+      gt_fieldcat-fieldname = 'CIS_MONTH'.
+      gt_fieldcat-outputlen    =  15.
+      gt_fieldcat-just         =  'L' .
+      gt_fieldcat-col_pos      =  w_sr.
+      gt_fieldcat-seltext_s    = 'CIS Entry Month'.
+      gt_fieldcat-seltext_m    = 'CIS Entry Month'.
+      gt_fieldcat-seltext_l    = 'CIS Entry Month'.
+      gt_fieldcat-ddictxt      = 'L'.
+      gt_fieldcat-do_sum       = space.
+      APPEND gt_fieldcat.
+      CLEAR gt_fieldcat.
+      w_sr = w_sr  + 1  .
+    ENDIF.
     gt_fieldcat-fieldname = 'COMMITED_QTY'.
     gt_fieldcat-outputlen    =  15.
     gt_fieldcat-just         =  'L' .
