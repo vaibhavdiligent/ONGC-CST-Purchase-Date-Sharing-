@@ -13373,6 +13373,11 @@ FORM display_list .
   PERFORM zonal_filter.
 * CIS UAT 14.10.2026 pt.1/2: seasonal indicator + monthly waivers (L1 view)
   PERFORM fill_l1_seasonal.
+* GAIL 05.11.2026: output title for the Strategic Monthly Discount run
+* (the other options keep the program title 'CIS Discount Execute (L1) N1')
+  IF r_addmj = 'X'.
+    i_layout-window_titlebar = 'Strategic Monthly Discount May''26 & June''26'.
+  ENDIF.
   IF r_quater = 'X' .
     CALL FUNCTION 'REUSE_ALV_LIST_DISPLAY'
       EXPORTING
