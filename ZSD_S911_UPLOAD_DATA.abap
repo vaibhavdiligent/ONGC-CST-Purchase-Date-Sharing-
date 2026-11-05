@@ -17,6 +17,9 @@
 *&     to one mass MODIFY + COMMIT WORK with a single result message.
 *&   - Obsolete OCCURS / header-line table replaced (ATC).
 *&   - Authority check S_TABU_NAM / S911 change added (ATC).
+*& 05.11.2026  Material conversion ALPHA -> MATN1 (S/4 field is 40 chars,
+*&   ALPHA stored 40-digit materials, MARA holds 18 digits -> quantity
+*&   in ZCO_MIDAS zero, material wrong; CRQ test 04.11.2026).
 *&---------------------------------------------------------------------*
 REPORT zsd_s911_upload_data.
 
@@ -226,11 +229,31 @@ FORM sub_transfer_data .
           IMPORTING
             output = w_upload-pkunag.
       WHEN '0013'.
-        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+* **BEGIN OF CHANGE 05.11.2026 - S/4HANA material number
+* ALPHA padded the material to the full 40-character S/4 field
+* (0000...0032021191, 40 digits); MARA / ZSD_S911_REPORT expect the
+* 18-digit form. MATN1 pads to the configured material number length.
+*        CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+*          EXPORTING
+*            input  = w_intern-value
+*          IMPORTING
+*            output = w_upload-matnr.
+        CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
           EXPORTING
-            input  = w_intern-value
+            input        = w_intern-value
           IMPORTING
-            output = w_upload-matnr.
+            output       = w_upload-matnr
+          EXCEPTIONS
+            length_error = 1
+            OTHERS       = 2.
+        IF sy-subrc <> 0.
+          w_err-row  = w_intern-row.
+          w_err-col  = w_intern-col.
+          w_err-val  = w_intern-value.
+          w_err-text = 'Material number too long / invalid'.
+          APPEND w_err TO t_err.
+        ENDIF.
+* **END OF CHANGE 05.11.2026
       WHEN '0014'.
         CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
           EXPORTING
