@@ -1,0 +1,185 @@
+*&---------------------------------------------------------------------*
+*& Report  ZCO_S911_UPLOAD
+*&
+*&---------------------------------------------------------------------*
+* Title           : S911 table upload
+* Author          : Parashar Khedekar
+* Program Type    : Executable
+* Creation Date   : 26.09.2019
+* Transaction     : ZCO_S911_UPLOAD
+* Functional design: Shashank sharma
+* Technical design: <>
+* Change request : 8000005475
+* Transport request: CRDK964790
+* Description     : Midas project 2-3
+*&---------------------------------------------------------------------*
+*Modification Information
+* Date            :
+* Author          :
+* Functional      :
+* Change request  :
+* Transport number:
+* Description     :
+*&---------------------------------------------------------------------*
+*&
+*&---------------------------------------------------------------------*
+REPORT zco_s911_upload.
+
+TYPES: BEGIN OF ty_upload,
+         ssour      TYPE s911-ssour,
+         vrsio      TYPE s911-vrsio,
+         spmon      TYPE char10, "s911-spmon,
+         sptag      TYPE s911-sptag,
+         spwoc      TYPE char10, "s911-spwoc,
+         spbup      TYPE s911-spbup,
+         vkorg      TYPE s911-vkorg,
+         vtweg      TYPE s911-vtweg,
+         fkart      TYPE s911-fkart,
+         inco1      TYPE s911-inco1,
+         kvgr1      TYPE s911-kvgr1,
+         pkunag     TYPE s911-pkunag,
+         matnr      TYPE s911-matnr,
+         ip_vend    TYPE s911-ip_vend,
+         plaag_01   TYPE s911-plaag_01,
+         periv      TYPE s911-periv,
+         vwdat      TYPE s911-vwdat,
+         vrkme      TYPE s911-vrkme,
+         waerk      TYPE s911-waerk,
+         stwae      TYPE s911-stwae,
+         basme      TYPE s911-basme,
+         werks      TYPE s911-werks,
+         vkbur      TYPE s911-vkbur,
+         kdgrp      TYPE s911-kdgrp,
+         plawe      TYPE s911-plawe,
+         kursk      TYPE s911-kursk,
+         sakn1      TYPE s911-sakn1,
+         spart      TYPE s911-spart,
+         spara      TYPE s911-spara,
+         katr3      TYPE s911-katr3,
+         katr4      TYPE s911-katr4,
+         fkimg      TYPE s911-fkimg,
+         netwr      TYPE s911-netwr,
+         skfbp      TYPE s911-skfbp,
+         wavwr      TYPE s911-wavwr,
+         mwsbp      TYPE s911-mwsbp,
+         umkzwi6    TYPE s911-umkzwi6,
+         umkzwi5    TYPE s911-umkzwi5,
+         fklmg      TYPE s911-fklmg,
+         irm_slsamt TYPE s911-irm_slsamt,
+       END OF ty_upload.
+
+DATA : ta_s911   TYPE TABLE OF s911,
+       wa_s911   TYPE s911,
+       ta_upload TYPE TABLE OF ty_upload,
+       wa_upload TYPE ty_upload,
+       ta_type   TYPE truxs_t_text_data.
+
+CONSTANTS : co_fname TYPE dynpread-fieldname VALUE 'P_FNAME'.
+
+SELECTION-SCREEN :  BEGIN OF BLOCK b1 WITH FRAME.
+PARAMETERS : p_fname TYPE rlgrap-filename OBLIGATORY.
+SELECTION-SCREEN : END OF BLOCK b1.
+
+AT SELECTION-SCREEN ON VALUE-REQUEST FOR p_fname.
+
+  CALL FUNCTION 'F4_FILENAME'
+    EXPORTING
+      program_name  = syst-cprog
+      dynpro_number = syst-dynnr
+      field_name    = co_fname "'P_FNAME'
+    IMPORTING
+      file_name     = p_fname.
+
+
+START-OF-SELECTION.
+
+  PERFORM f_sub_get_file.
+
+  PERFORM f_sub_update_table.
+*&---------------------------------------------------------------------*
+*&      Form  F_SUB_GET_FILE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_sub_get_file .
+
+  IF p_fname IS NOT INITIAL.
+    CALL FUNCTION 'TEXT_CONVERT_XLS_TO_SAP'
+      EXPORTING
+*       I_FIELD_SEPERATOR    =
+        i_line_header        = 'X'
+        i_tab_raw_data       = ta_type
+        i_filename           = p_fname
+      TABLES
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*         i_tab_converted_data = ta_upload
+        i_tab_converted_data = ta_upload "#EC CI_FLDEXT_OK[2215424]
+" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+      EXCEPTIONS
+        conversion_failed    = 1
+        OTHERS               = 2.
+
+    IF sy-subrc <> 0.
+      MESSAGE 'Upload failed'(001) TYPE 'E'.
+    ENDIF.
+
+    LOOP AT ta_upload ASSIGNING FIELD-SYMBOL(<fs_wa_upload>).
+
+      CALL FUNCTION 'CONVERSION_EXIT_CUNIT_INPUT'
+        EXPORTING
+          input          = <fs_wa_upload>-vrkme
+          language       = sy-langu
+        IMPORTING
+          output         = <fs_wa_upload>-vrkme
+        EXCEPTIONS
+          unit_not_found = 1
+          OTHERS         = 2.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+      CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
+        EXPORTING
+          input        = <fs_wa_upload>-matnr
+        IMPORTING
+          output       = <fs_wa_upload>-matnr
+        EXCEPTIONS
+          length_error = 1
+          OTHERS       = 2.
+      IF sy-subrc <> 0.
+* Implement suitable error handling here
+      ENDIF.
+
+*      MODIFY ta_upload FROM wa_upload.
+    ENDLOOP.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_SUB_UPDATE_TABLE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_sub_update_table .
+  CONSTANTS:lc_ver(3) TYPE c VALUE '000'.
+  LOOP AT ta_upload INTO wa_upload.
+    MOVE-CORRESPONDING wa_upload TO wa_s911.
+    wa_s911-vrsio = lc_ver."'000'.
+    CONCATENATE wa_upload-spmon+0(4) wa_upload-spmon+5(2) INTO wa_s911-spmon.
+    CONCATENATE wa_upload-spwoc+0(4) wa_upload-spwoc+5(2) INTO wa_s911-spwoc.
+    APPEND wa_s911 TO ta_s911.
+  ENDLOOP.
+  IF ta_s911 IS NOT INITIAL.
+    MODIFY s911 FROM TABLE ta_s911.
+    IF sy-subrc EQ 0.
+      MESSAGE 'Data updated Successfully'(002) TYPE 'S'.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
