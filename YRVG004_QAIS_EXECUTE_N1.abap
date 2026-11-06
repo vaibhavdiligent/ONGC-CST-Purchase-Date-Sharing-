@@ -2688,6 +2688,10 @@ FORM additional_mj_discount.
   DATA lv_yr TYPE char4.
   lv_yr  = s_sptag-low(4).
   lv_rem = |SMD { lv_mon }-{ lv_yr }|.
+* applicable period only (also checked on the selection screen)
+  IF s_sptag-low < '20260501' OR s_sptag-low > '20260630'.
+    RETURN.
+  ENDIF.
 
 * GAIL DVR test 27.10.2026: Raffia-sector grades (Rs. 4000/MT) = the MPGs
 * (S922-KONDM) listed by GAIL for the circular's grades W50/T50/Y50/E36/E24:
@@ -2753,6 +2757,14 @@ FORM additional_mj_discount.
       AND kunnr IN @s_pkunag
       AND kvgr2 IN @s_kvgr2          " GAIL QAR 04.11.2026: group selection
       AND vkbur IN @s_vkbur.
+* GAIL QAR 05.11.2026: duplicate lines for the same customer (e.g. 24479,
+* 29961) - YRVA_QAIS_DATA keeps several versions of a customer's CIS record.
+* As in the normal monthly run, drop module / inactive records and keep the
+* LATEST record (YYTIMESTAMP) per customer, so each customer appears once.
+  DELETE lt_elig WHERE module_identity = 'X'.
+  DELETE lt_elig WHERE inactive = 'X'.
+  SORT lt_elig BY kunnr ASCENDING yytimestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_elig COMPARING kunnr.
   IF lt_elig IS INITIAL OR lt_hl IS INITIAL.
     RETURN.
   ENDIF.
@@ -15478,6 +15490,22 @@ INITIALIZATION.
 * Monthly Discount (May'26) and other periods can be tested. Re-enable
 * (keeping May allowed for the Strategic discount) before go-live.
 AT SELECTION-SCREEN.
+* GAIL QAR 05.11.2026: the Strategic Monthly Discount applies ONLY to
+* May'26 and June'26 (01.05.2026 - 30.06.2026), one month per run - it was
+* also being calculated for August / September 2026.
+  IF r_addmj = 'X' AND sy-ucomm = 'ONLI'.
+    DATA lv_smd_to TYPE d.
+    lv_smd_to = s_sptag-high.
+    IF lv_smd_to IS INITIAL.
+      lv_smd_to = s_sptag-low.
+    ENDIF.
+    IF s_sptag-low < '20260501' OR lv_smd_to > '20260630'.
+      MESSAGE 'Strategic Monthly Discount applies only to May''26 and June''26 (01.05.2026 - 30.06.2026)' TYPE 'E'.
+    ENDIF.
+    IF s_sptag-low(6) <> lv_smd_to(6).
+      MESSAGE 'Strategic Monthly Discount: run one month at a time (May or June 2026)' TYPE 'E'.
+    ENDIF.
+  ENDIF.
 *  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR
 *     s_sptag-high(6) = '202604' OR s_sptag-high(6) = '202605'.
 *    MESSAGE 'CIS START MONTH IS JUNE 2026' TYPE 'E'.
