@@ -284,7 +284,7 @@
       ( tmpl = '1f487b03' col = 134 hdr = 'Global Company Prefix' node = 'Z' fld = 'GLOBAL_COM' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 135 hdr = 'Backorder Days' node = 'Z' fld = 'BO_DAYS' fmt = '' cnv = '' )
       ( tmpl = '1f487b03' col = 136 hdr = 'Location Number' node = 'Z' fld = 'LOCATION_NUMBER' fmt = '' cnv = '' )
-    "  28573fa5 - 43 columns - */ZDOM
+    "  28573fa5 - 49 columns - */ZDOM
       ( tmpl = '28573fa5' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 2   hdr = 'Customer Account Number' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '28573fa5' col = 3   hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' cnv = '' )
@@ -328,6 +328,12 @@
       ( tmpl = '28573fa5' col = 41  hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 42  hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
       ( tmpl = '28573fa5' col = 43  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '28573fa5' col = 44  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
+      ( tmpl = '28573fa5' col = 45  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
+      ( tmpl = '28573fa5' col = 46  hdr = 'Indicator: Record Payment History ?' node = 'B' fld = 'XZVER' fmt = '' cnv = '' )
+      ( tmpl = '28573fa5' col = 47  hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' cnv = '' )
+      ( tmpl = '28573fa5' col = 48  hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
+      ( tmpl = '28573fa5' col = 49  hdr = 'Exchange Rate Type' node = 'S' fld = 'KURST' fmt = '' cnv = '' )
     "  32831d38 - 88 columns - IN/ZPY1
       ( tmpl = '32831d38' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 2   hdr = 'Ref Customer Code  as sample' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
@@ -966,7 +972,7 @@
       ( tmpl = '6d2ec22f' col = 130 hdr = 'Global Company Prefix' node = 'Z' fld = 'GLOBAL_COM' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 131 hdr = 'Backorder Days' node = 'Z' fld = 'BO_DAYS' fmt = '' cnv = '' )
       ( tmpl = '6d2ec22f' col = 132 hdr = 'Location Number' node = 'Z' fld = 'LOCATION_NUMBER' fmt = '' cnv = '' )
-    "  6e6467eb - 74 columns - KE/YVTO, US/YVMI, US/YVSP, US/YVTO
+    "  6e6467eb - 75 columns - KE/YVTO, US/YVMI, US/YVSP, US/YVTO
       ( tmpl = '6e6467eb' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 2   hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 3   hdr = 'Sales Organization' node = 'K' fld = 'VKORG' fmt = '' cnv = '' )
@@ -1041,6 +1047,7 @@
       ( tmpl = '6e6467eb' col = 72  hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 73  hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 74  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '6e6467eb' col = 75  hdr = 'Lockbox' node = 'B' fld = 'LOCKB' fmt = '' cnv = '' )
     "  80d23dd8 - 76 columns - AE/ZSHP, US/ZSHP
       ( tmpl = '80d23dd8' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 2   hdr = 'Customer code' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )

@@ -47,6 +47,8 @@ KNOWN = {
     'TSTL', 'TVV3', 'TVKO', 'TVKOV', 'TSPA', 'SKB1', 'DD02L',
     # business partner, and the link to the customer and the supplier
     'BUT000', 'BUT100', 'BUT0ID', 'CVI_CUST_LINK', 'CVI_VEND_LINK',
+    # the partner's tax numbers and their categories
+    'DFKKBPTAXNUM', 'TFKTAXNUMTYPE',
     'CVIC_CUST_TO_BP1', 'CVIC_CUST_TO_BP2', 'CVIC_VEND_TO_BP1', 'CVIC_VEND_TO_BP2',
     # supplier master, which the business partner still writes through
     'LFA1', 'LFB1', 'LFBK', 'LFBW', 'LFM1', 'WYT3', 'BNKA', 'FIWTIN_TAN_EXEM',

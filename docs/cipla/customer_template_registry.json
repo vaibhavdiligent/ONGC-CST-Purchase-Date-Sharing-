@@ -3274,7 +3274,7 @@
   },
   "6e6467eb": {
    "id": "6e6467eb",
-   "ncol": 74,
+   "ncol": 75,
    "fields": [
     "TCODE",
     "BUKRS",
@@ -3349,7 +3349,8 @@
     "KMSUM",
     "DRUGLICENSE1",
     "DRUGLICENSE2",
-    "DL1_DL2_VALIDDT"
+    "DL1_DL2_VALIDDT",
+    "LOCKB"
    ],
    "desc": [
     "Transaction Code",
@@ -3425,7 +3426,8 @@
     "Distance in kms.",
     "20B. Lic. No",
     "21B. Lic. No",
-    "20B and 21B Expiry Date"
+    "20B and 21B Expiry Date",
+    "Lockbox"
    ],
    "typ": [
     "C",
@@ -3580,7 +3582,13 @@
     "10"
    ],
    "tcode": "XD01",
-   "has_tech": true
+   "has_tech": true,
+   "added": [
+    {
+     "fld": "LOCKB",
+     "desc": "Lockbox"
+    }
+   ]
   },
   "da47e4b3": {
    "id": "da47e4b3",
@@ -6118,7 +6126,7 @@
   },
   "28573fa5": {
    "id": "28573fa5",
-   "ncol": 43,
+   "ncol": 49,
    "fields": [],
    "desc": [
     "Transaction Code",
@@ -6163,12 +6171,44 @@
     "Distance in kms.",
     "20B. Lic. No",
     "21B. Lic. No",
-    "20B and 21B Expiry Date"
+    "20B and 21B Expiry Date",
+    "Reconciliation Account in General Ledger",
+    "Key for sorting according to assignment numbers",
+    "Indicator: Record Payment History ?",
+    "Incoterms (Part 1)",
+    "Incoterms (Part 2)",
+    "Exchange Rate Type"
    ],
    "typ": [],
    "length": [],
    "tcode": "XD01",
-   "has_tech": false
+   "has_tech": false,
+   "added": [
+    {
+     "fld": "AKONT",
+     "desc": "Reconciliation Account in General Ledger"
+    },
+    {
+     "fld": "ZUAWA",
+     "desc": "Key for sorting according to assignment numbers"
+    },
+    {
+     "fld": "XZVER",
+     "desc": "Indicator: Record Payment History ?"
+    },
+    {
+     "fld": "INCO1",
+     "desc": "Incoterms (Part 1)"
+    },
+    {
+     "fld": "INCO2",
+     "desc": "Incoterms (Part 2)"
+    },
+    {
+     "fld": "KURST",
+     "desc": "Exchange Rate Type"
+    }
+   ]
   },
   "c9c1a8dd": {
    "id": "c9c1a8dd",
@@ -8106,6 +8146,26 @@
    "format": "e10ec770",
    "tech_row": 32,
    "desc_row": 35
+  },
+  {
+   "sheet": "Invagen",
+   "region": "IV",
+   "country": "US",
+   "ktokd": "YVMI",
+   "format": "6e6467eb",
+   "tech_row": 37,
+   "desc_row": 40,
+   "added": true
+  },
+  {
+   "sheet": "Invagen",
+   "region": "IV",
+   "country": "US",
+   "ktokd": "YVTO",
+   "format": "6e6467eb",
+   "tech_row": 37,
+   "desc_row": 40,
+   "added": true
   }
  ],
  "sheet_country": {

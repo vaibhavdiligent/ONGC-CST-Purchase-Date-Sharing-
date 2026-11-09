@@ -75,6 +75,36 @@ SHEET_REGION = {
 # all - so the block takes the QCIL domestic field list.
 BLOCK_FROM = {('QCIL', 'ZEXP'): ('QCIL', 'ZDOM')}
 
+# Additions from the go-live tests of November 2026 (Incident 542). The workbook
+# stays as Cipla sent it; these are laid on top once the formats are worked out.
+# A format keeps its id, and a file that was already filled keeps its columns,
+# because a new column always goes at the end. Each entry names one block; the
+# addition reaches every combination that shares that block's format.
+ADD_COLUMNS = {
+    # YVSP, YVMI and YVTO: the field status of the account group makes the
+    # lockbox a required entry ("Lockbox (KNB1-LOCKB) is a required entry
+    # field") and the workbook has no column for it.
+    ('Exelan', 'YVSP'): [('LOCKB', 'Lockbox')],
+    # Customer extension: a new company code and a new sales area need these,
+    # and the extension tab carries none of them - "Reconciliation acct
+    # (KNB1-AKONT) is a required entry field", Sort key, Record payment
+    # history, Incoterms, Exchange rate type. A reference company code and
+    # sales area on the row fill them as well; these columns are for a row
+    # that names no reference, or wants a different value.
+    ('cust extn', 'ZDOM'): [('AKONT', 'Reconciliation Account in General Ledger'),
+                            ('ZUAWA', 'Key for sorting according to assignment numbers'),
+                            ('XZVER', 'Indicator: Record Payment History ?'),
+                            ('INCO1', 'Incoterms (Part 1)'),
+                            ('INCO2', 'Incoterms (Part 2)'),
+                            ('KURST', 'Exchange Rate Type')],
+}
+
+# Account groups a region needs that its tab does not list. Invagen sells to the
+# same indirect and tolling customers as Exelan; the dropdown for Invagen did not
+# offer YVMI and YVTO. They take the layout of Invagen's own US sold-to block.
+ADD_COMBOS = [('Invagen', 'YVMI', ('Invagen', 'YVSP')),
+              ('Invagen', 'YVTO', ('Invagen', 'YVSP'))]
+
 
 def blocks_of(ws):
     """Every template block on one sheet, in row order."""
@@ -196,6 +226,21 @@ def main(path, out):
                 combo.append(dict(sheet=b['sheet'], region=rg, country=ctry, ktokd=k,
                                   format=sig, tech_row=b['tech_row'],
                                   desc_row=b['desc_row']))
+
+    # The additions, on top of what the workbook says.
+    sig_of = {(c['sheet'], c['ktokd']): c['format'] for c in combo}
+    for (sheet, ktokd), cols in ADD_COLUMNS.items():
+        f = fmt[sig_of[(sheet, ktokd)]]
+        f['added'] = [dict(fld=fld, desc=desc) for fld, desc in cols]
+        if f['fields']:
+            f['fields'] = f['fields'] + [fld for fld, _ in cols]
+        f['desc'] = f['desc'] + [desc for _, desc in cols]
+        f['ncol'] = f['ncol'] + len(cols)
+    for sheet, ktokd, (src_sheet, src_ktokd) in ADD_COMBOS:
+        for c in [c for c in combo if (c['sheet'], c['ktokd']) == (src_sheet, src_ktokd)]:
+            if not any((d['sheet'], d['ktokd'], d['country']) == (sheet, ktokd, c['country'])
+                       for d in combo):
+                combo.append(dict(c, ktokd=ktokd, added=True))
 
     # The region list the selection screen shows, each with the country or
     # countries behind it, so the user picks a place and not a key.

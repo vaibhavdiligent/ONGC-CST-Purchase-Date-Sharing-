@@ -1840,6 +1840,17 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS ok_ktokd    IMPORTING iv        TYPE clike
                         RETURNING VALUE(rv) TYPE abap_bool.
 
+    " The company code and sales area a row copies from - XD01's "reference"
+    " columns. Read only: what is copied goes to the API like any other value.
+    METHODS ref_knb1    IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                                  VALUE(iv_bukrs) TYPE bukrs
+                        RETURNING VALUE(rs)       TYPE knb1.
+    METHODS ref_knvv    IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                                  VALUE(iv_vkorg) TYPE vkorg
+                                  VALUE(iv_vtweg) TYPE vtweg
+                                  VALUE(iv_spart) TYPE spart
+                        RETURNING VALUE(rs)       TYPE knvv.
+
   PRIVATE SECTION.
     CLASS-DATA mo TYPE REF TO lcl_cfg.
 
@@ -2069,6 +2080,17 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD ok_ktokd.
     rv = xsdbool( line_exists( mt_ktokd[ table_line = iv ] ) ).
+  ENDMETHOD.
+
+  METHOD ref_knb1.
+    SELECT SINGLE * FROM knb1
+      WHERE kunnr = @iv_kunnr AND bukrs = @iv_bukrs INTO @rs.
+  ENDMETHOD.
+
+  METHOD ref_knvv.
+    SELECT SINGLE * FROM knvv
+      WHERE kunnr = @iv_kunnr AND vkorg = @iv_vkorg
+        AND vtweg = @iv_vtweg AND spart = @iv_spart INTO @rs.
   ENDMETHOD.
 
 ENDCLASS.
@@ -2685,6 +2707,19 @@ CLASS lcl_engine DEFINITION FINAL.
 
     METHODS master IMPORTING is_row TYPE ty_row.
 
+    " Fills, from a stored KNB1 or KNVV row, every field of the API data the
+    " file did not fill itself - what XD01 did with its reference columns.
+    " The file always wins: a field whose DATAX flag is already set is left
+    " as the file gave it. IV_EXCEPT lists, comma-wrapped, the fields that
+    " belong to the record copied from and never to a new one (keys, blocks,
+    " deletion flags, who created it).
+    METHODS ref_fill
+      IMPORTING is_ref   TYPE any
+                iv_except TYPE string
+      EXPORTING ev_n     TYPE i
+      CHANGING  cs_data  TYPE any
+                cs_datax TYPE any.
+
     " The API validates the customer as a whole, so a value already stored
     " against one of its sales areas can reject an update that has nothing
     " to do with it. This says which one, instead of leaving the user with
@@ -2697,6 +2732,12 @@ CLASS lcl_engine DEFINITION FINAL.
     " Technical field names that occur only once in this scenario, and so
     " can identify a column on a file headed with field names.
     METHODS fld_keys RETURNING VALUE(rt) TYPE string_table.
+
+    " The column's field written as TABLE-FIELD and squashed - KNB1AKONT -
+    " or nothing for a column that is not a field of one table.
+    METHODS tab_key
+      IMPORTING is_col    TYPE ty_col
+      RETURNING VALUE(rv) TYPE string.
 ENDCLASS.
 
 
@@ -2741,7 +2782,27 @@ CLASS lcl_engine IMPLEMENTATION.
     LOOP AT lt_fk INTO DATA(lv_f).
       INSERT lv_f INTO TABLE lt_k.
     ENDLOOP.
+    " And TABLE-FIELD, as the field names are written in SAP itself.
+    LOOP AT mt_map INTO DATA(ls_q).
+      DATA(lv_q) = tab_key( ls_q ).
+      IF lv_q IS NOT INITIAL.
+        INSERT lv_q INTO TABLE lt_k.
+      ENDIF.
+    ENDLOOP.
     rt = VALUE #( FOR lv IN lt_k ( lv ) ).
+  ENDMETHOD.
+
+  METHOD tab_key.
+    DATA(lv_tab) = SWITCH string( is_col-node
+                     WHEN gc_n_cent THEN `KNA1`
+                     WHEN gc_n_comp THEN `KNB1`
+                     WHEN gc_n_sale THEN `KNVV`
+                     WHEN gc_n_lic  THEN `ZSD_LICENSE_CHK`
+                     ELSE `` ).
+    IF lv_tab IS INITIAL OR is_col-fld IS INITIAL.
+      RETURN.
+    ENDIF.
+    rv = lcl_util=>squash( |{ lv_tab }-{ is_col-fld }| ).
   ENDMETHOD.
 
   METHOD fld_keys.
@@ -2883,11 +2944,28 @@ CLASS lcl_engine IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       DATA(lv_fk) = lcl_util=>squash( <ls_m>-fld ).
-      IF lv_fk IS INITIAL OR NOT line_exists( lt_fk[ table_line = lv_fk ] ).
+      IF lv_fk IS INITIAL.
         CONTINUE.
       ENDIF.
-      READ TABLE lt_cnt INTO ls_fc WITH KEY key = lv_fk.
-      IF sy-subrc <> 0 OR ls_fc-n <> 1
+      " TABLE-FIELD - KNB1-AKONT, KNVV-ZTERM - names the field outright, so
+      " it is taken even for a name the template uses in two places.
+      DATA(lv_tq) = tab_key( <ls_m> ).
+      DATA lv_hit TYPE abap_bool.
+      lv_hit = abap_false.
+      IF lv_tq IS NOT INITIAL.
+        READ TABLE lt_cnt INTO ls_fc WITH KEY key = lv_tq.
+        lv_hit = xsdbool( sy-subrc = 0 ).
+      ENDIF.
+      IF lv_hit = abap_false.
+        IF NOT line_exists( lt_fk[ table_line = lv_fk ] ).
+          CONTINUE.
+        ENDIF.
+        READ TABLE lt_cnt INTO ls_fc WITH KEY key = lv_fk.
+        IF sy-subrc <> 0.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+      IF ls_fc-n <> 1
          OR line_exists( lt_used[ table_line = ls_fc-col ] ).
         CONTINUE.
       ENDIF.
@@ -3107,6 +3185,39 @@ CLASS lcl_engine IMPLEMENTATION.
                         cs_datax = cs_datax ).
   ENDMETHOD.
 
+  METHOD ref_fill.
+    CLEAR ev_n.
+    " The included view, not COMPONENTS: the API structures carry includes,
+    " and every field inside one has to be reached by its own name.
+    DATA(lo_sd) = CAST cl_abap_structdescr( cl_abap_typedescr=>describe_by_data( cs_data ) ).
+    DATA(lt_comp) = lo_sd->get_included_view( ).
+    LOOP AT lt_comp INTO DATA(ls_c).
+      DATA(lv_name) = CONV string( ls_c-name ).
+      IF iv_except CS |,{ lv_name },|.
+        CONTINUE.
+      ENDIF.
+      ASSIGN COMPONENT lv_name OF STRUCTURE is_ref TO FIELD-SYMBOL(<lv_r>).
+      IF sy-subrc <> 0 OR <lv_r> IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      ASSIGN COMPONENT lv_name OF STRUCTURE cs_datax TO FIELD-SYMBOL(<lv_x>).
+      IF sy-subrc <> 0 OR <lv_x> IS NOT INITIAL.
+        CONTINUE.                                " the file gave this one
+      ENDIF.
+      ASSIGN COMPONENT lv_name OF STRUCTURE cs_data TO FIELD-SYMBOL(<lv_d>).
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      TRY.
+          <lv_d> = <lv_r>.
+        CATCH cx_sy_conversion_error.
+          CONTINUE.
+      ENDTRY.
+      <lv_x> = abap_true.
+      ev_n = ev_n + 1.
+    ENDLOOP.
+  ENDMETHOD.
+
   METHOD master.
     DATA(lo_cfg) = lcl_cfg=>get( ).
     mo_lic->reset( ).
@@ -3167,13 +3278,56 @@ CLASS lcl_engine IMPLEMENTATION.
       RETURN.
     ENDIF.
 
+    " ---- 1a. the columns that are not fields ----------------------------
+    " The reference columns are XD01's "create with reference": the company
+    " code and sales area named there are copied, and the row's own cells
+    " override them. The extension tab relies on them for everything it does
+    " not carry - reconciliation account, sort key, Incoterms, exchange rate
+    " type. The XD05 tab's first column says whether the row blocks or
+    " unblocks; the workbook's own example writes "for Unblocking" with every
+    " block cell empty.
+    DATA: lv_rkunnr TYPE kunnr,
+          lv_rbukrs TYPE bukrs,
+          lv_rvkorg TYPE vkorg,
+          lv_rvtweg TYPE vtweg,
+          lv_rspart TYPE spart,
+          lv_unblk  TYPE abap_bool.
+    LOOP AT mt_map INTO DATA(ls_r) WHERE node = '-'.
+      DATA(lv_rv) = lcl_util=>cell( is_row = is_row iv_col = ls_r-col ).
+      IF lv_rv IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      CASE ls_r-hdr.
+        WHEN 'REFERENCEFORCUSTOMERMATCHCODEFIELD'.
+          lv_rkunnr = key_kunnr( iv_cell = lv_rv iv_row = is_row-row ).
+        WHEN 'REFERENCECOMPANYCODE' OR 'REFCOMPANYCODE'.
+          lv_rbukrs = lv_rv.
+        WHEN 'REFERENCESALESORGANIZATION' OR 'REFSALESORGANIZATION'.
+          lv_rvkorg = lv_rv.
+        WHEN 'REFERENCEDISTRIBUTIONCHANNEL' OR 'REFDISTRIBUTIONCHANNEL'.
+          lv_rvtweg = lv_rv.
+        WHEN 'DIVISIONTHATISUSEDASAREFERENCE' OR 'REFDIVISION'.
+          lv_rspart = lv_rv.
+        WHEN 'BLOCKINGORUNBLOCKING'.
+          " "for Unblocking", "Unblock", "UNBLK" - and the workbook's own
+          " "for Ubblocking".
+          DATA(lv_lbl) = lcl_util=>squash( lv_rv ).
+          lv_unblk = xsdbool( lv_lbl CS 'UNBL' OR lv_lbl CS 'UBBL'
+                           OR lv_lbl CS 'UNLOCK' OR lv_lbl = 'U' ).
+      ENDCASE.
+    ENDLOOP.
+
     " ---- 2. build the customer node ------------------------------------
     DATA ls_cust TYPE cmds_ei_extern.
     CLEAR ls_cust.
     ls_cust-header-object_instance-kunnr = lv_kunnr.
     ls_cust-header-object_task           = lv_task.
-    ls_cust-central_data-central-data-ktokd  = lv_ktokd.
-    ls_cust-central_data-central-datax-ktokd = abap_true.
+    " Only when the row gives one: the XD05 tab has no account group column,
+    " and a blank sent with its flag set asks the API to clear it.
+    IF lv_ktokd IS NOT INITIAL.
+      ls_cust-central_data-central-data-ktokd  = lv_ktokd.
+      ls_cust-central_data-central-datax-ktokd = abap_true.
+    ENDIF.
     ls_cust-central_data-address-task        = lv_task.
 
     DATA ls_comp TYPE cmds_ei_company.
@@ -3204,8 +3358,22 @@ CLASS lcl_engine IMPLEMENTATION.
           lv_smt TYPE string,
           lv_adh TYPE string.
 
+    " Which tax column of the template this is, counted over every tax
+    " column whether its cell is filled or not.
+    DATA lv_tnth TYPE i.
+
     LOOP AT mt_map INTO DATA(ls_m) WHERE node <> gc_n_key.
       DATA(lv_cell) = lcl_util=>cell( is_row = is_row iv_col = ls_m-col ).
+      IF ls_m-node = gc_n_tax.
+        lv_tnth = lv_tnth + 1.
+      ENDIF.
+      " An unblocking row clears every block its cells leave empty. Without
+      " this an empty cell meant "leave alone", as it does everywhere else,
+      " so an unblocking row was posted and changed nothing.
+      IF lv_unblk = abap_true AND lv_cell IS INITIAL
+         AND ( ls_m-node = gc_n_cent OR ls_m-node = gc_n_comp OR ls_m-node = gc_n_sale ).
+        lv_cell = gc_clear.
+      ENDIF.
       IF lv_cell IS INITIAL.
         CONTINUE.
       ENDIF.
@@ -3266,11 +3434,30 @@ CLASS lcl_engine IMPLEMENTATION.
                          iv_nth   = CONV i( ls_m-fld+1 ) ).
           ELSE.
             lv_tatyp = ls_m-fld.
+            " A heading that names a category of another country. Invagen's
+            " domestic tab was copied from India's and still heads its tax
+            " columns JOCG, JTC1, JTX1 and JTX2, which the US does not have,
+            " so a US customer was refused for all four even with zeros in
+            " them. The column is then what it was to the recording it came
+            " from: the nth tax classification of the row's own country, in
+            " TSTL order - the order the customer master screen shows them.
+            IF lo_cfg->tax_cat_ok( iv_aland = lv_aland iv_tatyp = lv_tatyp ) = abap_false.
+              DATA(lv_named) = lv_tatyp.
+              lv_tatyp = lo_cfg->tax_cat_nth( iv_aland = lv_aland iv_nth = lv_tnth ).
+              IF lv_tatyp IS NOT INITIAL.
+                mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'I'
+                             iv_struc = 'KNVI' iv_fld = lv_tatyp
+                             iv_text = |Column { ls_m-col } is headed { lv_named }, which is not a tax | &&
+                                       |category of { lv_aland } - its value goes to { lv_tatyp }, | &&
+                                       |tax category { lv_tnth } of { lv_aland }| ).
+              ENDIF.
+            ENDIF.
           ENDIF.
           IF lv_tatyp IS INITIAL.
             mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
                          iv_struc = 'KNVI' iv_fld = ls_m-fld
-                         iv_text = |No tax category configured for country { lv_aland } - column { ls_m-col } skipped| ).
+                         iv_text = |Country { lv_aland } has no tax category { lv_tnth } in TSTL - | &&
+                                   |column { ls_m-col } ("{ lv_cell }") is not loaded| ).
             CONTINUE.
           ENDIF.
           IF lo_cfg->tax_cat_ok( iv_aland = lv_aland iv_tatyp = lv_tatyp ) = abap_false.
@@ -3386,12 +3573,94 @@ CLASS lcl_engine IMPLEMENTATION.
              ) TO ls_cust-central_data-address-communication-smtp-smtp.
     ENDIF.
 
+    " ---- 3a. copy from the reference company code and sales area -------
+    " The reference customer is the one named, or else the row's own
+    " customer - an extension usually copies one of its own company codes.
+    DATA(lv_refk) = COND kunnr( WHEN lv_rkunnr IS NOT INITIAL THEN lv_rkunnr
+                                ELSE lv_kunnr ).
+    DATA lv_ncopy TYPE i.
+    IF lv_rbukrs IS NOT INITIAL AND lv_bukrs IS NOT INITIAL.
+      DATA(ls_rknb1) = lo_cfg->ref_knb1( iv_kunnr = lv_refk iv_bukrs = lv_rbukrs ).
+      IF ls_rknb1 IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_bukrs = lv_bukrs iv_type = 'E'
+                     iv_struc = 'KNB1'
+                     iv_text = |Reference company code { lv_rbukrs }: customer { lv_refk ALPHA = OUT } | &&
+                               |is not in it, so there is nothing to copy - correct the reference columns| ).
+      ELSE.
+        ref_fill( EXPORTING is_ref  = ls_rknb1
+                            iv_except = `,MANDT,KUNNR,BUKRS,ERDAT,ERNAM,SPERR,LOEVM,NODEL,ALTKN,` &&
+                                      `EIKTO,ZSABE,TLFNS,TLFXS,INTAD,KVERM,ZINDT,DATLZ,`
+                  IMPORTING ev_n    = lv_ncopy
+                  CHANGING  cs_data = ls_comp-data cs_datax = ls_comp-datax ).
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_bukrs = lv_bukrs iv_type = 'I'
+                     iv_struc = 'KNB1'
+                     iv_text = |{ lv_ncopy } company code field(s) copied from customer | &&
+                               |{ lv_refk ALPHA = OUT }, company code { lv_rbukrs }| ).
+      ENDIF.
+    ENDIF.
+    IF lv_rvkorg IS NOT INITIAL AND lv_vkorg IS NOT INITIAL.
+      DATA(lv_rvt) = COND vtweg( WHEN lv_rvtweg IS NOT INITIAL THEN lv_rvtweg ELSE lv_vtweg ).
+      DATA(lv_rsp) = COND spart( WHEN lv_rspart IS NOT INITIAL THEN lv_rspart ELSE lv_spart ).
+      DATA(ls_rknvv) = lo_cfg->ref_knvv( iv_kunnr = lv_refk iv_vkorg = lv_rvkorg
+                                         iv_vtweg = lv_rvt  iv_spart = lv_rsp ).
+      IF ls_rknvv IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_vkorg = lv_vkorg iv_type = 'E'
+                     iv_struc = 'KNVV'
+                     iv_text = |Reference sales area { lv_rvkorg }/{ lv_rvt }/{ lv_rsp }: customer | &&
+                               |{ lv_refk ALPHA = OUT } is not in it, so there is nothing to copy - | &&
+                               |correct the reference columns| ).
+      ELSE.
+        ref_fill( EXPORTING is_ref  = ls_rknvv
+                            iv_except = `,MANDT,KUNNR,VKORG,VTWEG,SPART,ERDAT,ERNAM,LOEVM,` &&
+                                      `AUFSD,LIFSD,FAKSD,CASSD,EIKTO,`
+                  IMPORTING ev_n    = lv_ncopy
+                  CHANGING  cs_data = ls_sale-data cs_datax = ls_sale-datax ).
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_vkorg = lv_vkorg iv_type = 'I'
+                     iv_struc = 'KNVV'
+                     iv_text = |{ lv_ncopy } sales area field(s) copied from customer | &&
+                               |{ lv_refk ALPHA = OUT }, sales area { lv_rvkorg }/{ lv_rvt }/{ lv_rsp }| ).
+      ENDIF.
+    ENDIF.
+
     " ---- 4. company code and sales area --------------------------------
+    " A row names a company code because the tab has the column, not because
+    " it brings company code data. The ship-to tabs (ZSHP, YSHP) and ZREM and
+    " ZNOT carry the column and no company code field at all - those account
+    " groups have no company code view. Sent as a bare key, the company code
+    " was created without a reconciliation account and the API refused the
+    " whole customer: "Required entry field Reconciliation acct is not
+    " filled". A company code therefore goes only with data for it.
     IF lv_bukrs IS NOT INITIAL.
-      APPEND ls_comp TO ls_cust-company_data-company.
+      IF ls_comp-task = gc_i AND mv_tmpl = gc_tmpl_blk.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_bukrs = lv_bukrs iv_type = 'W'
+                     iv_text = |The customer is not in company code { lv_bukrs } - there is | &&
+                               |nothing there to block or unblock| ).
+      ELSEIF ls_comp-datax IS NOT INITIAL.
+        APPEND ls_comp TO ls_cust-company_data-company.
+      ELSEIF ls_comp-task = gc_i.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_bukrs = lv_bukrs iv_type = 'I'
+                     iv_text = |No company code data in this row, so the customer is not set up | &&
+                               |in company code { lv_bukrs } (account groups such as ship-to have | &&
+                               |no company code data)| ).
+      ENDIF.
     ENDIF.
     IF lv_vkorg IS NOT INITIAL.
-      APPEND ls_sale TO ls_cust-sales_data-sales.
+      IF ls_sale-task = gc_i AND mv_tmpl = gc_tmpl_blk.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_vkorg = lv_vkorg iv_type = 'W'
+                     iv_text = |The customer is not in sales area { lv_vkorg }/{ lv_vtweg }/{ lv_spart } | &&
+                               |- there is nothing there to block or unblock| ).
+      ELSEIF ls_sale-datax IS NOT INITIAL OR ls_sale-task = gc_i.
+        APPEND ls_sale TO ls_cust-sales_data-sales.
+      ENDIF.
+    ENDIF.
+
+    IF mv_tmpl = gc_tmpl_blk AND lv_unblk = abap_false
+       AND ls_cust-central_data-central-datax IS INITIAL
+       AND ls_cust-company_data-company IS INITIAL
+       AND ls_cust-sales_data-sales IS INITIAL.
+      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                   iv_text = 'Nothing to block in this row - to unblock, write "for Unblocking" in column 1 and leave the block cells empty' ).
+      RETURN.
     ENDIF.
 
     " ---- 5. the BP node: category, grouping, roles, Aadhaar ------------
@@ -3534,6 +3803,16 @@ CLASS lcl_engine IMPLEMENTATION.
 
     IF lv_exists = abap_true.
       warn_stored( iv_kunnr = lv_kunnr iv_row = is_row-row is_sale = ls_sale ).
+    ENDIF.
+
+    " A row the program has already found fault with is not posted. It used
+    " to be: the faulty column was dropped and the rest went through, so the
+    " list said "Customer posted" under four red lines and the customer was
+    " created without its tax classification.
+    IF mo_log->has_error( is_row-row ) = abap_true.
+      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                   iv_text = 'Row not posted - correct the errors above and load it again' ).
+      RETURN.
     ENDIF.
 
     DATA(lv_ok) = mo_cvis->post( is_data  = ls_cvis

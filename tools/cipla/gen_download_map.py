@@ -232,6 +232,11 @@ def main():
         nth_tax = 0
         lines.append(f"    \"  {sig} - {fmt['ncol']} columns - {', '.join(users)}")
         names = fmt['fields'] or ['' for _ in fmt['desc']]
+        # Columns added after the go-live tests name their field outright,
+        # also on a tab that otherwise carries descriptions only.
+        added = fmt.get('added', [])
+        if added and not fmt['fields']:
+            names = names[:len(names) - len(added)] + [a['fld'] for a in added]
         seen_desc = collections.Counter()
         all_desc = collections.Counter(squash(d) for d in fmt['desc'])
         for col, (fld, desc) in enumerate(zip(names, fmt['desc']), 1):

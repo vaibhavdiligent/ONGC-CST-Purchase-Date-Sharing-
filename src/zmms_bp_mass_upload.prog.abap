@@ -165,6 +165,7 @@ CONSTANTS:
   gc_i     TYPE cmd_ei_object_task VALUE 'I',   " insert
   gc_u     TYPE cmd_ei_object_task VALUE 'U',   " update
   gc_m     TYPE cmd_ei_object_task VALUE 'M',   " modify
+  gc_d     TYPE cmd_ei_object_task VALUE 'D',   " delete
   gc_clear TYPE string             VALUE '#BLANK#'.
 
 " Tab names in "Vendor LSMW with Template.xlsx"
@@ -1778,6 +1779,19 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS vend_land1  IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE land1.
     METHODS vend_pan    IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE j_1ipanno.
     METHODS vend_guid   IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE bu_partner_guid.
+    "! The business partner behind a vendor, through the CVI link.
+    METHODS vend_bp     IMPORTING iv_lifnr TYPE lifnr RETURNING VALUE(rv) TYPE bu_partner.
+
+    "! Tax numbers belong to the business partner (DFKKBPTAXNUM), filed by
+    "! tax number category (TFKTAXNUMTYPE); CVI copies them to LFA1-STCD*.
+    METHODS tax_type_ok IMPORTING VALUE(iv_type) TYPE bptaxtype
+                        RETURNING VALUE(rv)      TYPE abap_bool.
+    "! The number a partner holds under a category, empty if none.
+    METHODS taxnum_of   IMPORTING VALUE(iv_partner) TYPE bu_partner
+                                  VALUE(iv_type)    TYPE bptaxtype
+                        EXPORTING ev_num            TYPE bptaxnum
+                                  ev_numxl          TYPE bptaxnumxl
+                        RETURNING VALUE(rv)         TYPE abap_bool.
     " The other way round: a vendor created with internal numbering has its
     " number only after the save, and the GUID the header carried is what
     " leads to it.
@@ -1983,6 +1997,27 @@ CLASS lcl_cfg IMPLEMENTATION.
     SELECT SINGLE partner_guid FROM cvi_vend_link WHERE vendor = @iv_lifnr INTO @rv.
   ENDMETHOD.
 
+  METHOD vend_bp.
+    rv = bp_by_guid( vend_guid( iv_lifnr ) ).
+  ENDMETHOD.
+
+  METHOD tax_type_ok.
+    DATA lv TYPE abap_bool.
+    SELECT SINGLE @abap_true FROM tfktaxnumtype WHERE taxtype = @iv_type INTO @lv.
+    rv = xsdbool( lv = abap_true ).
+  ENDMETHOD.
+
+  METHOD taxnum_of.
+    CLEAR: ev_num, ev_numxl.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE taxnum, taxnumxl FROM dfkkbptaxnum
+      WHERE partner = @iv_partner AND taxtype = @iv_type
+      INTO (@ev_num, @ev_numxl).
+    rv = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
   METHOD vend_by_guid.
     IF iv_guid IS INITIAL.
       RETURN.
@@ -2158,6 +2193,12 @@ CLASS lcl_cvis IMPLEMENTATION.
                        iv_ty  = ls_r2-type iv_id = ls_r2-id iv_no = ls_r2-number
                        iv_fl  = ls_r2-field iv_txt = ls_r2-message ).
           rv_ok = abap_false.
+        ELSEIF ls_r2-type = 'W'.
+          " Warnings do not stop the posting, but they are what explains a
+          " creation that went half way - a partner without its supplier.
+          mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
+                       iv_ty  = ls_r2-type iv_id = ls_r2-id iv_no = ls_r2-number
+                       iv_fl  = ls_r2-field iv_txt = ls_r2-message ).
         ENDIF.
       ENDLOOP.
     ENDLOOP.
@@ -2467,6 +2508,12 @@ CLASS lcl_h_create DEFINITION INHERITING FROM lcl_base FINAL.
                          CHANGING  cs_data TYPE cvis_ei_extern.
     METHODS fill_central IMPORTING is_row TYPE ty_row
                          CHANGING  cs_data TYPE cvis_ei_extern.
+    "! Tax number 3, tax number 5 and the VAT registration number, as the
+    "! business partner's tax numbers.
+    METHODS fill_tax     IMPORTING is_row   TYPE ty_row
+                                   iv_lifnr TYPE lifnr OPTIONAL
+                         EXPORTING ev_bad   TYPE abap_bool
+                         CHANGING  cs_data  TYPE cvis_ei_extern.
 ENDCLASS.
 
 CLASS lcl_h_create IMPLEMENTATION.
@@ -2650,11 +2697,17 @@ CLASS lcl_h_create IMPLEMENTATION.
     " KUNNR is CHAR 10 and VBUND is CHAR 6, so they pad differently.
     "   KUNNR  domain KUNNR  - ALPHA, 10
     "   VBUND  domain RCOMP  - ALPHA, 6
-    " KONZS, STCD*, BRSCH, J_1I* and VEN_CLASS have no conversion exit and are
+    " KONZS, BRSCH, J_1I* and VEN_CLASS have no conversion exit and are
     " passed through unchanged.
+    "
+    " STCD3, STCD5 and STCEG (columns 35 to 37) are not sent here. Written
+    " into the supplier they reached LFA1 and nothing else: SE16N showed the
+    " number, transaction BP showed no tax number at all, and the next save
+    " in BP - which maps the partner's tax numbers onto LFA1 - could lose it.
+    " FILL_TAX sends them to the business partner instead.
     DATA(lt_map) = VALUE string_table(
       ( |KTOKK;5;|  ) ( |KUNNR;32;10| ) ( |VBUND;33;6| ) ( |KONZS;34;| )
-      ( |STCD3;35;| ) ( |STCD5;36;|  ) ( |STCEG;37;|  ) ( |J_1KFTBUS;38;| )
+      ( |J_1KFTBUS;38;| )
       ( |STENR;39;| ) ( |BRSCH;40;|  )
       " CIN - LFA1 fields, confirmed present in VMDS_EI_VMD_CENTRAL
       ( |VEN_CLASS;55;| ) ( |J_1ISSIST;56;| ) ( |J_1IPANNO;57;| ) ).
@@ -2668,6 +2721,88 @@ CLASS lcl_h_create IMPLEMENTATION.
       lcl_util=>set( EXPORTING iv_comp = lv_f iv_value = lv_v
                      CHANGING  cs_data  = cs_data-vendor-central_data-central-data
                                cs_datax = cs_data-vendor-central_data-central-datax ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD fill_tax.
+    " In S/4HANA a tax number belongs to the business partner, filed under a
+    " tax number category: the country and a digit, the digit saying which
+    " LFA1 field CVI fills from it - IN3 for India's tax number 3 (GSTIN),
+    " IN0 for a VAT registration number. The category has to exist in
+    " TFKTAXNUMTYPE; where it does not, the partner cannot hold the number
+    " and the row says so instead of writing it where BP does not look.
+    "   "field;column;digit of the category" - the same order as FILL_CENTRAL
+    CLEAR ev_bad.
+    DATA(lt_tax) = VALUE string_table( ( |STCD3;35;3| ) ( |STCD5;36;5| ) ( |STCEG;37;0| ) ).
+    DATA: lv_land TYPE land1,
+          lv_bp   TYPE bu_partner,
+          lv_look TYPE abap_bool.
+
+    LOOP AT lt_tax INTO DATA(lv_t).
+      SPLIT lv_t AT ';' INTO DATA(lv_f) DATA(lv_c) DATA(lv_d).
+      DATA(lv_v) = lcl_util=>cell( is_row = is_row iv_col = CONV i( lv_c ) ).
+      IF lv_v IS INITIAL.
+        CONTINUE.
+      ENDIF.
+
+      " Country and partner are looked up once, and only for a row that
+      " carries a tax number.
+      IF lv_look = abap_false.
+        lv_look = abap_true.
+        lv_land = to_upper( lcl_util=>cell( is_row = is_row iv_col = 20 ) ).
+        IF iv_lifnr IS NOT INITIAL.
+          IF lv_land IS INITIAL.
+            lv_land = mo_cfg->vend_land1( iv_lifnr ).
+          ENDIF.
+          lv_bp = mo_cfg->vend_bp( iv_lifnr ).
+        ENDIF.
+      ENDIF.
+      IF lv_land IS INITIAL.
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
+                     iv_st = 'TAXNUMBER' iv_fl = lv_f
+                     iv_txt = |{ lv_f } (column { lv_c }) needs the supplier's country (column 20) - | &&
+                              |the tax number category is chosen by country| ).
+        ev_bad = abap_true.
+        CONTINUE.
+      ENDIF.
+
+      DATA(lv_type) = CONV bptaxtype( |{ lv_land }{ lv_d }| ).
+      IF mo_cfg->tax_type_ok( lv_type ) = abap_false.
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
+                     iv_st = 'TAXNUMBER' iv_fl = lv_f
+                     iv_txt = |{ lv_f } "{ lv_v }" (column { lv_c }): the business partner files it | &&
+                              |under tax number category { lv_type }, which does not exist. Maintain | &&
+                              |it (Business Partner > Basic Settings > Tax Numbers > Maintain Tax | &&
+                              |Number Categories) or leave the column empty| ).
+        ev_bad = abap_true.
+        CONTINUE.
+      ENDIF.
+
+      DATA: lv_old   TYPE bptaxnum,
+            lv_oldxl TYPE bptaxnumxl.
+      DATA(lv_has) = mo_cfg->taxnum_of( EXPORTING iv_partner = lv_bp iv_type = lv_type
+                                        IMPORTING ev_num     = lv_old ev_numxl = lv_oldxl ).
+      DATA ls_tx TYPE bus_ei_bupa_taxnumber.
+      CLEAR ls_tx.
+      ls_tx-data_key-taxtype = lv_type.
+      IF lv_v = gc_clear.
+        IF lv_has = abap_false.
+          CONTINUE.                              " nothing there to remove
+        ENDIF.
+        ls_tx-task               = gc_d.
+        ls_tx-data_key-taxnumber = lv_old.
+        ls_tx-data_key-taxnumxl  = lv_oldxl.
+      ELSE.
+        ls_tx-task = COND #( WHEN lv_has = abap_true THEN gc_u ELSE gc_i ).
+        " Up to 20 characters the number is TAXNUM; longer ones only fit
+        " TAXNUMXL, which is where BP itself keeps them.
+        IF strlen( lv_v ) > 20.
+          ls_tx-data_key-taxnumxl  = lv_v.
+        ELSE.
+          ls_tx-data_key-taxnumber = lv_v.
+        ENDIF.
+      ENDIF.
+      APPEND ls_tx TO cs_data-partner-central_data-taxnumber-taxnumbers.
     ENDLOOP.
   ENDMETHOD.
 
@@ -2768,6 +2903,17 @@ CLASS lcl_h_create IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       fill_central( EXPORTING is_row = ls_row CHANGING cs_data = ls_data ).
+      DATA lv_badtax TYPE abap_bool.
+      CLEAR lv_badtax.
+      fill_tax( EXPORTING is_row = ls_row iv_lifnr = lv_lifnr
+                IMPORTING ev_bad = lv_badtax
+                CHANGING  cs_data = ls_data ).
+      IF lv_badtax = abap_true.
+        IF p_stop = abap_true.
+          EXIT.
+        ENDIF.
+        CONTINUE.
+      ENDIF.
 
       " bank details
       IF lv_bankl IS NOT INITIAL AND lv_bankn IS NOT INITIAL.
@@ -2858,8 +3004,22 @@ CLASS lcl_h_create IMPLEMENTATION.
         DATA(lv_new) = mo_cfg->vend_by_guid( lv_guid ).
         DATA(lv_bp)  = mo_cfg->bp_by_guid( lv_guid ).
         IF lv_new IS INITIAL.
-          mo_log->add( iv_row = ls_row-row iv_ty = 'W'
-                       iv_txt = 'Posted, but the new vendor number could not be read back from CVI_VEND_LINK' ).
+          " The update went through and reported nothing against it, yet no
+          " supplier is linked to the partner it was posted under. Which of
+          " the two halves is missing decides what to look at, so it is said.
+          IF lv_bp IS INITIAL.
+            mo_log->add( iv_row = ls_row-row iv_ty = 'E'
+                         iv_txt = |Nothing was created: the update reported no error, but neither a | &&
+                                  |business partner nor a supplier exists under the GUID this row was | &&
+                                  |posted with. See the warnings above for this row| ).
+          ELSE.
+            mo_log->add( iv_row = ls_row-row iv_k1 = lv_bp iv_ty = 'E'
+                         iv_txt = |Business partner { lv_bp ALPHA = OUT } was created, but no supplier | &&
+                                  |is linked to it (CVI_VEND_LINK). Check in BP that it has the supplier | &&
+                                  |roles of account group { lv_ktokk } (CVIV_VEND_TO_BP2) and the | &&
+                                  |warnings above for this row; do not load the row again until it is | &&
+                                  |cleared, or a second partner is created| ).
+          ENDIF.
         ELSE.
           mo_log->set_key( iv_row = ls_row-row iv_k1 = lv_new ).
           DATA(lv_made) = |Vendor { lv_new ALPHA = OUT } created|.
