@@ -14,78 +14,102 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Customer Master Download / Upload</ENTRY>
-     <LENGTH>33</LENGTH>
+     <ENTRY>Customer Master - Dynamic Download / Upload</ENTRY>
+     <LENGTH>43</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>001</KEY>
+     <ENTRY>Create or change</ENTRY>
+     <LENGTH>16</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>002</KEY>
      <ENTRY>Download or upload</ENTRY>
      <LENGTH>18</LENGTH>
     </item>
     <item>
      <ID>I</ID>
-     <KEY>002</KEY>
-     <ENTRY>Scenario</ENTRY>
-     <LENGTH>8</LENGTH>
+     <KEY>003</KEY>
+     <ENTRY>New records (create only)</ENTRY>
+     <LENGTH>25</LENGTH>
     </item>
     <item>
      <ID>I</ID>
-     <KEY>003</KEY>
+     <KEY>004</KEY>
+     <ENTRY>Fields in the file</ENTRY>
+     <LENGTH>18</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>005</KEY>
      <ENTRY>Which customers (download)</ENTRY>
      <LENGTH>26</LENGTH>
     </item>
     <item>
      <ID>I</ID>
-     <KEY>004</KEY>
-     <ENTRY>Upload options</ENTRY>
-     <LENGTH>14</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
-     <KEY>005</KEY>
-     <ENTRY>File</ENTRY>
-     <LENGTH>4</LENGTH>
-    </item>
-    <item>
-     <ID>I</ID>
      <KEY>006</KEY>
-     <ENTRY>Area</ENTRY>
-     <LENGTH>4</LENGTH>
+     <ENTRY>Upload</ENTRY>
+     <LENGTH>6</LENGTH>
     </item>
     <item>
      <ID>I</ID>
      <KEY>007</KEY>
-     <ENTRY>Scenario</ENTRY>
-     <LENGTH>8</LENGTH>
+     <ENTRY>File</ENTRY>
+     <LENGTH>4</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_CRT</KEY>
+     <ENTRY>D       .Create new records</ENTRY>
+     <LENGTH>27</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_CHG</KEY>
+     <ENTRY>D       .Change existing records</ENTRY>
+     <LENGTH>32</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_DOWN</KEY>
-     <ENTRY>D       .Download a workbook</ENTRY>
-     <LENGTH>28</LENGTH>
+     <ENTRY>D       .Download a file</ENTRY>
+     <LENGTH>24</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_UP</KEY>
-     <ENTRY>D       .Upload a filled workbook</ENTRY>
-     <LENGTH>33</LENGTH>
+     <ENTRY>D       .Upload a filled file</ENTRY>
+     <LENGTH>29</LENGTH>
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_AREA</KEY>
-     <ENTRY>D       .Area</ENTRY>
-     <LENGTH>13</LENGTH>
+     <KEY>P_KTOGR</KEY>
+     <ENTRY>D       .Account group</ENTRY>
+     <LENGTH>22</LENGTH>
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_SCEN</KEY>
-     <ENTRY>D       .Scenario</ENTRY>
-     <LENGTH>17</LENGTH>
+     <KEY>P_BPGRP</KEY>
+     <ENTRY>D       .BP grouping (optional)</ENTRY>
+     <LENGTH>31</LENGTH>
     </item>
     <item>
      <ID>S</ID>
-     <KEY>S_KUNNR</KEY>
+     <KEY>S_FLD</KEY>
+     <ENTRY>D       .Chosen fields</ENTRY>
+     <LENGTH>22</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>P_TLANG</KEY>
+     <ENTRY>D       .Language of texts</ENTRY>
+     <LENGTH>26</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S_NUM</KEY>
      <ENTRY>D       .Customer</ENTRY>
      <LENGTH>17</LENGTH>
     </item>
@@ -97,33 +121,27 @@
     </item>
     <item>
      <ID>S</ID>
-     <KEY>P_VKORG</KEY>
+     <KEY>S_BUKRS</KEY>
+     <ENTRY>D       .Company code</ENTRY>
+     <LENGTH>21</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
+     <KEY>S_ORG</KEY>
      <ENTRY>D       .Sales organization</ENTRY>
      <LENGTH>27</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_MAX</KEY>
-     <ENTRY>D       .Rows at most</ENTRY>
-     <LENGTH>21</LENGTH>
+     <ENTRY>D       .Records at most</ENTRY>
+     <LENGTH>24</LENGTH>
     </item>
     <item>
      <ID>S</ID>
      <KEY>P_TEST</KEY>
      <ENTRY>D       .Test run (nothing is posted)</ENTRY>
      <LENGTH>37</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_STOP</KEY>
-     <ENTRY>D       .Stop at the first faulty row</ENTRY>
-     <LENGTH>37</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_SKIP</KEY>
-     <ENTRY>D       .Heading rows to skip</ENTRY>
-     <LENGTH>29</LENGTH>
     </item>
     <item>
      <ID>S</ID>
@@ -142,12 +160,6 @@
      <KEY>P_TXT</KEY>
      <ENTRY>D       .Text, tab-separated (.txt)</ENTRY>
      <LENGTH>35</LENGTH>
-    </item>
-    <item>
-     <ID>S</ID>
-     <KEY>P_EMPTY</KEY>
-     <ENTRY>D       .Headings only (empty template)</ENTRY>
-     <LENGTH>39</LENGTH>
     </item>
    </TPOOL>
   </asx:values>

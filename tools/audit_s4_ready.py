@@ -52,6 +52,8 @@ KNOWN = {
     'LFA1', 'LFB1', 'LFBK', 'LFBW', 'LFM1', 'WYT3', 'BNKA', 'FIWTIN_TAN_EXEM',
     # FSCM credit management
     'UKMBP_CMS', 'UKMBP_CMS_SGM', 'UKMCRED_SGM0C', 'UKM_KKBER2SGM',
+    # dictionary metadata and text IDs read by the CCEJ dynamic programs
+    'DD05S', 'DD07L', 'TTXID', 'TTXIT',
     # Cipla's own
     'ZPARAM_TABLE', 'ZFI_VEND_MSME', 'ZFI_TAX_TAB', 'ZSD_LICENSE_CHK',
 }
