@@ -342,6 +342,7 @@ FORM send_trackwise .
       lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
       lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
       lo_http_client->request->set_header_field( name = 'Accept' value = 'application/xml' ).
+      lo_http_client->request->set_header_field( name = 'X-Plant' value = CONV string( ls_track_sql-plant_code ) ).
 
       " Set XML payload
       lo_http_client->request->set_cdata( lv_xml ).
@@ -528,6 +529,7 @@ FORM send_plant  USING    p_gv_qmel TYPE viqmel
   lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
   lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
   lo_http_client->request->set_header_field( name = 'Accept' value = 'application/xml' ).
+  lo_http_client->request->set_header_field( name = 'X-Plant' value = CONV string( ls_req-plant_code ) ).
   lo_http_client->request->set_cdata( lv_xml ).
 
   " 4. Execute HTTP Post Call
@@ -599,6 +601,7 @@ FORM send_plant  USING    p_gv_qmel TYPE viqmel
     lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
     lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
     lo_http_client->request->set_header_field( name = 'Accept' value = 'application/xml' ).
+    lo_http_client->request->set_header_field( name = 'X-Plant' value = CONV string( ls_res-plant_code ) ).
 
     " Set XML payload
     lo_http_client->request->set_cdata( lv_xml ).
@@ -1118,6 +1121,7 @@ FORM date_condition1 .
     lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
     lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
     lo_http_client->request->set_header_field( name = 'Accept' value = 'application/xml' ).
+    lo_http_client->request->set_header_field( name = 'X-Plant' value = CONV string( ls_main_sql-plant_code ) ).
 
     " Set XML payload
     lo_http_client->request->set_cdata( lv_xml ).

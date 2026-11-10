@@ -75,7 +75,14 @@ START-OF-SELECTION.
 
   SORT gt_asrs BY plant.
   "Begin of change on 07.09.2026 by ABAP7++
-  PERFORM f_send_request.
+    " Plant-wise send: one HTTP call per plant (restores original per-plant routing)
+  DATA: lt_plants TYPE STANDARD TABLE OF werks_d.
+  lt_plants = VALUE #( FOR ls_plant IN gt_asrs ( ls_plant-plant ) ).
+  SORT lt_plants.
+  DELETE ADJACENT DUPLICATES FROM lt_plants.
+  LOOP AT lt_plants INTO DATA(lv_plant).
+    PERFORM f_send_request USING lv_plant.
+  ENDLOOP.
   "End of change on 07.09.2026 by ABAP7++
   LOOP AT gt_asrs ASSIGNING <fs_asrs>.
    "Begin of change on 07.09.2026 by ABAP7--
@@ -182,7 +189,7 @@ START-OF-SELECTION.
 *& -->  p1        text
 *& <--  p2        text
 *&---------------------------------------------------------------------*
-FORM f_send_request .
+FORM f_send_request USING iv_plant TYPE werks_d.
  " HTTP Client Variables
 DATA: lo_http_client TYPE REF TO if_http_client,
       lv_xml         TYPE string,          " Changed from lv_json to lv_xml
@@ -194,7 +201,7 @@ DATA: lo_http_client TYPE REF TO if_http_client,
  CONSTANTS: lc_destination TYPE rfcdest VALUE 'CPI_API_OB'. " Configured in SM59
 "Fill payload
  lt_payload = VALUE #(
-  FOR ls_asrs IN gt_asrs
+  FOR ls_asrs IN gt_asrs WHERE ( plant = iv_plant )
   ( VALUE #(
       BASE CORRESPONDING #( ls_asrs )
       processname = 'ASR_PUSH_MESSAGE' ) ) ).
@@ -224,6 +231,7 @@ DATA: lo_http_client TYPE REF TO if_http_client,
   lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
   lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
   lo_http_client->request->set_header_field( name = 'Accept'       value = 'application/xml' ).
+  lo_http_client->request->set_header_field( name = 'X-Plant' value = CONV string( iv_plant ) ).
 
   " Set XML payload
   lo_http_client->request->set_cdata( lv_xml ).
