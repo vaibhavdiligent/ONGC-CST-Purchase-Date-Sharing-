@@ -227,22 +227,27 @@ CLASS lcl_dl IMPLEMENTATION.
     DATA lt_k TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     IF s_num[] IS NOT INITIAL.
       IF gc_side = 'C'.
+        " Typed tables: one column read into an inline table gives a
+        " structured line, which a string template cannot take.
+        DATA lt_c TYPE STANDARD TABLE OF kunnr WITH EMPTY KEY.
         SELECT kunnr FROM kna1 WHERE kunnr IN @s_num ORDER BY kunnr
-          INTO TABLE @DATA(lt_c) UP TO @p_max ROWS.
+          INTO TABLE @lt_c UP TO @p_max ROWS.
         LOOP AT lt_c INTO DATA(lv_cust).
           INSERT |{ lv_cust }| INTO TABLE lt_k.
         ENDLOOP.
       ELSE.
+        DATA lt_v TYPE STANDARD TABLE OF lifnr WITH EMPTY KEY.
         SELECT lifnr FROM lfa1 WHERE lifnr IN @s_num ORDER BY lifnr
-          INTO TABLE @DATA(lt_v) UP TO @p_max ROWS.
+          INTO TABLE @lt_v UP TO @p_max ROWS.
         LOOP AT lt_v INTO DATA(lv_vend).
           INSERT |{ lv_vend }| INTO TABLE lt_k.
         ENDLOOP.
       ENDIF.
     ENDIF.
     IF s_bp[] IS NOT INITIAL.
+      DATA lt_bp TYPE STANDARD TABLE OF bu_partner WITH EMPTY KEY.
       SELECT partner FROM but000 WHERE partner IN @s_bp
-        INTO TABLE @DATA(lt_bp) UP TO @p_max ROWS.
+        INTO TABLE @lt_bp UP TO @p_max ROWS.
       DATA(lt_n) = lcl_cfg=>nums_of_bp( lt_bp ).
       LOOP AT lt_n INTO DATA(lv_n).
         INSERT lv_n INTO TABLE lt_k.

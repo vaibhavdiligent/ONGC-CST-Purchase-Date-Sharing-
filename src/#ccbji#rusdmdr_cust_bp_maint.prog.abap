@@ -28,7 +28,7 @@
 *&   Classic ABAP, deliberately: CL_MD_BP_MAINTAIN is not released for
 *&   ABAP Cloud and no released API maintains the customer and supplier
 *&   parts of a business partner from a GUI mass upload. Reads of the
-*&   master tables, the ABAP Dictionary (DD05S, DD07L) and the text IDs
+*&   master tables, the ABAP Dictionary (DDIF_FK_GET, DD07L) and the text IDs
 *&   (TTXID) are confined to LCL_CAT, LCL_CHK, LCL_CFG and LCL_DB.
 *&
 *& Generated - do not edit. Source: tools/ccej/bp_maint/*.abap,
@@ -1863,10 +1863,34 @@ CLASS lcl_chk IMPLEMENTATION.
       rt = ls_c-fk.
       RETURN.
     ENDIF.
-    SELECT checktable, checkfield, fortable, forkey FROM dd05s
-      WHERE tabname = @iv_tab AND fieldname = @iv_fld AND as4local = 'A'
-      ORDER BY primpos
-      INTO TABLE @rt.
+    " Through the dictionary's own API, not a SELECT on DD05S: the check
+    " table is not a column of DD05S on S/4HANA 2025 ("Unknown column name
+    " CHECKTABLE"). DD05M, which DDIF_FK_GET fills, carries both sides of
+    " every key field pair together with the check table.
+    DATA: lv_tab TYPE ddobjname,
+          lv_fld TYPE dfies-fieldname,
+          lt_05m TYPE STANDARD TABLE OF dd05m,
+          lt_08v TYPE STANDARD TABLE OF dd08v.
+    lv_tab = iv_tab.
+    lv_fld = iv_fld.
+    CALL FUNCTION 'DDIF_FK_GET'
+      EXPORTING
+        tabname       = lv_tab
+        fieldname     = lv_fld
+        state         = 'A'
+      TABLES
+        dd08v_tab     = lt_08v
+        dd05m_tab     = lt_05m
+      EXCEPTIONS
+        illegal_input = 1
+        OTHERS        = 2.
+    IF sy-subrc = 0.
+      SORT lt_05m BY primpos.
+      LOOP AT lt_05m INTO DATA(ls_05m).
+        APPEND VALUE #( checktable = ls_05m-checktable checkfield = ls_05m-checkfield
+                        fortable   = ls_05m-fortable   forkey     = ls_05m-forkey ) TO rt.
+      ENDLOOP.
+    ENDIF.
     INSERT VALUE #( tab = iv_tab fld = iv_fld fk = rt ) INTO TABLE mt_fkc.
   ENDMETHOD.
 
@@ -2042,16 +2066,20 @@ CLASS lcl_cfg IMPLEMENTATION.
       RETURN.
     ENDIF.
     IF gc_side = 'C'.
+      " A typed table, not @DATA( ): one column read into an inline table
+      " gives a structured line, which a string template cannot take.
+      DATA lt_c TYPE STANDARD TABLE OF kunnr WITH EMPTY KEY.
       SELECT customer FROM cvi_cust_link
         FOR ALL ENTRIES IN @lt_g WHERE partner_guid = @lt_g-partner_guid
-        INTO TABLE @DATA(lt_c).
+        INTO TABLE @lt_c.
       LOOP AT lt_c INTO DATA(lv_cust).
         APPEND |{ lv_cust }| TO rt.
       ENDLOOP.
     ELSE.
+      DATA lt_v TYPE STANDARD TABLE OF lifnr WITH EMPTY KEY.
       SELECT vendor FROM cvi_vend_link
         FOR ALL ENTRIES IN @lt_g WHERE partner_guid = @lt_g-partner_guid
-        INTO TABLE @DATA(lt_v).
+        INTO TABLE @lt_v.
       LOOP AT lt_v INTO DATA(lv_vend).
         APPEND |{ lv_vend }| TO rt.
       ENDLOOP.
@@ -2678,7 +2706,9 @@ CLASS lcl_file IMPLEMENTATION.
         et_head = lt_c.
         CONTINUE.
       ENDIF.
-      IF condense( lv_line ) IS INITIAL.
+      " IS INITIAL takes a data object, not a built-in function.
+      DATA(lv_trim) = condense( lv_line ).
+      IF lv_trim IS INITIAL.
         CONTINUE.
       ENDIF.
       APPEND VALUE #( row = lv_no cells = lt_c ) TO et_rows.
@@ -2988,22 +3018,27 @@ CLASS lcl_dl IMPLEMENTATION.
     DATA lt_k TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     IF s_num[] IS NOT INITIAL.
       IF gc_side = 'C'.
+        " Typed tables: one column read into an inline table gives a
+        " structured line, which a string template cannot take.
+        DATA lt_c TYPE STANDARD TABLE OF kunnr WITH EMPTY KEY.
         SELECT kunnr FROM kna1 WHERE kunnr IN @s_num ORDER BY kunnr
-          INTO TABLE @DATA(lt_c) UP TO @p_max ROWS.
+          INTO TABLE @lt_c UP TO @p_max ROWS.
         LOOP AT lt_c INTO DATA(lv_cust).
           INSERT |{ lv_cust }| INTO TABLE lt_k.
         ENDLOOP.
       ELSE.
+        DATA lt_v TYPE STANDARD TABLE OF lifnr WITH EMPTY KEY.
         SELECT lifnr FROM lfa1 WHERE lifnr IN @s_num ORDER BY lifnr
-          INTO TABLE @DATA(lt_v) UP TO @p_max ROWS.
+          INTO TABLE @lt_v UP TO @p_max ROWS.
         LOOP AT lt_v INTO DATA(lv_vend).
           INSERT |{ lv_vend }| INTO TABLE lt_k.
         ENDLOOP.
       ENDIF.
     ENDIF.
     IF s_bp[] IS NOT INITIAL.
+      DATA lt_bp TYPE STANDARD TABLE OF bu_partner WITH EMPTY KEY.
       SELECT partner FROM but000 WHERE partner IN @s_bp
-        INTO TABLE @DATA(lt_bp) UP TO @p_max ROWS.
+        INTO TABLE @lt_bp UP TO @p_max ROWS.
       DATA(lt_n) = lcl_cfg=>nums_of_bp( lt_bp ).
       LOOP AT lt_n INTO DATA(lv_n).
         INSERT lv_n INTO TABLE lt_k.
@@ -3359,7 +3394,9 @@ CLASS lcl_ul IMPLEMENTATION.
       IF lv_hc IS INITIAL.
         " A column without a heading is only a problem if it has data.
         LOOP AT it_rows INTO DATA(ls_r).
-          IF condense( cell( is_row = ls_r iv_idx = lv_i ) ) IS NOT INITIAL.
+          " IS NOT INITIAL takes a data object, not a built-in function.
+          DATA(lv_cv) = condense( cell( is_row = ls_r iv_idx = lv_i ) ).
+          IF lv_cv IS NOT INITIAL.
             mo_log->add( iv_row = ls_r-row iv_type = 'E'
                          iv_msg = |Column { lcl_util=>col_letter( lv_i ) } has data but no field name in row 1| ).
             rv = abap_false.

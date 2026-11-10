@@ -28,7 +28,7 @@
 *&   Classic ABAP, deliberately: CL_MD_BP_MAINTAIN is not released for
 *&   ABAP Cloud and no released API maintains the customer and supplier
 *&   parts of a business partner from a GUI mass upload. Reads of the
-*&   master tables, the ABAP Dictionary (DD05S, DD07L) and the text IDs
+*&   master tables, the ABAP Dictionary (DDIF_FK_GET, DD07L) and the text IDs
 *&   (TTXID) are confined to LCL_CAT, LCL_CHK, LCL_CFG and LCL_DB.
 *&
 *& Generated - do not edit. Source: tools/ccej/bp_maint/*.abap,

@@ -150,7 +150,9 @@ CLASS lcl_ul IMPLEMENTATION.
       IF lv_hc IS INITIAL.
         " A column without a heading is only a problem if it has data.
         LOOP AT it_rows INTO DATA(ls_r).
-          IF condense( cell( is_row = ls_r iv_idx = lv_i ) ) IS NOT INITIAL.
+          " IS NOT INITIAL takes a data object, not a built-in function.
+          DATA(lv_cv) = condense( cell( is_row = ls_r iv_idx = lv_i ) ).
+          IF lv_cv IS NOT INITIAL.
             mo_log->add( iv_row = ls_r-row iv_type = 'E'
                          iv_msg = |Column { lcl_util=>col_letter( lv_i ) } has data but no field name in row 1| ).
             rv = abap_false.

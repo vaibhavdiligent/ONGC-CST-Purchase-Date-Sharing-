@@ -18,6 +18,7 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 V = 'src/zmms_bp_mass_upload.prog.abap'
 VX = 'src/zmms_bp_mass_upload.prog.xml'
 C = 'src/zsds_cust_tmpl_download.prog.abap'
+K = 'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap'
 
 # (seen as, program, audit, [(file, old, new), ...])
 CASES = [
@@ -146,6 +147,26 @@ CASES = [
      'audit_incident542.py',
      [(C, "        ref_fill( EXPORTING is_ref  = ls_rknb1\n", "        lcl_util=>noop( EXPORTING is_ref  = ls_rknb1\n"),
       (C, "        ref_fill( EXPORTING is_ref  = ls_rknvv\n", "        lcl_util=>noop( EXPORTING is_ref  = ls_rknvv\n")]),
+    # ---- /CCBJI/RUSDMDR_CUST_BP_MAINT, first activation in Q4R ----------
+    ('Unknown column name "CHECKTABLE" - SELECT on DD05S', K,
+     'audit_release_syntax.py',
+     [(K, "    CALL FUNCTION 'DDIF_FK_GET'\n",
+          "    SELECT checktable, checkfield, fortable, forkey FROM dd05s\n"
+          "      WHERE tabname = @iv_tab AND fieldname = @iv_fld INTO TABLE @rt.\n"
+          "    CALL FUNCTION 'DDIF_FK_GET'\n")]),
+    ('"LV_CUST" cannot be converted to a character-like value - one column into @DATA( )', K,
+     'audit_release_syntax.py',
+     [(K, "      DATA lt_c TYPE STANDARD TABLE OF kunnr WITH EMPTY KEY.\n"
+          "      SELECT customer FROM cvi_cust_link\n"
+          "        FOR ALL ENTRIES IN @lt_g WHERE partner_guid = @lt_g-partner_guid\n"
+          "        INTO TABLE @lt_c.\n",
+          "      SELECT customer FROM cvi_cust_link\n"
+          "        FOR ALL ENTRIES IN @lt_g WHERE partner_guid = @lt_g-partner_guid\n"
+          "        INTO TABLE @DATA(lt_c).\n")]),
+    ('Unexpected operator "IS" - condense( ) IS INITIAL', K,
+     'audit_release_syntax.py',
+     [(K, "      DATA(lv_trim) = condense( lv_line ).\n      IF lv_trim IS INITIAL.\n",
+          "      IF condense( lv_line ) IS INITIAL.\n")]),
     ('A selection text SAP cuts short - "Vendor / BP creation - all com"', VX,
      'audit_screen_and_texts.py',
      [(VX, '.Vendor / BP creation - all CC<', '.Vendor / BP creation - all company codes<')]),

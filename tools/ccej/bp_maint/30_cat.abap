@@ -753,10 +753,34 @@ CLASS lcl_chk IMPLEMENTATION.
       rt = ls_c-fk.
       RETURN.
     ENDIF.
-    SELECT checktable, checkfield, fortable, forkey FROM dd05s
-      WHERE tabname = @iv_tab AND fieldname = @iv_fld AND as4local = 'A'
-      ORDER BY primpos
-      INTO TABLE @rt.
+    " Through the dictionary's own API, not a SELECT on DD05S: the check
+    " table is not a column of DD05S on S/4HANA 2025 ("Unknown column name
+    " CHECKTABLE"). DD05M, which DDIF_FK_GET fills, carries both sides of
+    " every key field pair together with the check table.
+    DATA: lv_tab TYPE ddobjname,
+          lv_fld TYPE dfies-fieldname,
+          lt_05m TYPE STANDARD TABLE OF dd05m,
+          lt_08v TYPE STANDARD TABLE OF dd08v.
+    lv_tab = iv_tab.
+    lv_fld = iv_fld.
+    CALL FUNCTION 'DDIF_FK_GET'
+      EXPORTING
+        tabname       = lv_tab
+        fieldname     = lv_fld
+        state         = 'A'
+      TABLES
+        dd08v_tab     = lt_08v
+        dd05m_tab     = lt_05m
+      EXCEPTIONS
+        illegal_input = 1
+        OTHERS        = 2.
+    IF sy-subrc = 0.
+      SORT lt_05m BY primpos.
+      LOOP AT lt_05m INTO DATA(ls_05m).
+        APPEND VALUE #( checktable = ls_05m-checktable checkfield = ls_05m-checkfield
+                        fortable   = ls_05m-fortable   forkey     = ls_05m-forkey ) TO rt.
+      ENDLOOP.
+    ENDIF.
     INSERT VALUE #( tab = iv_tab fld = iv_fld fk = rt ) INTO TABLE mt_fkc.
   ENDMETHOD.
 
@@ -932,16 +956,20 @@ CLASS lcl_cfg IMPLEMENTATION.
       RETURN.
     ENDIF.
     IF gc_side = 'C'.
+      " A typed table, not @DATA( ): one column read into an inline table
+      " gives a structured line, which a string template cannot take.
+      DATA lt_c TYPE STANDARD TABLE OF kunnr WITH EMPTY KEY.
       SELECT customer FROM cvi_cust_link
         FOR ALL ENTRIES IN @lt_g WHERE partner_guid = @lt_g-partner_guid
-        INTO TABLE @DATA(lt_c).
+        INTO TABLE @lt_c.
       LOOP AT lt_c INTO DATA(lv_cust).
         APPEND |{ lv_cust }| TO rt.
       ENDLOOP.
     ELSE.
+      DATA lt_v TYPE STANDARD TABLE OF lifnr WITH EMPTY KEY.
       SELECT vendor FROM cvi_vend_link
         FOR ALL ENTRIES IN @lt_g WHERE partner_guid = @lt_g-partner_guid
-        INTO TABLE @DATA(lt_v).
+        INTO TABLE @lt_v.
       LOOP AT lt_v INTO DATA(lv_vend).
         APPEND |{ lv_vend }| TO rt.
       ENDLOOP.

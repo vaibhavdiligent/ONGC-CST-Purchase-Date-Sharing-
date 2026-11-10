@@ -566,7 +566,9 @@ CLASS lcl_file IMPLEMENTATION.
         et_head = lt_c.
         CONTINUE.
       ENDIF.
-      IF condense( lv_line ) IS INITIAL.
+      " IS INITIAL takes a data object, not a built-in function.
+      DATA(lv_trim) = condense( lv_line ).
+      IF lv_trim IS INITIAL.
         CONTINUE.
       ENDIF.
       APPEND VALUE #( row = lv_no cells = lt_c ) TO et_rows.
