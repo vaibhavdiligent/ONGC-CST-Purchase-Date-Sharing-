@@ -1,0 +1,259 @@
+*&---------------------------------------------------------------------*
+*& Report  ZMDM_RA_TRACKWISE
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT zmdm_ra_trackwise.
+
+TABLES: mara.
+
+DATA: gs_mara TYPE mara,
+      gt_mara TYPE STANDARD TABLE OF mara,
+      gt_con TYPE STANDARD TABLE OF zcon_mdm,
+      gs_con TYPE zcon_mdm,
+      g_field1 TYPE zmm_param-field1." WITH HEADER LINE.
+
+DATA: exc_ref    TYPE REF TO cx_sy_native_sql_error,
+      error_text TYPE string.
+
+FIELD-SYMBOLS <fs_mara> TYPE mara.
+DATA: dbs TYPE dbcon-con_name.
+DATA: con(20) TYPE c.
+
+DATA: l_cnt(3) TYPE n.
+*--------------------------------------------------------------------
+SELECT-OPTIONS: s_ersda FOR mara-ersda .
+*--------------------------------------------------------------------
+
+START-OF-SELECTION.
+  PERFORM  get_data.
+  PERFORM process_data.
+
+*&---------------------------------------------------------------------*
+*&      Form  GET_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM get_data .
+  CLEAR g_field1.
+  REFRESH: gt_mara[], gt_con[].
+
+  SELECT *
+    FROM zcon_mdm CLIENT SPECIFIED
+    INTO TABLE gt_con
+    WHERE mandt = sy-mandt.
+
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*  SELECT SINGLE field1 FROM  zmm_param CLIENT SPECIFIED
+*    INTO g_field1
+*         WHERE  mandt       = sy-mandt
+*         AND    param_type  = 'ZZ9'.
+ SELECT FIELD1 FROM ZMM_PARAM CLIENT SPECIFIED   UP TO 1 ROWS INTO
+G_FIELD1 WHERE MANDT = SY-MANDT AND PARAM_TYPE = 'ZZ9'  ORDER BY  SRNO .
+   ENDSELECT.
+" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026 FOR ATC
+
+  SELECT *
+    FROM mara
+    INTO TABLE gt_mara
+    WHERE ersda IN s_ersda
+    AND mtart ='ZAPI'
+*    AND lvorm NE 'X'   "not require on 27.10.2016
+    AND mstae NOT IN (g_field1).
+ENDFORM.                    " GET_DATA
+*&---------------------------------------------------------------------*
+*&      Form  PROCESS_DATA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM process_data .
+  "Begin of change on 07.09.2026 by ABAP7++
+    types: BEGIN OF ty_matnr,
+         matnr type matnr,
+         processname type string,
+       END OF ty_matnr.
+  data: ls_matnr type ty_matnr,
+        lt_matnr type table of ty_matnr,
+        " HTTP Client Variables
+      lo_http_client TYPE REF TO if_http_client,
+      lv_xml         TYPE string,          " Changed from lv_json to lv_xml
+      lv_json type string,
+      lv_status_code TYPE i,
+      lv_reason      TYPE string,
+      lv_response    TYPE string.
+  CONSTANTS: lc_destination TYPE rfcdest VALUE 'CPI_API_OB'. " Configured in SM59
+  "End of change on 07.09.2026 by ABAP7++
+  SORT gt_mara BY matnr.
+  "Begin of change on 07.09.2026 by ABAP7--
+*  CLEAR gs_con.
+*" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*  READ TABLE gt_con INTO gs_con INDEX 1. "#EC CI_NOORDER
+*" Code Remediation changes S4 2025_A Conversion * *END OF CHANGE BY ABAP7 26.06.2026  FOR ATC
+*  IF sy-subrc = 0.
+*
+*    CLEAR l_cnt.
+  "End of change on 07.09.2026 by ABAP7--
+    LOOP AT gt_mara INTO gs_mara.   "ASSIGNING <fs_mara>.
+*    ON CHANGE OF <fs_mara>-plant.
+*      READ TABLE gt_con INTO gs_con WITH KEY werks = <fs_mara>-plant.
+*      IF sy-subrc <> 0.
+*        CONTINUE.
+*      ENDIF.
+        "Begin of change on 07.09.2026 by ABAP7--
+*      TRY.
+*          IF con IS NOT INITIAL.
+*            EXEC SQL.
+*              DISCONNECT :con
+*            ENDEXEC.                 "#EC CI_EXECSQL
+*          ENDIF.
+*
+*          CLEAR con.
+*          EXEC SQL.
+*            CONNECT TO :gs_con-DBCON
+*          ENDEXEC.                   "#EC CI_EXECSQL
+*
+*          EXEC SQL.
+*            GET CONNECTION :CON
+*          ENDEXEC.                   "#EC CI_EXECSQL
+*
+*          EXEC SQL.
+*            SET CONNECTION :gs_con-DBCON
+*          ENDEXEC.                   "#EC CI_EXECSQL
+*
+*        CATCH cx_sy_native_sql_error INTO exc_ref.
+*      ENDTRY.
+**    ENDON.
+*
+**            UPDATE mara
+**SET
+**            INSERT INTO  mara (matnr)
+**                    VALUES (gs_mara-matnr)
+
+*      SHIFT gs_mara-matnr LEFT DELETING LEADING '0'.
+*
+*      TRY.
+*          EXEC SQL.
+*            INSERT INTO  MARA (MATNR)
+*                                VALUES ( :gs_mara-matnr)
+*
+*          ENDEXEC.                   "#EC CI_EXECSQL
+*
+*        CATCH cx_sy_native_sql_error INTO exc_ref.
+*          error_text = exc_ref->get_text( ).
+*
+*          l_cnt = l_cnt + 1.
+*          CONTINUE.
+*      ENDTRY.
+*
+*      COMMIT WORK AND WAIT .
+  "End of change on 07.09.2026 by ABAP7--
+    "Begin of change on 07.09.2026 by ABAP7++
+    SHIFT gs_mara-matnr LEFT DELETING LEADING '0'.
+      ls_matnr-matnr = gs_mara-matnr.
+      ls_matnr-processname = 'TRACKWISE_POST_MATERIAL'.
+      append ls_matnr to lt_matnr.
+    ENDLOOP.
+*      " 3. Convert Internal Table to XML String
+  CALL TRANSFORMATION id
+    SOURCE items = lt_matnr
+    RESULT XML lv_xml.
+    " 4. Instantiate HTTP Client
+  cl_http_client=>create_by_destination(
+    EXPORTING
+      destination              = lc_destination
+    IMPORTING
+      client                   = lo_http_client
+    EXCEPTIONS
+      argument_not_found       = 1
+      destination_not_found    = 2
+      destination_no_authority = 3
+      plugin_not_active        = 4
+      internal_error           = 5
+      OTHERS                   = 6
+  ).
+  IF sy-subrc <> 0.
+    MESSAGE 'Error creating HTTP Client.' type 'E' DISPLAY LIKE 'I'.
+    RETURN.
+  ENDIF.
+   " 5. Configure HTTP Headers for XML
+  lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
+  lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
+  lo_http_client->request->set_header_field( name = 'Accept'       value = 'application/xml' ).
+
+  " Set XML payload
+  lo_http_client->request->set_cdata( lv_xml ).
+*  lo_http_client->request->set_cdata( lv_json ).
+
+  " 6. Send HTTP Request
+  lo_http_client->send(
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4
+  ).
+
+  IF sy-subrc <> 0.
+    lo_http_client->get_last_error( IMPORTING message = lv_reason ).
+    MESSAGE | Communication Failure: { lv_reason }| TYPE 'E' DISPLAY LIKE 'I'.
+    lo_http_client->close( ).
+    RETURN.
+  ENDIF.
+  " 7. Receive Response
+  lo_http_client->receive(
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4
+  ).
+
+  " Get Response details
+  lo_http_client->response->get_status(
+    IMPORTING
+      code   = lv_status_code
+      reason = lv_reason
+  ).
+
+  lv_response = lo_http_client->response->get_cdata( ).
+
+  IF lv_status_code BETWEEN 200 AND 299.
+    MESSAGE | Payload sent successfully in XML format! Status: { lv_status_code } | TYPE 'E' DISPLAY LIKE 'I'.
+  ELSE.
+    MESSAGE  | Failed to send XML payload. Error:,  { lv_status_code },  { lv_reason } | TYPE 'E' DISPLAY LIKE 'I'.
+  ENDIF.
+
+  " Close Connection
+  lo_http_client->close( ).
+    "End of change on 07.09.2026 by ABAP7++
+"Begin of change on 07.09.2026 by ABAP7--
+*    IF con IS NOT INITIAL.
+*      EXEC SQL.
+*        DISCONNECT :con
+*      ENDEXEC.                       "#EC CI_EXECSQL
+*      DATA: l_str TYPE string.
+*
+*
+**      CONCATENATE  '' 'Records inserted successfully' INTO l_str.
+**      MESSAGE l_str TYPE 'S'.
+*
+*      CONCATENATE  '' 'Data inserted successfully' INTO l_str.
+*      MESSAGE l_str TYPE 'S'.
+*    ENDIF.
+
+*  ELSE.
+*    MESSAGE 'Connection not maintained.' TYPE  'E'.
+*  ENDIF.
+"End of change on 07.09.2026 by ABAP7--
+
+*  MODIFY zmara FROM TABLE gt_mara.
+ENDFORM.                    " PROCESS_DATA

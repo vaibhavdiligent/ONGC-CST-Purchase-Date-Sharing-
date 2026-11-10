@@ -1,0 +1,281 @@
+*&---------------------------------------------------------------------*
+*& Report  ZDEMO_SQL_ASRS_SAP
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+
+REPORT zmm_sql_asrs_sap_push_in.
+"Begin of change on 07.09.2026 by ABAP7++
+TYPES: BEGIN OF TY_CPI_PAYLOAD,
+          MSG_SRC         TYPE ZMM_ASRS-MSG_SRC        ,
+          MSG_REC_ID      TYPE ZMM_ASRS-MSG_REC_ID     ,
+          MSG_TRANS_TYPE  TYPE ZMM_ASRS-MSG_TRANS_TYPE ,
+          MSG_ACTION      TYPE ZMM_ASRS-MSG_ACTION     ,
+          MSG_DT_DEF      TYPE ZMM_ASRS-MSG_DT_DEF     ,
+          MSG_STAT        TYPE ZMM_ASRS-MSG_STAT       ,
+          GR_NO           TYPE ZMM_ASRS-GR_NO          ,
+          MAT_CODE        TYPE ZMM_ASRS-MAT_CODE       ,
+          SAP_BATCH       TYPE ZMM_ASRS-SAP_BATCH      ,
+          QTY             TYPE ZMM_ASRS-QTY            ,
+          STATUS          TYPE ZMM_ASRS-STATUS         ,
+          TOTAL_PACK      TYPE ZMM_ASRS-TOTAL_PACK     ,
+          MFG_DATE        TYPE ZMM_ASRS-MFG_DATE       ,
+          MANUFACTURER    TYPE ZMM_ASRS-MANUFACTURER   ,
+          MFG_BATCH       TYPE ZMM_ASRS-MFG_BATCH      ,
+          LINE_ITEM       TYPE ZMM_ASRS-LINE_ITEM      ,
+          PLANT           TYPE ZMM_ASRS-PLANT          ,
+          PROCESSNAME     TYPE STRING                  ,
+       END OF TY_CPI_PAYLOAD.
+"End of change on 07.09.2026 by ABAP7++
+TABLES: zmm_asrs.
+
+SELECT-OPTIONS: s_type for zmm_asrs-msg_trans_type.
+
+DATA: gs_asrs TYPE zmm_asrs,
+      gt_asrs TYPE STANDARD TABLE OF zmm_asrs,
+      gt_con TYPE STANDARD TABLE OF zmm_dbcon_asrs,
+      gs_con TYPE zmm_dbcon_asrs.
+FIELD-SYMBOLS <fs_asrs> TYPE zmm_asrs.
+DATA: dbs TYPE dbcon-con_name.
+DATA: con(20) TYPE c.
+
+
+START-OF-SELECTION.
+
+  SELECT *
+    FROM zmm_dbcon_asrs
+    INTO TABLE gt_con.
+
+
+
+
+
+
+
+*WRITE sy-subrc.
+
+
+
+  DATA: lv_date TYPE char10.
+  DATA: lv_date1 TYPE char10.
+  DATA: lv_date2 TYPE char10.
+  SELECT *
+    FROM zmm_asrs
+    INTO CORRESPONDING FIELDS OF TABLE gt_asrs
+    WHERE msg_trans_type in s_type
+    AND trf_status = 'N'.
+*  lv_date = sy-datum.
+*  exec SQL.
+*    SELECT MSG_REC_ID   FROM HOST_TO_WMS_TEST INTO :gs_asrs-msg_rec_id
+*  ENDEXEC.
+  DATA: exc_ref    TYPE REF TO cx_sy_native_sql_error,
+        error_text TYPE string.
+
+  SORT gt_asrs BY plant.
+  "Begin of change on 07.09.2026 by ABAP7++
+    " Plant-wise send: one HTTP call per plant (restores original per-plant routing)
+  DATA: lt_plants TYPE STANDARD TABLE OF werks_d.
+  lt_plants = VALUE #( FOR ls_plant IN gt_asrs ( ls_plant-plant ) ).
+  SORT lt_plants.
+  DELETE ADJACENT DUPLICATES FROM lt_plants.
+  LOOP AT lt_plants INTO DATA(lv_plant).
+    PERFORM f_send_request USING lv_plant.
+  ENDLOOP.
+  "End of change on 07.09.2026 by ABAP7++
+  LOOP AT gt_asrs ASSIGNING <fs_asrs>.
+   "Begin of change on 07.09.2026 by ABAP7--
+*    ON CHANGE OF <fs_asrs>-plant.
+*      READ TABLE gt_con INTO gs_con WITH KEY werks = <fs_asrs>-plant.
+*      IF sy-subrc <> 0.
+*        CONTINUE.
+*      ENDIF.
+*      TRY.
+*          IF con IS NOT INITIAL.
+*            " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*            EXEC SQL. DISCONNECT :con ENDEXEC. "#EC CI_EXECSQL
+*            " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*          ENDIF.
+*          CLEAR con.
+*          " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*          EXEC SQL. CONNECT TO :gs_con-DBCON
+*          ENDEXEC. "#EC CI_EXECSQL
+*          EXEC SQL. GET CONNECTION :CON
+*          ENDEXEC. "#EC CI_EXECSQL
+*          EXEC SQL. SET CONNECTION :gs_con-DBCON
+*          ENDEXEC. "#EC CI_EXECSQL
+*          " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*        CATCH cx_sy_native_sql_error INTO exc_ref.
+*      ENDTRY.
+*    ENDON.
+*    gs_asrs = <fs_asrs>.
+*
+*    lv_date = gs_asrs-msg_dt_def.
+*    IF gs_asrs-msg_dt_trm IS NOT INITIAL.
+*      lv_date1 = gs_asrs-msg_dt_trm.
+*    ENDIF.
+*    IF gs_asrs-mfg_date IS NOT INITIAL.
+*      lv_date2 = gs_asrs-mfg_date.
+*    ENDIF.
+*    TRY.
+*      " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*        EXEC SQL.
+*          INSERT INTO  host_to_wms  (MSG_SRC,
+*                                        MSG_REC_ID,
+*                                        MSG_TRANS_TYPE,
+*                                        MSG_ACTION,
+*                                        MSG_DT_DEF,
+*                                        MSG_STAT,
+*                                        GR_NO,
+*                                        MAT_CODE,
+*                                        SAP_BATCH,
+*                                        QTY,
+*                                        STATUS,
+*                                        TOTAL_PACK,
+*                                        MFG_DATE,
+*                                        MANUFACTURER,
+*                                        MFG_BATCH,
+*                                        LINE_ITEM,
+*                                        PLANT)
+*                  VALUES (              :gs_asrs-MSG_SRC  ,
+*                                        :gs_asrs-MSG_REC_ID  ,
+*                                        :gs_asrs-MSG_TRANS_TYPE  ,
+*                                        :gs_asrs-MSG_ACTION  ,
+*                                        :lv_date,
+*                                        :gs_asrs-MSG_STAT  ,
+*                                        :gs_asrs-GR_NO  ,
+*                                        :gs_asrs-MAT_CODE  ,
+*                                        :gs_asrs-SAP_BATCH  ,
+*                                        :gs_asrs-QTY  ,
+*                                        :gs_asrs-STATUS  ,
+*                                        :gs_asrs-TOTAL_PACK  ,
+*                                        :lv_date2,
+*                                        :gs_asrs-MANUFACTURER  ,
+*                                        :gs_asrs-MFG_BATCH  ,
+*                                        :gs_asrs-LINE_ITEM  ,
+*                                        :gs_asrs-PLANT) ENDEXEC. "#EC CI_EXECSQL
+*      " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*
+*      CATCH cx_sy_native_sql_error INTO exc_ref.
+*        error_text = exc_ref->get_text( ).
+*
+*        CONTINUE.
+*    ENDTRY.
+*
+*    COMMIT WORK AND WAIT .
+ "End of change on 07.09.2026 by ABAP7--
+
+*  EXEC SQL.
+*    DISCONNECT :con
+*  ENDEXEC.
+    <fs_asrs>-trf_status  = 'Y'.
+  ENDLOOP.
+"Begin of change on 07.09.2026 by ABAP7++
+*  IF con IS NOT INITIAL.
+*    " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*    EXEC SQL. DISCONNECT :con
+*    ENDEXEC. "#EC CI_EXECSQL
+*    " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 30.07.2026 FOR ATC
+*  ENDIF.
+"End of change on 07.09.2026 by ABAP7++
+  MODIFY zmm_asrs FROM TABLE gt_asrs.
+"Begin of change on 07.09.2026 by ABAP7++
+*&---------------------------------------------------------------------*
+*& Form f_send_request
+*&---------------------------------------------------------------------*
+*& text
+*&---------------------------------------------------------------------*
+*& -->  p1        text
+*& <--  p2        text
+*&---------------------------------------------------------------------*
+FORM f_send_request USING iv_plant TYPE werks_d.
+ " HTTP Client Variables
+DATA: lo_http_client TYPE REF TO if_http_client,
+      lv_xml         TYPE string,          " Changed from lv_json to lv_xml
+      lv_json type string,
+      lv_status_code TYPE i,
+      lv_reason      TYPE string,
+      lv_response    TYPE string,
+      lt_payload type table of ty_cpi_payload.
+ CONSTANTS: lc_destination TYPE rfcdest VALUE 'CPI_API_OB'. " Configured in SM59
+"Fill payload
+ lt_payload = VALUE #(
+  FOR ls_asrs IN gt_asrs WHERE ( plant = iv_plant )
+  ( VALUE #(
+      BASE CORRESPONDING #( ls_asrs )
+      processname = 'ASR_PUSH_MESSAGE' ) ) ).
+ " 3. Convert Internal Table to XML String
+  CALL TRANSFORMATION id
+    SOURCE items = lt_payload
+    RESULT XML lv_xml.
+   " 4. Instantiate HTTP Client
+  cl_http_client=>create_by_destination(
+    EXPORTING
+      destination              = lc_destination
+    IMPORTING
+      client                   = lo_http_client
+    EXCEPTIONS
+      argument_not_found       = 1
+      destination_not_found    = 2
+      destination_no_authority = 3
+      plugin_not_active        = 4
+      internal_error           = 5
+      OTHERS                   = 6
+  ).
+     IF sy-subrc <> 0.
+    MESSAGE 'Error creating HTTP Client.' TYPE 'E'.
+    RETURN.
+  ENDIF.
+    " 5. Configure HTTP Headers for XML
+  lo_http_client->request->set_method( if_http_request=>co_request_method_post ).
+  lo_http_client->request->set_header_field( name = 'Content-Type' value = 'application/xml' ).
+  lo_http_client->request->set_header_field( name = 'Accept'       value = 'application/xml' ).
+  lo_http_client->request->set_header_field( name = 'X-Plant' value = CONV string( iv_plant ) ).
+
+  " Set XML payload
+  lo_http_client->request->set_cdata( lv_xml ).
+*  lo_http_client->request->set_cdata( lv_json ).
+
+  " 6. Send HTTP Request
+  lo_http_client->send(
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4
+  ).
+
+  IF sy-subrc <> 0.
+    lo_http_client->get_last_error( IMPORTING message = lv_reason ).
+    MESSAGE |Communication Failure: { lv_reason }| TYPE 'E'.
+    lo_http_client->close( ).
+    RETURN.
+  ENDIF.
+   " 7. Receive Response
+  lo_http_client->receive(
+    EXCEPTIONS
+      http_communication_failure = 1
+      http_invalid_state         = 2
+      http_processing_failed     = 3
+      OTHERS                     = 4
+  ).
+
+  " Get Response details
+  lo_http_client->response->get_status(
+    IMPORTING
+      code   = lv_status_code
+      reason = lv_reason
+  ).
+
+  lv_response = lo_http_client->response->get_cdata( ).
+  IF lv_status_code BETWEEN 200 AND 299.
+   MESSAGE |Payload sent successfully in XML format! Status: { lv_status_code }| TYPE 'S'.
+  ELSE.
+    MESSAGE |Failed to send XML payload. Error: { lv_status_code } { lv_reason }| type 'E'.
+  ENDIF.
+
+  " Close Connection
+  lo_http_client->close( ).
+ENDFORM.
+"End of change on 07.09.2026 by ABAP7++
