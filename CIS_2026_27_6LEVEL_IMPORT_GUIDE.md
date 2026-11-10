@@ -151,3 +151,13 @@ CPC enters one row per PMG release, e.g. `M | 01.10.2026 | 31.10.2026 | 05.11.20
 | SMD-4 | OG grades not counted (W55 OG – 32906, Y50 OG – 33870) | Raffia MPGs always applicable; A / B / OG / NA variants of an applicable grade (same material family in MVKE) are applicable too | YRVG004_QAIS_EXECUTE_N1 |
 | WF-6 | Two selection boxes (YRVG004_F, YRVG052) | Extra ALV row-selection box removed – only the Select / Print tick-box column | YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE, YCIS_REBATE_REPORT |
 | WF-7 | Approval note clubbed for two L5 batches | Note printed per L5 approval batch (same L5 user/date/time); L5 stamps one time for the whole batch | YCIS_REBATE_REPORT, YCIS_APPRV5 |
+
+## UAT observations 06.11.2026 – changes (mail of 10.11.2026)
+
+| # | Observation | Change | Program |
+|---|---|---|---|
+| WF-8 | Rebate order 29486381 returned by L5 not visible on the L1 screen | The order is logged in YRVA_REBATE at L3, and L1 dropped every customer with a rebate-log entry as "order already created". L1 now ignores rebate-log entries whose order is returned to L1 (YCIS_APPRVL WF_STATUS 10) – on the list and on Execute. When L1 re-submits, the earlier order's YRVA_REBATE entry is removed (L3 creates a new order). | YRVG004_QAIS_EXECUTE_N1, YRVG004_QAIS_EXECUTE_N1_old |
+| WF-9 | YRVG052 shows "Returned by L2" for an order returned by L5 | Status text for all 6 levels: *Returned by L<n> - Pending L1* (n = level that returned it), Pending L2 … Pending L6, *Completed - Credit Note posted*, *Closed at L3 - no discount* | YCIS_REBATE_REPORT |
+| WF-10 | (found during the fix) PDR program re-staged rows already at L4–L6 / completed | In-flight check in YRVG004_QAIS_EXECUTE_N1_old now covers WF_STATUS 20–70 (as in N1) | YRVG004_QAIS_EXECUTE_N1_old |
+
+Note: the earlier rebate order of a returned row (e.g. 29486381) stays open in SAP. Set a reason for rejection on it in VA02 so it is not used again; the credit note is created only from the new order created at L3.

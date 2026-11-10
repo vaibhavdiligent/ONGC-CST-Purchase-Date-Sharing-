@@ -315,18 +315,30 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  status_text   (readable workflow status for the report)
 *&---------------------------------------------------------------------*
+*   6-level workflow (CIS 2026-27). GAIL UAT 06.11.2026: a rebate order
+*   returned by L5 was shown as "Returned by L2" - the text was still the
+*   3-level one. Every return goes back to L1 (WF_STATUS 10); the level that
+*   returned it is in REJ_LEVEL.
 FORM status_text USING p_appr TYPE ycis_apprvl
               CHANGING p_txt TYPE any.
   CASE p_appr-wf_status.
-    WHEN '40'. p_txt = 'Completed - Order Created'.
-    WHEN '30'. p_txt = 'Pending L3 (Approved by L2)'.
-    WHEN '20'.
-      IF p_appr-rej_level = '3'.
-        p_txt = 'Returned by L3 - Pending L2'.
+    WHEN '10'.
+      IF p_appr-rej_level IS NOT INITIAL.
+        p_txt = |Returned by L{ p_appr-rej_level } - Pending L1|.
       ELSE.
-        p_txt = 'Pending L2 (Submitted by L1)'.
+        p_txt = 'Pending L1'.
       ENDIF.
-    WHEN '10'. p_txt = 'Returned by L2 - Pending L1'.
+    WHEN '20'. p_txt = 'Pending L2 (Submitted by L1)'.
+    WHEN '30'. p_txt = 'Pending L3 (Approved by L2)'.
+    WHEN '40'. p_txt = 'Pending L4 (Order created by L3)'.
+    WHEN '50'. p_txt = 'Pending L5 (Vetted by L4)'.
+    WHEN '60'. p_txt = 'Pending L6 (Approved by L5)'.
+    WHEN '70'.
+      IF p_appr-order_no = 'GROUP OK'.
+        p_txt = 'Closed at L3 - no discount'.
+      ELSE.
+        p_txt = 'Completed - Credit Note posted'.
+      ENDIF.
     WHEN OTHERS. p_txt = p_appr-wf_status.
   ENDCASE.
 ENDFORM.

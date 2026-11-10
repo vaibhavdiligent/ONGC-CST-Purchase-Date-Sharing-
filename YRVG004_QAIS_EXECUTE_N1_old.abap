@@ -1400,6 +1400,9 @@ FORM get_data.
   WHERE (it_where_tab).
   IF sy-subrc EQ 0.
   ENDIF.
+* CIS 2026-27 (GAIL UAT 06.11.2026): an order returned to L1 by L4/L5/L6
+* must be shown again at L1 - do not treat its rebate log as "created"
+  PERFORM drop_returned_rebates.
   IF r_rpd NE 'X'.
     SELECT * FROM yrva_rebate INTO TABLE it_yrva_rebate1
     WHERE (it_where_tab1).
@@ -11735,6 +11738,8 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
         ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
       ENDIF.
+*     CIS 2026-27: orders returned to L1 by L4/L5/L6 can be re-executed
+      PERFORM drop_returned_rebates.
       IF it_yrva_rebate[] IS INITIAL.
         REFRESH it_yrva_rebate.
 
@@ -12541,7 +12546,7 @@ FORM hide_forwarded.
     FROM ycis_apprvl INTO TABLE lt_fwd
     WHERE period_from = s_sptag-low
       AND period_to   = s_sptag-high
-      AND wf_status   IN ('20','30','40').
+      AND wf_status   IN ('20','30','40','50','60','70').  " in-flight L2..L6 / completed (6-level)
   CHECK lt_fwd IS NOT INITIAL.
 
   LOOP AT it_data_monthly.
@@ -12584,6 +12589,38 @@ FORM hide_forwarded.
     IF sy-subrc = 0. DELETE it_data_annual_newcus. ENDIF.
   ENDLOOP.
 ENDFORM.                    "hide_forwarded
+*&---------------------------------------------------------------------*
+*&      Form  drop_returned_rebates
+*&---------------------------------------------------------------------*
+*   CIS 2026-27, GAIL UAT 06.11.2026 (rebate order 29486381 returned by L5
+*   was not visible at L1): the rebate order is created at L3 and logged in
+*   YRVA_REBATE. When L4 / L5 / L6 return it, the row goes back to L1
+*   (YCIS_APPRVL-WF_STATUS 10), but the rebate log still exists, so L1
+*   dropped the customer as "order already created". Ignore rebate-log
+*   entries whose order is returned to L1, so the customer is shown again
+*   and can be re-executed.
+*&---------------------------------------------------------------------*
+FORM drop_returned_rebates.
+  TYPES: BEGIN OF ty_ret,
+           order_no TYPE ycis_apprvl-order_no,
+         END OF ty_ret.
+  DATA: lt_ret TYPE SORTED TABLE OF ty_ret WITH NON-UNIQUE KEY order_no,
+        lv_idx TYPE sy-tabix.
+  CHECK it_yrva_rebate IS NOT INITIAL.
+  SELECT order_no FROM ycis_apprvl INTO TABLE lt_ret
+    WHERE wf_status = '10'
+      AND order_no  <> space.
+  CHECK lt_ret IS NOT INITIAL.
+  LOOP AT it_yrva_rebate INTO wa_yrva_rebate.
+    lv_idx = sy-tabix.
+    READ TABLE lt_ret TRANSPORTING NO FIELDS
+         WITH TABLE KEY order_no = wa_yrva_rebate-vbeln.
+    IF sy-subrc = 0.
+      DELETE it_yrva_rebate INDEX lv_idx.
+    ENDIF.
+  ENDLOOP.
+  CLEAR wa_yrva_rebate.
+ENDFORM.                    "drop_returned_rebates
 *&---------------------------------------------------------------------*
 *&      Form  show_stmt_popup   (verification & confirmation pop-up - L1)
 *&---------------------------------------------------------------------*
@@ -12745,17 +12782,26 @@ FORM stage_one USING p_stype   TYPE char1
 *   Prevent duplicate forwarding / duplicate L2 e-mail when L1 presses
 *   Execute again: if this CIS is already Pending-L2 / Pending-L3 / done,
 *   leave it as-is and do NOT re-stage or re-notify. (GAIL 28.07.2026)
-  DATA lv_wf TYPE ycis_apprvl-wf_status.
-  SELECT SINGLE wf_status INTO lv_wf FROM ycis_apprvl
+  DATA: lv_wf     TYPE ycis_apprvl-wf_status,
+        lv_oldord TYPE ycis_apprvl-order_no.
+  SELECT SINGLE wf_status order_no INTO (lv_wf, lv_oldord) FROM ycis_apprvl
     WHERE qais_no     = ls-qais_no
       AND scheme_type = ls-scheme_type
       AND period_from = ls-period_from
       AND period_to   = ls-period_to
       AND kunnr       = ls-kunnr
       AND kvgr2       = ls-kvgr2.
-  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40' ).
+  IF sy-subrc = 0 AND ( lv_wf = '20' OR lv_wf = '30' OR lv_wf = '40'
+                     OR lv_wf = '50' OR lv_wf = '60' OR lv_wf = '70' ).
     gv_stg_dup = gv_stg_dup + 1.         " count it so L1 gets clear feedback
     RETURN.                              " already forwarded - skip, no re-mail
+  ENDIF.
+*   CIS 2026-27 (GAIL UAT 06.11.2026): re-submitting a row that L4/L5/L6
+*   returned to L1. Its earlier rebate order (created at L3) is no longer
+*   used - L3 creates a new one - so remove that order's entry from the
+*   rebate log YRVA_REBATE (otherwise the customer is counted twice).
+  IF lv_wf = '10' AND lv_oldord IS NOT INITIAL AND lv_oldord <> 'GROUP OK'.
+    DELETE FROM yrva_rebate WHERE vbeln = lv_oldord.
   ENDIF.
   MODIFY ycis_apprvl FROM ls.
 *   grade-wise detail for the rebate report (captured at source)
