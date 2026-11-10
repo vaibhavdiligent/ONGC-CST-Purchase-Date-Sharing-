@@ -24,8 +24,8 @@ ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DD = json.load(open(os.path.join(ROOT, 'tools/ddic.json')))
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap',
-         'src/zsds_cust_bp_maint.prog.abap',
-         'src/zmms_vend_bp_maint.prog.abap']
+         'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',
+         'src/#ccbji#rummmdr_vend_bp_maint.prog.abap']
 
 # Transactions S/4HANA no longer has. Driving one from code fails outright.
 GONE_TCODE = {'XD01', 'XD02', 'XD03', 'XD05', 'XD06', 'XD07', 'XD99',

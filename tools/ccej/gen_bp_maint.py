@@ -14,15 +14,22 @@ ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)
 PARTS = sorted(glob.glob(os.path.join(ROOT, 'tools', 'ccej', 'bp_maint', '*.abap')))
 
 SIDES = {
-    'C': dict(PROG='zsds_cust_bp_maint', PROGU='ZSDS_CUST_BP_MAINT', SIDE='C',
+    # CCBJI's report convention /CCBJI/R<U|D><module><submodule>R_<name>, as in
+    # /CCBJI/RUSDSLSR_LSA_UPLOAD: U for a report that updates, SD or MM, MD for
+    # master data. abapGit writes the namespace slashes as # in the file name.
+    'C': dict(PROG='/ccbji/rusdmdr_cust_bp_maint', PROGU='/CCBJI/RUSDMDR_CUST_BP_MAINT',
+              FILE='#ccbji#rusdmdr_cust_bp_maint', FILEBASE='CUST_BP_MAINT', SIDE='C',
               NUMTYPE='kunnr', ORGTYPE='vkorg', KTOTYPE='ktokd',
               TITLE='Customer Master - Dynamic Download / Upload', MODULE='SD',
-              TCODE='ZSDS_CUSTMNT', WHAT1='customer',
+              TCODE='/CCBJI/RUSDMD_CUSBP', TTEXT='Customer master download / upload',
+              WHAT1='customer',
               NUMTEXT='Customer', ORGTEXT='Sales organization', WHO='Which customers (download)'),
-    'V': dict(PROG='zmms_vend_bp_maint', PROGU='ZMMS_VEND_BP_MAINT', SIDE='V',
+    'V': dict(PROG='/ccbji/rummmdr_vend_bp_maint', PROGU='/CCBJI/RUMMMDR_VEND_BP_MAINT',
+              FILE='#ccbji#rummmdr_vend_bp_maint', FILEBASE='VEND_BP_MAINT', SIDE='V',
               NUMTYPE='lifnr', ORGTYPE='ekorg', KTOTYPE='ktokk',
               TITLE='Supplier Master - Dynamic Download / Upload', MODULE='MM',
-              TCODE='ZMMS_VENDMNT', WHAT1='supplier',
+              TCODE='/CCBJI/RUMMMD_VENBP', TTEXT='Supplier master download / upload',
+              WHAT1='supplier',
               NUMTEXT='Supplier', ORGTEXT='Purchasing organization', WHO='Which suppliers (download)'),
 }
 
@@ -73,11 +80,45 @@ def xml(side):
             '</abapGit>\n')
 
 
+def tran_file(side):
+    return SIDES[side]['TCODE'].lower().replace('/', '#') + '.tran.xml'
+
+
+def tran_xml(side):
+    v = SIDES[side]
+    assert len(v['TCODE']) <= 20 and len(v['PROGU']) <= 30 and len(v['TTEXT']) <= 36, v
+    return ('<?xml version="1.0" encoding="utf-8"?>\n'
+            '<abapGit version="v1.0.0" serializer="LCL_OBJECT_TRAN" serializer_version="v1.0.0">\n'
+            ' <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">\n'
+            '  <asx:values>\n'
+            '   <TSTC>\n'
+            f'    <TCODE>{v["TCODE"]}</TCODE>\n'
+            f'    <PGMNA>{v["PROGU"]}</PGMNA>\n'
+            '    <DTEFPS>U</DTEFPS>\n'
+            '    <CINFO>00000000000000000010000000000000</CINFO>\n'
+            '   </TSTC>\n'
+            '   <TSTCC>\n'
+            f'    <TCODE>{v["TCODE"]}</TCODE>\n'
+            '    <S_WEBGUI>1</S_WEBGUI>\n'
+            '    <S_EASYWEB>0</S_EASYWEB>\n'
+            '    <S_SERVICE>0</S_SERVICE>\n'
+            '   </TSTCC>\n'
+            '   <TSTCT>\n'
+            f'    <TCODE>{v["TCODE"]}</TCODE>\n'
+            f'    <TTEXT>{v["TTEXT"]}</TTEXT>\n'
+            '   </TSTCT>\n'
+            '  </asx:values>\n'
+            ' </asx:abap>\n'
+            '</abapGit>\n')
+
+
 def main():
     for side, v in SIDES.items():
-        base = os.path.join(ROOT, 'src', v['PROG'])
+        base = os.path.join(ROOT, 'src', v['FILE'])
         open(base + '.prog.abap', 'w', encoding='utf-8').write(source(side))
         open(base + '.prog.xml', 'w', encoding='utf-8').write(xml(side))
+        tran = os.path.join(ROOT, 'src', tran_file(side))
+        open(tran, 'w', encoding='utf-8').write(tran_xml(side))
         print('wrote', base + '.prog.abap', len(source(side).split('\n')), 'lines')
 
 

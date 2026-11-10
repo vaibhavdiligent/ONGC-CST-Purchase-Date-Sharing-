@@ -25,8 +25,8 @@ from abap_parse import statements, unchain
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap',
-         'src/zsds_cust_bp_maint.prog.abap',
-         'src/zmms_vend_bp_maint.prog.abap']
+         'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',
+         'src/#ccbji#rummmdr_vend_bp_maint.prog.abap']
 
 TBL = re.compile(r'\b(SORTED|HASHED)\s+TABLE\s+OF\b.*?\bWITH\s+(NON-UNIQUE|UNIQUE)\s+KEY\b(.*)$',
                  re.I | re.S)

@@ -417,7 +417,7 @@ CLASS lcl_file IMPLEMENTATION.
           lv_path TYPE string,
           lv_full TYPE string.
     DATA(lv_ext) = COND string( WHEN p_txt = abap_true THEN `txt` ELSE `xlsx` ).
-    DATA(lv_def) = |@@PROGU@@_{ sy-datum }.{ lv_ext }|.
+    DATA(lv_def) = |@@FILEBASE@@_{ sy-datum }.{ lv_ext }|.
     cl_gui_frontend_services=>file_save_dialog(
       EXPORTING  window_title      = 'Save the file'
                  default_extension = lv_ext

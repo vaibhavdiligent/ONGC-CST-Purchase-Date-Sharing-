@@ -1,8 +1,8 @@
 *&---------------------------------------------------------------------*
-*& Report  ZSDS_CUST_BP_MAINT
+*& Report  /CCBJI/RUSDMDR_CUST_BP_MAINT
 *&---------------------------------------------------------------------*
 *& Title       : Customer Master - Dynamic Download / Upload
-*& Module      : SD                       Transaction : ZSDS_CUSTMNT
+*& Module      : SD                       Transaction : /CCBJI/RUSDMD_CUSBP
 *&
 *& What it does
 *&   One program for every change to, and every creation of, a
@@ -34,7 +34,7 @@
 *& Generated - do not edit. Source: tools/ccej/bp_maint/*.abap,
 *& generator tools/ccej/gen_bp_maint.py.
 *&---------------------------------------------------------------------*
-REPORT zsds_cust_bp_maint.
+REPORT /ccbji/rusdmdr_cust_bp_maint.
 
 " C = customer program, V = supplier program. The two programs are one
 " source; this constant is what tells them apart at runtime.
@@ -2529,7 +2529,7 @@ CLASS lcl_file IMPLEMENTATION.
           lv_path TYPE string,
           lv_full TYPE string.
     DATA(lv_ext) = COND string( WHEN p_txt = abap_true THEN `txt` ELSE `xlsx` ).
-    DATA(lv_def) = |ZSDS_CUST_BP_MAINT_{ sy-datum }.{ lv_ext }|.
+    DATA(lv_def) = |CUST_BP_MAINT_{ sy-datum }.{ lv_ext }|.
     cl_gui_frontend_services=>file_save_dialog(
       EXPORTING  window_title      = 'Save the file'
                  default_extension = lv_ext

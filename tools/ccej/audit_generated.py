@@ -1,8 +1,8 @@
 """The two CCEJ programs are generated - they must be exactly what the
 generator makes from tools/ccej/bp_maint/*.abap.
 
-A change made straight in src/zsds_cust_bp_maint.prog.abap or
-src/zmms_vend_bp_maint.prog.abap would be lost at the next generation, and a
+A change made straight in src/#ccbji#rusdmdr_cust_bp_maint.prog.abap or
+src/#ccbji#rummmdr_vend_bp_maint.prog.abap would be lost at the next generation, and a
 change made only to the parts would never reach SAP.
 """
 import importlib.util, os, sys
@@ -14,12 +14,15 @@ spec.loader.exec_module(gen)
 
 bad = []
 for side, v in gen.SIDES.items():
-    base = os.path.join(ROOT, 'src', v['PROG'])
+    base = os.path.join(ROOT, 'src', v['FILE'])
     if open(base + '.prog.abap', encoding='utf-8').read() != gen.source(side):
         bad.append(f"{v['PROGU']}.prog.abap differs from the generator's output - edit the parts "
                    f"in tools/ccej/bp_maint and run tools/ccej/gen_bp_maint.py")
     if open(base + '.prog.xml', encoding='utf-8').read() != gen.xml(side):
         bad.append(f"{v['PROGU']}.prog.xml differs from the generator's output")
+    tran = os.path.join(ROOT, 'src', gen.tran_file(side))
+    if not os.path.exists(tran) or open(tran, encoding='utf-8').read() != gen.tran_xml(side):
+        bad.append(f"{v['TCODE']}: {gen.tran_file(side)} differs from the generator's output")
 if bad:
     print('\n'.join(bad))
     sys.exit(1)
