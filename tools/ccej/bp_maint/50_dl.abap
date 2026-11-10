@@ -273,15 +273,24 @@ CLASS lcl_dl IMPLEMENTATION.
     " the screen limit which entries are written.
     DATA(lv_root) = lcl_cat=>root_of( iv_grp ).
     SPLIT iv_key AT `|` INTO TABLE DATA(lt_p).
+    " The first key part, moved into a field of the range's own type. Not
+    " VALUE bukrs( lt_p[ 1 ] OPTIONAL ): the lines of LT_P are strings, and
+    " a VALUE with a table expression takes only a compatible type.
+    DATA: lv_first TYPE string,
+          lv_bukrs TYPE bukrs,
+          lv_org   TYPE @@ORGTYPE@@.
+    READ TABLE lt_p INTO lv_first INDEX 1.
     rv = abap_true.
     CASE lv_root.
       WHEN 'COMP'.
         IF s_bukrs[] IS NOT INITIAL.
-          rv = xsdbool( VALUE bukrs( lt_p[ 1 ] OPTIONAL ) IN s_bukrs ).
+          lv_bukrs = lv_first.
+          rv = xsdbool( lv_bukrs IN s_bukrs ).
         ENDIF.
       WHEN 'SALE' OR 'PURC'.
         IF s_org[] IS NOT INITIAL.
-          rv = xsdbool( VALUE @@ORGTYPE@@( lt_p[ 1 ] OPTIONAL ) IN s_org ).
+          lv_org = lv_first.
+          rv = xsdbool( lv_org IN s_org ).
         ENDIF.
     ENDCASE.
   ENDMETHOD.

@@ -361,9 +361,19 @@ CLASS lcl_cat IMPLEMENTATION.
       WHERE tdobject = @lt_id-tdobject AND tdid = @lt_id-tdid
       INTO TABLE @DATA(lt_tx).
     LOOP AT lt_id INTO DATA(ls_id).
-      DATA(lv_txt) = VALUE string( lt_tx[ tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = sy-langu ]-tdtext OPTIONAL ).
-      IF lv_txt IS INITIAL.
-        lv_txt = VALUE #( lt_tx[ tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = 'E' ]-tdtext OPTIONAL ).
+      " READ TABLE rather than VALUE string( lt_tx[ ... ]-tdtext OPTIONAL ):
+      " TDTEXT is a character field, and a VALUE with a table expression
+      " takes only a compatible type.
+      DATA lv_txt TYPE string.
+      CLEAR lv_txt.
+      READ TABLE lt_tx INTO DATA(ls_tx)
+           WITH KEY tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = sy-langu.
+      IF sy-subrc <> 0.
+        READ TABLE lt_tx INTO ls_tx
+             WITH KEY tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = 'E'.
+      ENDIF.
+      IF sy-subrc = 0.
+        lv_txt = ls_tx-tdtext.
       ENDIF.
       DATA(lv_grp) = COND ty_grp( WHEN ls_id-tdobject = 'KNA1' OR ls_id-tdobject = 'LFA1' THEN 'TXTC'
                                   WHEN ls_id-tdobject = 'KNB1' OR ls_id-tdobject = 'LFB1' THEN 'TXTB'

@@ -1471,9 +1471,19 @@ CLASS lcl_cat IMPLEMENTATION.
       WHERE tdobject = @lt_id-tdobject AND tdid = @lt_id-tdid
       INTO TABLE @DATA(lt_tx).
     LOOP AT lt_id INTO DATA(ls_id).
-      DATA(lv_txt) = VALUE string( lt_tx[ tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = sy-langu ]-tdtext OPTIONAL ).
-      IF lv_txt IS INITIAL.
-        lv_txt = VALUE #( lt_tx[ tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = 'E' ]-tdtext OPTIONAL ).
+      " READ TABLE rather than VALUE string( lt_tx[ ... ]-tdtext OPTIONAL ):
+      " TDTEXT is a character field, and a VALUE with a table expression
+      " takes only a compatible type.
+      DATA lv_txt TYPE string.
+      CLEAR lv_txt.
+      READ TABLE lt_tx INTO DATA(ls_tx)
+           WITH KEY tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = sy-langu.
+      IF sy-subrc <> 0.
+        READ TABLE lt_tx INTO ls_tx
+             WITH KEY tdobject = ls_id-tdobject tdid = ls_id-tdid tdspras = 'E'.
+      ENDIF.
+      IF sy-subrc = 0.
+        lv_txt = ls_tx-tdtext.
       ENDIF.
       DATA(lv_grp) = COND ty_grp( WHEN ls_id-tdobject = 'KNA1' OR ls_id-tdobject = 'LFA1' THEN 'TXTC'
                                   WHEN ls_id-tdobject = 'KNB1' OR ls_id-tdobject = 'LFB1' THEN 'TXTB'
@@ -3064,15 +3074,24 @@ CLASS lcl_dl IMPLEMENTATION.
     " the screen limit which entries are written.
     DATA(lv_root) = lcl_cat=>root_of( iv_grp ).
     SPLIT iv_key AT `|` INTO TABLE DATA(lt_p).
+    " The first key part, moved into a field of the range's own type. Not
+    " VALUE bukrs( lt_p[ 1 ] OPTIONAL ): the lines of LT_P are strings, and
+    " a VALUE with a table expression takes only a compatible type.
+    DATA: lv_first TYPE string,
+          lv_bukrs TYPE bukrs,
+          lv_org   TYPE ekorg.
+    READ TABLE lt_p INTO lv_first INDEX 1.
     rv = abap_true.
     CASE lv_root.
       WHEN 'COMP'.
         IF s_bukrs[] IS NOT INITIAL.
-          rv = xsdbool( VALUE bukrs( lt_p[ 1 ] OPTIONAL ) IN s_bukrs ).
+          lv_bukrs = lv_first.
+          rv = xsdbool( lv_bukrs IN s_bukrs ).
         ENDIF.
       WHEN 'SALE' OR 'PURC'.
         IF s_org[] IS NOT INITIAL.
-          rv = xsdbool( VALUE ekorg( lt_p[ 1 ] OPTIONAL ) IN s_org ).
+          lv_org = lv_first.
+          rv = xsdbool( lv_org IN s_org ).
         ENDIF.
     ENDCASE.
   ENDMETHOD.
