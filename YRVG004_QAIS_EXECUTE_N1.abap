@@ -2910,6 +2910,10 @@ FORM additional_mj_discount.
     ENDIF.
     MODIFY it_data_monthly.
   ENDLOOP.
+* GAIL QAR 10.11.2026: a CIS entry with no committed quantity (MCQ 0, e.g.
+* customer 33866 in the June'26 run) is not eligible - drop it. Group
+* members carry the group MCQ (above), so they are not affected.
+  DELETE it_data_monthly WHERE commited_qty IS INITIAL.
 ENDFORM.                    " ADDITIONAL_MJ_DISCOUNT
 
 *&---------------------------------------------------------------------*
@@ -12166,6 +12170,20 @@ FORM on_selection USING r_ucomm LIKE sy-ucomm
           AND reb_cond = 'PE31'.
         ENDIF.
 ** EOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007222
+*   GAIL QAR 10.11.2026: Strategic Monthly Discount - with one row ticked,
+*   Execute submitted ALL rows to L2 (this option had no branch here, so the
+*   unticked rows were not removed). Only the ticked rows are processed.
+      ELSEIF r_addmj = 'X'.
+        DELETE it_data_monthly WHERE check <> 'X' .
+        IF it_data_monthly[] IS NOT INITIAL.
+          SELECT * FROM yrva_rebate INTO TABLE it_yrva_rebate
+            FOR ALL ENTRIES IN it_data_monthly
+            WHERE kunnr = it_data_monthly-kunnr
+            AND yy_per_start = s_sptag-low
+            AND yy_per_end = s_sptag-high
+            AND vkbur = it_data_monthly-vkbur
+          AND reb_cond = 'ZSTR'.
+        ENDIF.
       ENDIF.
 *     CIS 2026-27: orders returned to L1 by L4/L5/L6 can be re-executed
       PERFORM drop_returned_rebates.
@@ -12935,6 +12953,13 @@ FORM stage_all_rebates.
               it_data_monthly-ind_lift_qty
               it_data_monthly-sale_order.
       lv_cnt = lv_cnt + 1.
+*     GAIL QAR 10.11.2026: Strategic Monthly Discount - the sales order is
+*     created at L3; on the L1 screen the Sales Order column shows VERIFIED
+*     for every row L1 has verified and submitted to L2.
+      IF r_addmj = 'X'.
+        it_data_monthly-sale_order = 'VERIFIED'.
+        MODIFY it_data_monthly.
+      ENDIF.
     ENDLOOP.
   ENDIF.
 *   Split the processed rows into NEWLY submitted vs ALREADY with L2/L3, so
@@ -12953,7 +12978,9 @@ FORM stage_all_rebates.
 *   hide_forwarded re-reads YCIS_APPRVL (now Pending-L2) and removes them from
 *   the display tables; the ALV refresh set by the caller shows the reduced
 *   list. (GAIL 31.07.2026)
-    PERFORM hide_forwarded.
+    IF r_addmj IS INITIAL.               " SMD: rows stay with 'VERIFIED'
+      PERFORM hide_forwarded.
+    ENDIF.
     IF gv_stg_dup > 0.
       MESSAGE |{ lv_new } record(s) submitted to L2 (e-mail sent); { gv_stg_dup } already with L2/L3 - not re-sent| TYPE 'S'.
     ELSE.
@@ -12962,7 +12989,9 @@ FORM stage_all_rebates.
   ELSEIF gv_stg_dup > 0.
 *   every selected row was already forwarded earlier - no re-staging, no
 *   duplicate e-mail; just tell L1 clearly.
-    PERFORM hide_forwarded.
+    IF r_addmj IS INITIAL.               " SMD: rows stay with 'VERIFIED'
+      PERFORM hide_forwarded.
+    ENDIF.
     MESSAGE |All { gv_stg_dup } selected record(s) are already with L2/L3 - already forwarded, no e-mail re-sent| TYPE 'I'.
   ELSEIF lv_skip > 0.
 *   rows were computed but every one was held back by the eligibility rule
@@ -12997,9 +13026,18 @@ FORM hide_forwarded.
       AND wf_status   IN ('20','30','40','50','60','70').  " in-flight L2..L6 / completed (6-level)
   CHECK lt_fwd IS NOT INITIAL.
 
+*   GAIL QAR 10.11.2026: the Strategic Monthly Discount is staged with
+*   scheme type 'T' - its submitted rows were still shown at L1 because
+*   only 'M' was checked here.
+  DATA lv_mstype TYPE ycis_apprvl-scheme_type.
+  IF r_addmj = 'X'.
+    lv_mstype = 'T'.
+  ELSE.
+    lv_mstype = 'M'.
+  ENDIF.
   LOOP AT it_data_monthly.
     READ TABLE lt_fwd TRANSPORTING NO FIELDS
-      WITH KEY scheme_type = 'M'
+      WITH KEY scheme_type = lv_mstype
                kunnr       = it_data_monthly-kunnr
                kvgr2       = it_data_monthly-kvgr2.
     IF sy-subrc = 0. DELETE it_data_monthly. ENDIF.
@@ -15549,6 +15587,20 @@ AT SELECTION-SCREEN.
     ENDIF.
     IF s_sptag-low(6) <> lv_smd_to(6).
       MESSAGE 'Strategic Monthly Discount: run one month at a time (May or June 2026)' TYPE 'E'.
+    ENDIF.
+*   GAIL QAR 10.11.2026: the June'26 output was given while May'26 was still
+*   in the approval levels. June can be run for a sales office only when no
+*   May'26 Strategic record of that office is pending at L1 - L6.
+    IF s_sptag-low(6) = '202606'.
+      DATA lv_smd_pend TYPE i.
+      SELECT COUNT(*) FROM ycis_apprvl INTO lv_smd_pend
+        WHERE scheme_type = 'T'
+          AND period_from BETWEEN '20260501' AND '20260531'
+          AND sales_off   IN s_vkbur
+          AND wf_status   IN ('10','20','30','40','50','60').
+      IF lv_smd_pend > 0.
+        MESSAGE |May'26 Strategic Monthly Discount not completed at all levels ({ lv_smd_pend } record(s) pending L1-L6) - complete May first| TYPE 'E'.
+      ENDIF.
     ENDIF.
   ENDIF.
 *  IF s_sptag-low(6)  = '202604' OR s_sptag-low(6)  = '202605' OR

@@ -91,6 +91,12 @@ SELECTION-SCREEN BEGIN OF LINE.
 PARAMETERS p_year RADIOBUTTON GROUP g1.
 SELECTION-SCREEN COMMENT 3(25) c_year.
 SELECTION-SCREEN END OF LINE.
+*   GAIL QAR 10.11.2026: separate selection for the Strategic Monthly
+*   Discount (scheme type 'T') - no longer mixed with the monthly CIS
+SELECTION-SCREEN BEGIN OF LINE.
+PARAMETERS p_smd  RADIOBUTTON GROUP g1.
+SELECTION-SCREEN COMMENT 3(45) c_smd.
+SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b1.
 *   CIS UAT 14.10.2026 pt.3: Unexecuted = pending at this level (action
 *   possible); Executed = already processed at this level (display only).
@@ -108,6 +114,7 @@ SELECTION-SCREEN END OF BLOCK b2.
 INITIALIZATION.
   c_mon  = 'Monthly'.
   c_year = 'Yearly (Annual)'.
+  c_smd  = 'Strategic Monthly Discount (May/June''26)'.
   c_unex = 'Unexecuted (pending at L5)'.
   c_exec = 'Executed (already processed at L5)'.
   t_b1   = 'Selection Criteria'.
@@ -191,9 +198,10 @@ FORM build_stype_range.
   IF p_year = 'X'.
     gs_stype-low = 'A'. APPEND gs_stype TO gr_stype.
     gs_stype-low = 'C'. APPEND gs_stype TO gr_stype.
-  ELSE.
-    gs_stype-low = 'M'. APPEND gs_stype TO gr_stype.
+  ELSEIF p_smd = 'X'.
     gs_stype-low = 'T'. APPEND gs_stype TO gr_stype.   " Strategic Monthly Discount
+  ELSE.
+    gs_stype-low = 'M'. APPEND gs_stype TO gr_stype.   " monthly CIS only
   ENDIF.
 ENDFORM.
 

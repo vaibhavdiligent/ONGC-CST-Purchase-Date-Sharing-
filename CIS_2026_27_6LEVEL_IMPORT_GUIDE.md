@@ -161,3 +161,16 @@ CPC enters one row per PMG release, e.g. `M | 01.10.2026 | 31.10.2026 | 05.11.20
 | WF-10 | (found during the fix) PDR program re-staged rows already at L4–L6 / completed | In-flight check in YRVG004_QAIS_EXECUTE_N1_old now covers WF_STATUS 20–70 (as in N1) | YRVG004_QAIS_EXECUTE_N1_old |
 
 Note: the earlier rebate order of a returned row (e.g. 29486381) stays open in SAP. Set a reason for rejection on it in VA02 so it is not used again; the credit note is created only from the new order created at L3.
+
+## Strategic Monthly Discount – QAR observations 10.11.2026
+
+| # | Observation | Change | Program |
+|---|---|---|---|
+| SMD-5 | Customer still shown at L1 after L1 executed it | Submitted Strategic rows (scheme type T) are hidden at L1 – the check looked only at scheme M | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-6 | Sales Order column empty – show "VERIFIED" | After Execute the submitted rows show **VERIFIED** in the Sales Order column (order itself is created at L3) | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-7 | No separate selection for SMD at L2 / L3 | New option **Strategic Monthly Discount (May/June'26)** at L2–L6; *Monthly* now shows only the monthly CIS (scheme M) | YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |
+| SMD-8 | One row ticked, Execute submitted all rows | Strategic option added to the Execute check – only ticked rows are submitted | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-9 | June output given while May still in L1–L6 | June'26 run for a sales office is blocked while any May'26 Strategic record of that office is pending (WF_STATUS 10–60) | YRVG004_QAIS_EXECUTE_N1 |
+| SMD-10 | CIS entry with MCQ 0 (33866) in June output | Customers with MCQ 0 (after the group MCQ) are not eligible | YRVG004_QAIS_EXECUTE_N1 |
+
+Test data note: the 11 June'26 rows of office 3000 submitted on 10.11.2026 by the single-tick Execute are already Pending L2 (scheme T). To retest point 8, either approve/return them at L2 or delete those YCIS_APPRVL rows (SCHEME_TYPE T, PERIOD_FROM 01.06.2026, SALES_OFF 3000) in QAR.
