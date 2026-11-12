@@ -14,7 +14,7 @@ CLASS zcl_fincs_cdm_reverse_badi DEFINITION
       gc_doctype_source     TYPE acdocu-docty  VALUE 'ZR',  " Std-alone Re-groupings (PL01)
       gc_doctype_target     TYPE acdocu-docty  VALUE 'ZS',  " Rev of Std. Re-Grouping (PL10)
       gc_plevl_target       TYPE acdocu-plevl  VALUE '10',  " posting level of ZS
-      gc_ledger             TYPE acdocu-rldnr  VALUE 'Y1',  " group reporting ledger
+      gc_ledger             TYPE acdocu-rldnr  VALUE '1G',  " group reporting ledger
       gc_dimension          TYPE acdocu-rdimen VALUE 'Y1',  " consolidation dimension
       gc_status_ok          TYPE fc_status     VALUE '9',   " Task: No errors
       gc_status_error       TYPE fc_status     VALUE '8'.   " Task: Error(s)

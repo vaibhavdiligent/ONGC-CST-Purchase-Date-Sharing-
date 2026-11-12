@@ -230,7 +230,7 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
     "   IT_LINE = the ZS lines (ACDOCU layout, amounts already inverted).
     "   Map them to the API's header/item structure:
     "     header: RLDNR, RDIMEN, RVERS, RYEAR, POPER, DOCTY (ZS), BUDAT, text
-    "     items : RBUNIT, RITCLG, RACCT (FS item), RBPTR (partner), SITYP/SUBIT
+    "     items : RBUNIT, RITCLG, RITEM (FS item), RBUPTR (partner), SITYP/SUBIT
     "             (subitem), RTCUR, TSL, HSL, KSL, MSL, ...
     "   Document text suggestion: |Rev { is_source-docty } { is_source-docnr }|
     "   On success: add_msg( 'S', 'ZS doc <no> posted for ZR doc <no>' ),
