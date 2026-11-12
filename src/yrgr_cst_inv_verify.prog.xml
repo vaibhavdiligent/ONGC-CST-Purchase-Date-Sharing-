@@ -17,20 +17,26 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>ONGC CST - Invoice Receipt Verification</ENTRY>
-     <LENGTH>40</LENGTH>
+     <ENTRY>ONGC CST Invoice Data</ENTRY>
+     <LENGTH>21</LENGTH>
     </item>
     <item>
-     <ID>S</ID>
+     <ID>I</ID>
      <KEY>001</KEY>
      <ENTRY>Selection Criteria</ENTRY>
      <LENGTH>18</LENGTH>
     </item>
     <item>
-     <ID>S</ID>
+     <ID>I</ID>
      <KEY>002</KEY>
      <ENTRY>Action</ENTRY>
      <LENGTH>6</LENGTH>
+    </item>
+    <item>
+     <ID>I</ID>
+     <KEY>003</KEY>
+     <ENTRY>ONGC CST Invoice Data</ENTRY>
+     <LENGTH>21</LENGTH>
     </item>
     <item>
      <ID>S</ID>
@@ -47,8 +53,8 @@
     <item>
      <ID>S</ID>
      <KEY>P_VIEW</KEY>
-     <ENTRY>View Invoice Receipt</ENTRY>
-     <LENGTH>20</LENGTH>
+     <ENTRY>View Invoice Data</ENTRY>
+     <LENGTH>17</LENGTH>
     </item>
     <item>
      <ID>S</ID>

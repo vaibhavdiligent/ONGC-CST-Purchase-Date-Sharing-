@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<abapGit version="v1.0.0" serializer="LCL_OBJECT_DTEL" serializer_version="v1.0.0">
+ <asx:abap xmlns:asx="http://www.sap.com/abapxml" version="1.0">
+  <asx:values>
+   <DD04V>
+    <ROLLNAME>YRGA_DE_CI_AVG_GCV</ROLLNAME>
+    <DDLANGUAGE>E</DDLANGUAGE>
+    <DOMNAME>YGMS_GCV</DOMNAME>
+    <HEADLEN>11</HEADLEN>
+    <SCRLEN1>10</SCRLEN1>
+    <SCRLEN2>20</SCRLEN2>
+    <SCRLEN3>40</SCRLEN3>
+    <DDTEXT>Average GCV</DDTEXT>
+    <REPTEXT>Average GCV</REPTEXT>
+    <SCRTEXT_S>Avg GCV</SCRTEXT_S>
+    <SCRTEXT_M>Average GCV</SCRTEXT_M>
+    <SCRTEXT_L>Average GCV</SCRTEXT_L>
+    <DTELMASTER>E</DTELMASTER>
+   </DD04V>
+  </asx:values>
+ </asx:abap>
+</abapGit>
