@@ -8,9 +8,10 @@
 *
 * Test run: nothing is reversed or posted, the log lists what would happen.
 *
-* POST_DOCUMENT is the only place that posts. It must call the group journal
-* entry posting API of the system (the one used by app Post Group Journal
-* Entries / OData FINCS_JRNLENTR_POST_SRV) - see the TODO there.
+* Posting: SAP consolidation posting logic, function group FC15
+*   FC_DOCUMENT_ANALYZE2 (check / derive)  ->  FC_DOCUMENT_POST2 (post)
+* Line structure FC05_S_PDOC has the same field names as ACDOCU
+* (RBUNIT, RBUPTR, RITEM, SITYP, SUBIT, RTCUR, TSL, HSL, KSL, MSL, ...).
 CLASS zcl_fincs_gje_reversal DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
 
@@ -44,7 +45,7 @@ CLASS zcl_fincs_gje_reversal DEFINITION
       END OF ty_doc,
       tt_doc  TYPE SORTED TABLE OF ty_doc
               WITH UNIQUE KEY rldnr rdimen ryear docct docnr,
-      tt_line TYPE STANDARD TABLE OF acdocu WITH EMPTY KEY.
+      tt_line TYPE fc05_t_pdoc.
 
     METHODS constructor
       IMPORTING is_selection TYPE ty_selection.
@@ -87,10 +88,16 @@ CLASS zcl_fincs_gje_reversal DEFINITION
       IMPORTING is_doc         TYPE ty_doc
       RETURNING VALUE(rt_line) TYPE tt_line.
 
-    "! Posts one group journal entry
+    "! Posts one group journal entry (FC_DOCUMENT_ANALYZE2 + FC_DOCUMENT_POST2)
     METHODS post_document
       IMPORTING is_source   TYPE ty_doc
                 it_line     TYPE tt_line
+      CHANGING  ct_messages TYPE bapiret2_t
+      RETURNING VALUE(rv_ok) TYPE abap_bool.
+
+    "! Copies FC05 messages to the log; false if an error message is included
+    METHODS collect_fc_messages
+      IMPORTING it_msg      TYPE fc05_t_message
       CHANGING  ct_messages TYPE bapiret2_t
       RETURNING VALUE(rv_ok) TYPE abap_bool.
 
@@ -201,45 +208,141 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
 
 
   METHOD build_target_lines.
+    DATA lt_acdocu TYPE STANDARD TABLE OF acdocu WITH EMPTY KEY.
+
     SELECT * FROM acdocu
       WHERE rldnr  = @is_doc-rldnr
         AND rdimen = @is_doc-rdimen
         AND ryear  = @is_doc-ryear
         AND docct  = @is_doc-docct
         AND docnr  = @is_doc-docnr
-      INTO TABLE @rt_line.
+      ORDER BY docln
+      INTO TABLE @lt_acdocu.
 
-    LOOP AT rt_line ASSIGNING FIELD-SYMBOL(<ls_line>).
-      " same unit, partner, FS item, subitem, period ... only type/level/sign change
-      <ls_line>-docty = ms_sel-docty_target.
-      <ls_line>-plevl = ms_sel-plevl_target.
-      " invert amounts: transaction / local / group currency / quantity
-      <ls_line>-tsl = - <ls_line>-tsl.
-      <ls_line>-hsl = - <ls_line>-hsl.
-      <ls_line>-ksl = - <ls_line>-ksl.
-      <ls_line>-msl = - <ls_line>-msl.
-      " new document: no number / reversal links yet
-      CLEAR: <ls_line>-docnr, <ls_line>-rvsdocnr, <ls_line>-orndocnr, <ls_line>-revyear.
+    " Same unit, partner, FS item, subitem, currency ... (copied by name),
+    " amounts inverted. Document type / posting level come from the header.
+    LOOP AT lt_acdocu INTO DATA(ls_acdocu).
+      DATA(ls_line) = CORRESPONDING fc05_s_pdoc( ls_acdocu ).
+      ls_line-tsl = - ls_line-tsl.
+      ls_line-hsl = - ls_line-hsl.
+      ls_line-ksl = - ls_line-ksl.
+      ls_line-msl = - ls_line-msl.
+      APPEND ls_line TO rt_line.
     ENDLOOP.
   ENDMETHOD.
 
 
   METHOD post_document.
-    "======================================================================
-    " TODO - connect the group journal entry posting API here.
-    "   IT_LINE = the ZS lines (ACDOCU layout, amounts already inverted).
-    "   Map them to the API's header/item structure:
-    "     header: RLDNR, RDIMEN, RVERS, RYEAR, POPER, DOCTY (ZS), BUDAT, text
-    "     items : RBUNIT, RITCLG, RITEM (FS item), RBUPTR (partner), SITYP/SUBIT
-    "             (subitem), RTCUR, TSL, HSL, KSL, MSL, ...
-    "   Document text suggestion: |Rev { is_source-docty } { is_source-docnr }|
-    "   On success: add_msg( 'S', 'ZS doc <no> posted for ZR doc <no>' ),
-    "   rv_ok = abap_true.  On error: copy the API messages, rv_ok = abap_false.
-    "======================================================================
-    add_msg( EXPORTING iv_type = 'E'
-                       iv_text = |Posting API not connected yet - { ms_sel-docty } doc { is_source-docnr } not posted|
+    DATA: lt_doc       TYPE fc05_t_pdoc,
+          lt_head      TYPE fc05_t_pdoc_head,
+          lt_msg       TYPE fc05_t_message,
+          ls_container TYPE fc05_s_pdoc_container,
+          ls_control   TYPE fc05_s_da_control.
+
+    rv_ok  = abap_true.
+    lt_doc = it_line.
+
+    "-- 1. Check / derive the document lines --------------------------------
+    CALL FUNCTION 'FC_DOCUMENT_ANALYZE2'
+      EXPORTING
+        e_rldnr      = ms_sel-rldnr
+        e_itclg      = ms_sel-ritclg
+        e_dimen      = ms_sel-rdimen
+        e_docty      = ms_sel-docty_target
+        e_rvers      = ms_sel-rvers
+        e_ryear      = ms_sel-ryear
+        e_perid      = ms_sel-poper
+        es_control   = ls_control
+      IMPORTING
+        it_message   = lt_msg
+        is_container = ls_container
+      CHANGING
+        ct_doc       = lt_doc.
+
+    IF collect_fc_messages( EXPORTING it_msg = lt_msg CHANGING ct_messages = ct_messages ) = abap_false
+       OR lt_doc IS INITIAL.
+      add_msg( EXPORTING iv_type = 'E'
+                         iv_text = |{ ms_sel-docty_target } for { ms_sel-docty } doc { is_source-docnr }: check failed, not posted|
+               CHANGING  ct_messages = ct_messages ).
+      rv_ok = abap_false.
+      RETURN.
+    ENDIF.
+
+    "-- 2. Header: one document = all lines ---------------------------------
+    APPEND VALUE #( docty  = ms_sel-docty_target
+                    s_cont = ls_container
+                    rcongr = ms_sel-rcongr
+                    sgtxt  = |Rev { ms_sel-docty } { is_source-docnr }|
+                    from   = 1
+                    to     = lines( lt_doc ) ) TO lt_head.
+
+    "-- 3. Post ---------------------------------------------------------------
+    CLEAR lt_msg.
+    CALL FUNCTION 'FC_DOCUMENT_POST2'
+      EXPORTING
+        e_rldnr    = ms_sel-rldnr
+        e_itclg    = ms_sel-ritclg
+        e_dimen    = ms_sel-rdimen
+        e_rvers    = ms_sel-rvers
+        e_ryear    = ms_sel-ryear
+        e_perid    = ms_sel-poper
+        es_control = ls_control
+        et_doc     = lt_doc
+      IMPORTING
+        it_message = lt_msg
+      CHANGING
+        ct_head    = lt_head.
+
+    IF collect_fc_messages( EXPORTING it_msg = lt_msg CHANGING ct_messages = ct_messages ) = abap_false.
+      ROLLBACK WORK.
+      add_msg( EXPORTING iv_type = 'E'
+                         iv_text = |{ ms_sel-docty_target } for { ms_sel-docty } doc { is_source-docnr }: posting failed|
+               CHANGING  ct_messages = ct_messages ).
+      rv_ok = abap_false.
+      RETURN.
+    ENDIF.
+
+    COMMIT WORK AND WAIT.
+
+    DATA(lv_new_docnr) = VALUE belnr_d( lt_head[ 1 ]-s_docnr-docnr OPTIONAL ).
+    add_msg( EXPORTING iv_type = 'S'
+                       iv_text = |{ ms_sel-docty_target } doc { lv_new_docnr } posted for { ms_sel-docty } doc { is_source-docnr }|
              CHANGING  ct_messages = ct_messages ).
-    rv_ok = abap_false.
+  ENDMETHOD.
+
+
+  METHOD collect_fc_messages.
+    " FC05_T_MESSAGE line layout is read generically (MSGTY/MSGID/MSGNO/MSGV1-4)
+    rv_ok = abap_true.
+
+    LOOP AT it_msg ASSIGNING FIELD-SYMBOL(<ls_msg>).
+      ASSIGN COMPONENT 'MSGTY' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_ty>).
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      ASSIGN COMPONENT 'MSGID' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_id>).
+      ASSIGN COMPONENT 'MSGNO' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_no>).
+      ASSIGN COMPONENT 'MSGV1' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_v1>).
+      ASSIGN COMPONENT 'MSGV2' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_v2>).
+      ASSIGN COMPONENT 'MSGV3' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_v3>).
+      ASSIGN COMPONENT 'MSGV4' OF STRUCTURE <ls_msg> TO FIELD-SYMBOL(<lv_v4>).
+      IF <lv_id> IS NOT ASSIGNED OR <lv_no> IS NOT ASSIGNED OR <lv_v1> IS NOT ASSIGNED
+         OR <lv_v2> IS NOT ASSIGNED OR <lv_v3> IS NOT ASSIGNED OR <lv_v4> IS NOT ASSIGNED.
+        CONTINUE.
+      ENDIF.
+
+      APPEND VALUE #( type       = <lv_ty>
+                      id         = <lv_id>
+                      number     = <lv_no>
+                      message_v1 = <lv_v1>
+                      message_v2 = <lv_v2>
+                      message_v3 = <lv_v3>
+                      message_v4 = <lv_v4> ) TO ct_messages.
+
+      IF <lv_ty> CA 'EAX'.
+        rv_ok = abap_false.
+      ENDIF.
+    ENDLOOP.
   ENDMETHOD.
 
 
