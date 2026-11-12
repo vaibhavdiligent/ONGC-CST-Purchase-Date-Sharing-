@@ -5,7 +5,7 @@
    <VSEOCLASS>
     <CLSNAME>ZCL_FINCS_GJE_REVERSAL</CLSNAME>
     <LANGU>E</LANGU>
-    <DESCRIPT>Group journal entry reversal helper (CXA0)</DESCRIPT>
+    <DESCRIPT>Post inverse of ZR docs as ZS docs</DESCRIPT>
     <EXPOSURE>2</EXPOSURE>
     <STATE>1</STATE>
     <CLSFINAL>X</CLSFINAL>

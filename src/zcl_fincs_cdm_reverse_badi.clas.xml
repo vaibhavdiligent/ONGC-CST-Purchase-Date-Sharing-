@@ -5,7 +5,7 @@
    <VSEOCLASS>
     <CLSNAME>ZCL_FINCS_CDM_REVERSE_BADI</CLSNAME>
     <LANGU>E</LANGU>
-    <DESCRIPT>Custom DM task: reverse docs of doc type</DESCRIPT>
+    <DESCRIPT>Custom DM task: post inverse of ZR as ZS</DESCRIPT>
     <EXPOSURE>2</EXPOSURE>
     <STATE>1</STATE>
     <CLSFINAL>X</CLSFINAL>
