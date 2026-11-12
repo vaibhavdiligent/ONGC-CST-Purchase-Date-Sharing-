@@ -27,6 +27,8 @@ CLASS zcl_fincs_cdm_reverse_badi DEFINITION
       IMPORTING iv_rvers     TYPE acdocu-rvers
                 iv_ryear     TYPE acdocu-ryear
                 iv_poper     TYPE acdocu-poper
+                iv_ritclg    TYPE fc_itclg
+                iv_rcongr    TYPE fc_congr OPTIONAL
                 it_rbunit    TYPE zcl_fincs_gje_reversal=>ty_selection-rbunit
                 iv_test_run  TYPE abap_bool
       EXPORTING et_messages  TYPE bapiret2_t
@@ -41,17 +43,9 @@ CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
     DATA lt_bunit TYPE zcl_fincs_gje_reversal=>ty_selection-rbunit.
 
     "-- 1. Consolidation units of this run ----------------------------------
-    "   The monitor passes either a list (CONSOLIDATIONUNITTAB) or one unit.
-    "   FINCS_T_UNIT may be a table of FC_BUNIT or of a structure; both work.
-    LOOP AT consolidationunittab ASSIGNING FIELD-SYMBOL(<ls_unit>).
-      ASSIGN COMPONENT 'CONSOLIDATIONUNIT' OF STRUCTURE <ls_unit> TO FIELD-SYMBOL(<lv_unit>).
-      IF sy-subrc <> 0.
-        ASSIGN COMPONENT 'BUNIT' OF STRUCTURE <ls_unit> TO <lv_unit>.
-      ENDIF.
-      IF sy-subrc <> 0.
-        ASSIGN <ls_unit> TO <lv_unit>.          " elementary line type FC_BUNIT
-      ENDIF.
-      APPEND VALUE #( sign = 'I' option = 'EQ' low = <lv_unit> ) TO lt_bunit.
+    "   CONSOLIDATIONUNITTAB = FINCS_T_UNIT = table of FC_BUNIT
+    LOOP AT consolidationunittab INTO DATA(lv_unit).
+      APPEND VALUE #( sign = 'I' option = 'EQ' low = lv_unit ) TO lt_bunit.
     ENDLOOP.
 
     IF lt_bunit IS INITIAL AND consolidationunit IS NOT INITIAL.
@@ -65,6 +59,8 @@ CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
       EXPORTING iv_rvers    = consolidationversion
                 iv_ryear    = fiscalyear
                 iv_poper    = CONV #( fiscalperiod )
+                iv_ritclg   = consolidationchartofaccounts
+                iv_rcongr   = consolidationgroup
                 it_rbunit   = lt_bunit
                 iv_test_run = xsdbool( isconsolidationtasktestrun IS NOT INITIAL )
       IMPORTING et_messages = DATA(lt_messages) ).
@@ -95,6 +91,8 @@ CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
                               rvers    = iv_rvers
                               ryear    = iv_ryear
                               poper    = iv_poper
+                              ritclg   = iv_ritclg
+                              rcongr   = iv_rcongr
                               rbunit   = it_rbunit
                               docty    = gc_doctype_to_reverse
                               test_run = iv_test_run ) ).
