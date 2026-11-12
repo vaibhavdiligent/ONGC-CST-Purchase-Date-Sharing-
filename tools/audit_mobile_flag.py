@@ -26,7 +26,7 @@ import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap',
+         'src/zsds_cust_tmpl_download.prog.abap', 'src/zsds_cust_credit_upload.prog.abap',
          'tools/cipla/download_skeleton.abap']
 
 BAD = re.compile(r'(?<!data)x-r_3_user|data-r_3_user\s*(?:=|<>)\s*'

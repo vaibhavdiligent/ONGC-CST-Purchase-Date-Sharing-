@@ -48,7 +48,7 @@ STRINGY = ('lcl_util=>cell(', 'to_upper(', 'to_lower(', 'condense(', 'lcl_util=>
 
 findings = []
 PROGS_ALL = ['src/zmms_bp_mass_upload.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap',
+         'src/zsds_cust_tmpl_download.prog.abap', 'src/zsds_cust_credit_upload.prog.abap',
          'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',
          'src/#ccbji#rummmdr_vend_bp_maint.prog.abap']
 for p in PROGS_ALL:

@@ -19,6 +19,7 @@ V = 'src/zmms_bp_mass_upload.prog.abap'
 VX = 'src/zmms_bp_mass_upload.prog.xml'
 C = 'src/zsds_cust_tmpl_download.prog.abap'
 K = 'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap'
+CR = 'src/zsds_cust_credit_upload.prog.abap'
 
 # (seen as, program, audit, [(file, old, new), ...])
 CASES = [
@@ -159,6 +160,17 @@ CASES = [
      'audit_incident542.py',
      [(C, "                lv_pv = lcl_cfg=>get( )->code_padded( iv_tab = iv_struc iv_fld = iv_fld\n",
           "                lv_pv = lcl_util=>noop( iv_tab = iv_struc iv_fld = iv_fld\n")]),
+    # ---- ZSDS_CUST_CREDIT_UPLOAD, faults of the retired R5 credit tab -----
+    ('Credit: customer number taken for the business partner number', CR,
+     'audit_credit_upload.py',
+     [(CR, "        DATA(lo_facade)  = cl_ukm_facade=>create(",
+           "        DATA(lv_wrong) = CONV bu_partner( iv_kunnr ).\n        DATA(lo_facade)  = cl_ukm_facade=>create(")]),
+    ('Credit: KLIMG "X" read as an amount - main segment limit set to 0', CR,
+     'audit_credit_upload.py',
+     [(CR, "    IF lv_okt = abap_true.\n      credit(", "    IF lv_klimg IS NOT INITIAL.\n      credit(")]),
+    ('Credit: NO CHANGE sent to SAP as payment terms', CR,
+     'audit_credit_upload.py',
+     [(CR, "    IF lcl_util=>no_change( lv_zterm ) = abap_true.\n      CLEAR lv_zterm.\n    ENDIF.\n", "")]),
     # ---- /CCBJI/RUSDMDR_CUST_BP_MAINT, first activation in Q4R ----------
     ('Unknown column name "CHECKTABLE" - SELECT on DD05S', K,
      'audit_release_syntax.py',
