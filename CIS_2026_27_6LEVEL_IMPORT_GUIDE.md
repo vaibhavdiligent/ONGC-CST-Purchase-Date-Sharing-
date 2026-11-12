@@ -174,3 +174,12 @@ Note: the earlier rebate order of a returned row (e.g. 29486381) stays open in S
 | SMD-10 | CIS entry with MCQ 0 (33866) in June output | Customers with MCQ 0 (after the group MCQ) are not eligible | YRVG004_QAIS_EXECUTE_N1 |
 
 Test data note: the 11 June'26 rows of office 3000 submitted on 10.11.2026 by the single-tick Execute are already Pending L2 (scheme T). To retest point 8, either approve/return them at L2 or delete those YCIS_APPRVL rows (SCHEME_TYPE T, PERIOD_FROM 01.06.2026, SALES_OFF 3000) in QAR.
+
+## UAT 11.11.2026 – Approval Note: amount in words
+
+The note now prints the discount total value in words under *Discount total value (Rs.)*, Indian numbering (crore / lakh), e.g. 2,05,800.00 → *Rupees Two Lakh Five Thousand Eight Hundred Only*.
+
+1. **SE11 – structure `ZCIS_APPR_NOTE_S`**: add field `AMT_WORDS`, data type CHAR, length 255 (predefined type, or data element `TEXT255`). Activate.
+2. **SFP – interface `ZCIS_PSD_APPR_NOTE`**: open, check, activate (WA_NOTE now includes AMT_WORDS).
+3. **SFP – form `ZCIS_PSD_APPR_NOTE`**: on the *Context* tab make sure `WA_NOTE-AMT_WORDS` is active (if WA_NOTE was dragged in as a whole it appears automatically; otherwise drag the field in). In the *Layout* re-import `ZCIS_PSD_APPR_NOTE_layout.XDP` – or add a text field `AMT_WORDS` (caption "Amount in words", multi-line, width 180 mm) below `DISC_TOTAL_VALUE`, binding `$.WA_NOTE.AMT_WORDS`. Activate.
+4. **YCIS_REBATE_REPORT** (YRVG052): copy the latest program and activate (new FORMs `amount_in_words`, `num_words`, `below_hundred`).

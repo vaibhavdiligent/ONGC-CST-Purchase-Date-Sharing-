@@ -104,6 +104,15 @@
             <value><text/></value>
             <bind match="dataRef" ref="$.WA_NOTE.DISC_TOTAL_VALUE"/>
          </field>
+         <field name="AMT_WORDS" access="readOnly" w="180mm" minH="7mm">
+            <ui><textEdit multiLine="1"/></ui>
+            <font typeface="Arial" size="10pt"/>
+            <margin topInset="0.5mm" bottomInset="0.5mm" leftInset="0mm" rightInset="1mm"/>
+            <para vAlign="middle"/>
+            <caption placement="left" reserve="60mm"><font typeface="Arial" size="9pt" weight="bold"/><para vAlign="top"/><value><text>Amount in words</text></value></caption>
+            <value><text/></value>
+            <bind match="dataRef" ref="$.WA_NOTE.AMT_WORDS"/>
+         </field>
          <draw name="d52946" w="180mm" h="2mm">
             <ui><textEdit/></ui>
             <font typeface="Arial" size="10pt" weight="normal"/>
@@ -332,6 +341,7 @@
             <L6_REMARKS/>
             <L6_SIGN/>
             <GRAND_TOTAL/>
+            <AMT_WORDS/>
          </WA_NOTE>
          <IT_OFFICE>
             <DATA>

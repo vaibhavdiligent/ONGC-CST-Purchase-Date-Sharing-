@@ -677,6 +677,10 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
   WRITE lv_total TO ls_note-disc_total_value DECIMALS 2.
   CONDENSE ls_note-disc_total_value.
   ls_note-grand_total = ls_note-disc_total_value.
+* GAIL UAT 11.11.2026: discount total value also in words (Indian
+* numbering - crore / lakh), e.g. 2,05,800.00 -> "Rupees Two Lakh Five
+* Thousand Eight Hundred Only". Needs field AMT_WORDS in ZCIS_APPR_NOTE_S.
+  PERFORM amount_in_words USING lv_total CHANGING ls_note-amt_words.
 
 *   ---- central blocks L3 / L4 / L5 (single approver each) ----
 *   CIS UAT 23.10.2026: L6 details (signature, time stamp, comments) are NOT
@@ -743,6 +747,106 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
       system_error   = 2
       internal_error = 3
       OTHERS         = 4.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  amount_in_words   (approval note - total value in words)
+*&---------------------------------------------------------------------*
+*   Indian numbering (crore / lakh / thousand / hundred), rounded to paise:
+*   205800.00 -> Rupees Two Lakh Five Thousand Eight Hundred Only
+*   12345678.50 -> Rupees One Crore Twenty Three Lakh Forty Five Thousand
+*                  Six Hundred Seventy Eight and Fifty Paise Only
+*   Own conversion - no dependency on country-specific function modules.
+*&---------------------------------------------------------------------*
+FORM amount_in_words USING    p_amt   TYPE p
+                     CHANGING p_words TYPE any.
+  DATA: lv_amt TYPE p LENGTH 16 DECIMALS 2,
+        lv_rs  TYPE p LENGTH 16 DECIMALS 0,
+        lv_cr  TYPE i,
+        lv_rem TYPE i,
+        lv_ps  TYPE i,
+        lv_w   TYPE string,
+        lv_out TYPE string.
+  CLEAR p_words.
+  lv_amt = abs( p_amt ).
+  lv_rs  = trunc( lv_amt ).
+  lv_ps  = ( lv_amt - lv_rs ) * 100.
+  lv_cr  = lv_rs DIV 10000000.
+  lv_rem = lv_rs MOD 10000000.
+  IF lv_cr > 0.
+    PERFORM num_words USING lv_cr CHANGING lv_w.
+    lv_out = |{ lv_w } Crore|.
+  ENDIF.
+  IF lv_rem > 0.
+    PERFORM num_words USING lv_rem CHANGING lv_w.
+    lv_out = |{ lv_out } { lv_w }|.
+  ENDIF.
+  IF lv_out IS INITIAL.
+    lv_out = 'Zero'.
+  ENDIF.
+  lv_out = |Rupees { lv_out }|.
+  IF lv_ps > 0.
+    PERFORM below_hundred USING lv_ps CHANGING lv_w.
+    lv_out = |{ lv_out } and { lv_w } Paise|.
+  ENDIF.
+  lv_out = |{ lv_out } Only|.
+  CONDENSE lv_out.
+  p_words = lv_out.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  num_words   (0 - 99,99,999 in words: lakh / thousand / hundred)
+*&---------------------------------------------------------------------*
+FORM num_words USING    p_n   TYPE i
+               CHANGING p_txt TYPE string.
+  DATA: lv_g TYPE i,
+        lv_w TYPE string.
+  CLEAR p_txt.
+  lv_g = p_n DIV 100000.                       " lakh
+  IF lv_g > 0.
+    PERFORM below_hundred USING lv_g CHANGING lv_w.
+    p_txt = |{ p_txt } { lv_w } Lakh|.
+  ENDIF.
+  lv_g = ( p_n MOD 100000 ) DIV 1000.          " thousand
+  IF lv_g > 0.
+    PERFORM below_hundred USING lv_g CHANGING lv_w.
+    p_txt = |{ p_txt } { lv_w } Thousand|.
+  ENDIF.
+  lv_g = ( p_n MOD 1000 ) DIV 100.             " hundred
+  IF lv_g > 0.
+    PERFORM below_hundred USING lv_g CHANGING lv_w.
+    p_txt = |{ p_txt } { lv_w } Hundred|.
+  ENDIF.
+  lv_g = p_n MOD 100.                          " tens and units
+  IF lv_g > 0.
+    PERFORM below_hundred USING lv_g CHANGING lv_w.
+    p_txt = |{ p_txt } { lv_w }|.
+  ENDIF.
+  CONDENSE p_txt.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  below_hundred   (1 - 99 in words)
+*&---------------------------------------------------------------------*
+FORM below_hundred USING    p_n   TYPE i
+                   CHANGING p_txt TYPE string.
+  DATA: lt_one TYPE STANDARD TABLE OF string WITH EMPTY KEY,
+        lt_ten TYPE STANDARD TABLE OF string WITH EMPTY KEY,
+        lv_t   TYPE i,
+        lv_o   TYPE i.
+  CLEAR p_txt.
+  CHECK p_n > 0 AND p_n < 100.
+  SPLIT 'One Two Three Four Five Six Seven Eight Nine Ten Eleven Twelve Thirteen Fourteen Fifteen Sixteen Seventeen Eighteen Nineteen'
+    AT space INTO TABLE lt_one.
+  SPLIT 'Ten Twenty Thirty Forty Fifty Sixty Seventy Eighty Ninety'
+    AT space INTO TABLE lt_ten.
+  IF p_n < 20.
+    p_txt = lt_one[ p_n ].
+  ELSE.
+    lv_t = p_n DIV 10.
+    lv_o = p_n MOD 10.
+    p_txt = lt_ten[ lv_t ].
+    IF lv_o > 0.
+      p_txt = |{ p_txt } { lt_one[ lv_o ] }|.
+    ENDIF.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*

@@ -22,6 +22,7 @@ Top level:
 | REF_NO | Reference number (GAIL/PMG/CPC/PSD…) |
 | VARIANT_NAME | Scheme / variant name |
 | DISC_TOTAL_VALUE | Discount total value (Rs.) |
+| AMT_WORDS | Discount total value in words, Indian numbering (CHAR 255) – e.g. *Rupees Two Lakh Five Thousand Eight Hundred Only* |
 | L1_REMARKS … L6_REMARKS | Remarks captured at each level |
 | L1_SIGN … L6_SIGN | Approver CPF No. + time stamp at each level |
 

@@ -137,6 +137,13 @@
         </xsd:annotation>
         <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="25"/></xsd:restriction></xsd:simpleType>
        </xsd:element>
+       <xsd:element name="AMT_WORDS">
+        <xsd:annotation xmlns:dc="http://purl.org/dc/elements/1.1/">
+         <xsd:documentation>Discount total value in words</xsd:documentation>
+         <xsd:appinfo><dc:description>Discount total value in words</dc:description><dc:title>Amount in words</dc:title></xsd:appinfo>
+        </xsd:annotation>
+        <xsd:simpleType><xsd:restriction base="xsd:string"><xsd:maxLength value="255"/></xsd:restriction></xsd:simpleType>
+       </xsd:element>
       </xsd:sequence>
      </xsd:complexType>
     </xsd:element>
