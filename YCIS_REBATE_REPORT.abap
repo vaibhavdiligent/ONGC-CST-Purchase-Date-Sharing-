@@ -680,7 +680,13 @@ FORM print_note USING p_vbeln TYPE vbeln_va.
 * GAIL UAT 11.11.2026: discount total value also in words (Indian
 * numbering - crore / lakh), e.g. 2,05,800.00 -> "Rupees Two Lakh Five
 * Thousand Eight Hundred Only". Needs field AMT_WORDS in ZCIS_APPR_NOTE_S.
-  PERFORM amount_in_words USING lv_total CHANGING ls_note-amt_words.
+* Field addressed by name so the program also activates before / without
+* the new structure field (then simply no words are printed).
+  FIELD-SYMBOLS <lv_words> TYPE any.
+  ASSIGN COMPONENT 'AMT_WORDS' OF STRUCTURE ls_note TO <lv_words>.
+  IF sy-subrc = 0.
+    PERFORM amount_in_words USING lv_total CHANGING <lv_words>.
+  ENDIF.
 
 *   ---- central blocks L3 / L4 / L5 (single approver each) ----
 *   CIS UAT 23.10.2026: L6 details (signature, time stamp, comments) are NOT
