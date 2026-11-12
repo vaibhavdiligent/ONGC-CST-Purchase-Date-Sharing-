@@ -25,7 +25,7 @@ templates removed, chains split - and checks:
 import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROGS = ['src/zsds_cust_tmpl_download.prog.abap', 'src/zsds_cust_credit_upload.prog.abap',
+PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap',
          'tools/cipla/download_skeleton.abap',
          'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',

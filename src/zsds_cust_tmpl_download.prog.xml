@@ -73,6 +73,12 @@
     </item>
     <item>
      <ID>S</ID>
+     <KEY>P_CRD</KEY>
+     <ENTRY>P_CRD   D       .Credit limit template</ENTRY>
+     <LENGTH>21</LENGTH>
+    </item>
+    <item>
+     <ID>S</ID>
      <KEY>P_REGN</KEY>
      <ENTRY>P_REGN  D       .Country / region</ENTRY>
      <LENGTH>7</LENGTH>

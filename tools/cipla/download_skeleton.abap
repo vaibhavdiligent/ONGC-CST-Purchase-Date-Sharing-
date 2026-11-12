@@ -28,8 +28,11 @@
 *& The upload replaces ZSDS_CUST_MASS_UPLOAD, which is retired. That
 *& program's seven hand-written layouts belong to the earlier LSMW workbook
 *& and none of them matches a current template. Its one other tab, the
-*& FSCM credit limit, is not carried over: Cipla has not asked for credit
-*& limits to be loaded, and none of the 24 templates carries them.
+*& FSCM credit limit, is here as the fourth template choice, "Credit limit
+*& template": Cipla's FD32 workbook layout, downloaded with each customer's
+*& credit segments and uploaded into SAP Credit Management (CL_UKM_FACADE)
+*& - see LCL_CREDIT. The credit representative group (SBGRP) has no place
+*& in Credit Management at Cipla and is not loaded, by decision.
 *&
 *& The data is read through the same interface the upload program writes
 *& through - CMD_EI_API_EXTRACT=>GET_DATA - so a column that can be loaded
@@ -224,7 +227,10 @@ CONSTANTS gc_mobile TYPE c LENGTH 1 VALUE '3'.
 " template and the XD05 block / unblock template.
 CONSTANTS: gc_any       TYPE land1 VALUE '*',
            gc_tmpl_extn TYPE char8 VALUE 'EXTN',
-           gc_tmpl_blk  TYPE char8 VALUE 'BLOCK'.
+           gc_tmpl_blk  TYPE char8 VALUE 'BLOCK',
+           " The credit limit template - not a customer master layout, so
+           " not in the column map; LCL_CREDIT reads and writes it.
+           gc_tmpl_cred TYPE char8 VALUE 'CREDIT'.
 
 TABLES sscrfields.
 
@@ -247,7 +253,8 @@ SELECTION-SCREEN END OF BLOCK b0.
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE TEXT-001.
 PARAMETERS: p_crt RADIOBUTTON GROUP g1 USER-COMMAND rb DEFAULT 'X',
             p_ext RADIOBUTTON GROUP g1,
-            p_blk RADIOBUTTON GROUP g1.
+            p_blk RADIOBUTTON GROUP g1,
+            p_crd RADIOBUTTON GROUP g1.
 SELECTION-SCREEN END OF BLOCK b1.
 
 SELECTION-SCREEN BEGIN OF BLOCK b2 WITH FRAME TITLE TEXT-002.
@@ -1868,6 +1875,51 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS ref_knb1    IMPORTING VALUE(iv_kunnr) TYPE kunnr
                                   VALUE(iv_bukrs) TYPE bukrs
                         RETURNING VALUE(rs)       TYPE knb1.
+
+    " ---- SAP Credit Management, for the credit limit template ----------
+    TYPES tt_bukrs TYPE STANDARD TABLE OF bukrs WITH EMPTY KEY.
+    TYPES: BEGIN OF ty_sarea,
+             vkorg TYPE vkorg,
+             vtweg TYPE vtweg,
+             spart TYPE spart,
+           END OF ty_sarea,
+           tt_sarea TYPE STANDARD TABLE OF ty_sarea WITH EMPTY KEY.
+    TYPES: BEGIN OF ty_csgm,
+             sgmnt   TYPE ukm_credit_sgmnt,
+             amount  TYPE ty_dec,
+             blocked TYPE abap_bool,
+           END OF ty_csgm,
+           tt_csgm TYPE STANDARD TABLE OF ty_csgm WITH EMPTY KEY.
+    " Credit control area <-> credit segment (UKM_KKBER2SGM, 1:1 at Cipla).
+    METHODS segment_of   IMPORTING VALUE(iv_kkber) TYPE kkber
+                         RETURNING VALUE(rv)       TYPE ukm_credit_sgmnt.
+    METHODS kkber_of     IMPORTING VALUE(iv_sgmnt) TYPE ukm_credit_sgmnt
+                         RETURNING VALUE(rv)       TYPE kkber.
+    METHODS segment_curr IMPORTING VALUE(iv_sgmnt) TYPE ukm_credit_sgmnt
+                         RETURNING VALUE(rv)       TYPE waers.
+    METHODS segments_of  IMPORTING VALUE(iv_partner) TYPE bu_partner
+                         RETURNING VALUE(rt)         TYPE tt_csgm.
+    " CRED_LIM_REQ is where SAP keeps a limit waiting for approval.
+    METHODS stored_limit
+      IMPORTING VALUE(iv_partner) TYPE bu_partner
+                VALUE(iv_sgmnt)   TYPE ukm_credit_sgmnt
+      EXPORTING ev_limit          TYPE ty_dec
+                ev_block          TYPE abap_bool
+                ev_found          TYPE abap_bool
+                ev_requested      TYPE ty_dec.
+    METHODS stored_risk  IMPORTING VALUE(iv_partner) TYPE bu_partner
+                         RETURNING VALUE(rv)         TYPE string.
+    " A value against the check table the dictionary gives TAB-FLD.
+    METHODS value_ok     IMPORTING iv_tab    TYPE clike
+                                   iv_fld    TYPE clike
+                                   iv_val    TYPE string
+                         RETURNING VALUE(rv) TYPE abap_bool.
+    METHODS kkber_bukrs  IMPORTING VALUE(iv_kkber) TYPE kkber
+                         RETURNING VALUE(rt)       TYPE tt_bukrs.
+    METHODS cust_bukrs   IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                         RETURNING VALUE(rt)       TYPE tt_bukrs.
+    METHODS cust_sales   IMPORTING VALUE(iv_kunnr) TYPE kunnr
+                         RETURNING VALUE(rt)       TYPE tt_sarea.
     METHODS ref_knvv    IMPORTING VALUE(iv_kunnr) TYPE kunnr
                                   VALUE(iv_vkorg) TYPE vkorg
                                   VALUE(iv_vtweg) TYPE vtweg
@@ -2196,6 +2248,91 @@ CLASS lcl_cfg IMPLEMENTATION.
       WHERE partner = @iv_partner AND taxtype = @iv_type
       INTO (@ev_num, @ev_numxl).
     rv = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD segment_of.
+    SELECT SINGLE credit_sgmnt FROM ukm_kkber2sgm WHERE kkber = @iv_kkber INTO @rv.
+  ENDMETHOD.
+
+  METHOD kkber_of.
+    SELECT SINGLE kkber FROM ukm_kkber2sgm WHERE credit_sgmnt = @iv_sgmnt INTO @rv.
+  ENDMETHOD.
+
+  METHOD segment_curr.
+    SELECT SINGLE currency FROM ukmcred_sgm0c WHERE credit_sgmnt = @iv_sgmnt INTO @rv.
+  ENDMETHOD.
+
+  METHOD segments_of.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT credit_sgmnt AS sgmnt, credit_limit AS amount, xblocked AS blocked
+      FROM ukmbp_cms_sgm WHERE partner = @iv_partner
+      ORDER BY credit_sgmnt INTO CORRESPONDING FIELDS OF TABLE @rt.
+  ENDMETHOD.
+
+  METHOD stored_limit.
+    CLEAR: ev_limit, ev_block, ev_found, ev_requested.
+    SELECT SINGLE credit_limit, xblocked, cred_lim_req FROM ukmbp_cms_sgm
+      WHERE partner = @iv_partner AND credit_sgmnt = @iv_sgmnt
+      INTO (@ev_limit, @ev_block, @ev_requested).
+    ev_found = xsdbool( sy-subrc = 0 ).
+  ENDMETHOD.
+
+  METHOD stored_risk.
+    DATA lv_r TYPE ukm_s_bp_cms-risk_class.
+    SELECT SINGLE risk_class FROM ukmbp_cms WHERE partner = @iv_partner INTO @lv_r.
+    rv = lv_r.
+  ENDMETHOD.
+
+  METHOD value_ok.
+    rv = abap_true.
+    IF iv_val IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA: lv_obj   TYPE ddobjname,
+          lv_lfld  TYPE dfies-lfieldname,
+          ls_dfies TYPE dfies.
+    lv_obj  = iv_tab.
+    lv_lfld = iv_fld.
+    CALL FUNCTION 'DDIF_FIELDINFO_GET'
+      EXPORTING
+        tabname    = lv_obj
+        lfieldname = lv_lfld
+      IMPORTING
+        dfies_wa   = ls_dfies
+      EXCEPTIONS
+        OTHERS     = 1.
+    IF sy-subrc <> 0 OR ls_dfies-checktable IS INITIAL OR ls_dfies-checktable = '*'.
+      RETURN.
+    ENDIF.
+    DATA(lv_ct) = CONV string( ls_dfies-checktable ).
+    DATA(lv_v) = iv_val.
+    REPLACE ALL OCCURRENCES OF `'` IN lv_v WITH `''`.
+    " The check table's key field carries the field's own name (T052-ZTERM,
+    " T056-VZSKZ, UKM_RISK_CL-RISK_CLASS); where it does not, the read
+    " fails and the value is left for the API to judge.
+    DATA(lv_w) = |{ ls_dfies-fieldname } = '{ lv_v }'|.
+    DATA lv_hit TYPE abap_bool.
+    TRY.
+        SELECT SINGLE @abap_true FROM (lv_ct) WHERE (lv_w) INTO @lv_hit.
+        rv = lv_hit.
+      CATCH cx_sy_dynamic_osql_error.
+        rv = abap_true.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD kkber_bukrs.
+    SELECT bukrs FROM t001 WHERE kkber = @iv_kkber ORDER BY bukrs INTO TABLE @rt.
+  ENDMETHOD.
+
+  METHOD cust_bukrs.
+    SELECT bukrs FROM knb1 WHERE kunnr = @iv_kunnr ORDER BY bukrs INTO TABLE @rt.
+  ENDMETHOD.
+
+  METHOD cust_sales.
+    SELECT vkorg, vtweg, spart FROM knvv WHERE kunnr = @iv_kunnr
+      ORDER BY vkorg, vtweg, spart INTO TABLE @rt.
   ENDMETHOD.
 
   METHOD ref_knb1.
@@ -4089,6 +4226,628 @@ CLASS lcl_engine IMPLEMENTATION.
 ENDCLASS.
 
 
+*----------------------------------------------------------------------*
+* LCL_CREDIT - the credit limit template
+*
+*   Cipla's FD32 LSMW workbook "Customer change Credit limit", downloaded
+*   and uploaded in its own layout. In S/4HANA the ECC credit tables KNKK /
+*   KNKA are replaced by SAP Credit Management:
+*
+*     KKBER  credit control area   -> credit segment (UKM_KKBER2SGM, 1:1)
+*     KLIMK  customer's credit limit, or KLIME  ->  segment credit limit
+*     KLIMG  total across all areas            ->  main segment 0000, only
+*                                                  in its own currency
+*     WAERS  currency                          ->  checked, never written
+*     CTLPC  risk category                     ->  risk class, one per BP
+*                                                  (001-010 as in ECC)
+*     CRBLB  blocked                           ->  blocked in credit mgmt
+*     Payment terms, customer group 3, interest indicator (and cycle)
+*                                              ->  customer master
+*
+*   SBGRP, the credit representative group, has no place in SAP Credit
+*   Management at Cipla (T024B-SBGRP_FSCM is empty, no BP relationship) and
+*   was dropped by decision: the column is kept for the layout and read for
+*   nothing. D0105 .. D0220 were the recording's screen flags.
+*
+*   A cell that is empty or reads NO CHANGE / TBU leaves the field as it
+*   is. Credit data goes through CL_UKM_FACADE, the customer master fields
+*   through LCL_CVIS; after a productive run the limit is read back, so a
+*   limit SAP kept back (approval, CRED_LIM_REQ) is not reported as saved.
+*----------------------------------------------------------------------*
+CLASS lcl_credit DEFINITION FINAL.
+  PUBLIC SECTION.
+    " The heading row the download writes - the workbook's own names.
+    CLASS-METHODS head RETURNING VALUE(rt) TYPE tt_cell.
+    " The same, squashed, for the reader to find the heading row by.
+    CLASS-METHODS want RETURNING VALUE(rt) TYPE string_table.
+    " One row per credit segment of each customer asked for.
+    CLASS-METHODS download
+      IMPORTING it_key TYPE lcl_src=>tt_key
+      EXPORTING et_row TYPE tt_row
+                et_msg TYPE tt_msg.
+
+    METHODS constructor IMPORTING io_log TYPE REF TO lcl_log.
+    METHODS run IMPORTING it_head TYPE string_table
+                          it_row  TYPE tt_row.
+  PRIVATE SECTION.
+    CONSTANTS gc_main TYPE ukm_credit_sgmnt VALUE '0000'.
+
+    DATA mo_log  TYPE REF TO lcl_log.
+    DATA mo_cfg  TYPE REF TO lcl_cfg.
+    DATA mo_cvis TYPE REF TO lcl_cvis.
+    " Column of each field in this file.
+    DATA: mv_kunnr TYPE i,
+          mv_kkber TYPE i,
+          mv_klimg TYPE i,
+          mv_klime TYPE i,
+          mv_waers TYPE i,
+          mv_klimk TYPE i,
+          mv_ctlpc TYPE i,
+          mv_crblb TYPE i,
+          mv_zterm TYPE i,
+          mv_kvgr3 TYPE i,
+          mv_vzskz TYPE i.
+    " The risk class each partner has been given by this file so far: ECC's
+    " risk category was per credit control area, a risk class is per BP.
+    TYPES: BEGIN OF ty_risk,
+             partner TYPE bu_partner,
+             risk    TYPE string,
+             row     TYPE i,
+           END OF ty_risk.
+    DATA mt_risk TYPE HASHED TABLE OF ty_risk WITH UNIQUE KEY partner.
+
+    CLASS-METHODS no_change
+      IMPORTING iv_in     TYPE string
+      RETURNING VALUE(rv) TYPE abap_bool.
+    " An amount; EV_OK false for a cell that is not one (KLIMG holds X).
+    CLASS-METHODS amount
+      IMPORTING iv_in  TYPE string
+      EXPORTING ev_dec TYPE ty_dec
+                ev_ok  TYPE abap_bool.
+
+    METHODS columns IMPORTING it_head TYPE string_table.
+    METHODS one     IMPORTING is_row  TYPE ty_row.
+    METHODS post_credit
+      IMPORTING iv_row     TYPE i
+                iv_kunnr   TYPE kunnr
+                iv_partner TYPE bu_partner
+                iv_sgmnt   TYPE ukm_credit_sgmnt
+                iv_limit   TYPE ty_dec
+                iv_set_lim TYPE abap_bool
+                iv_block   TYPE string
+                iv_risk    TYPE string.
+    METHODS post_master
+      IMPORTING iv_row   TYPE i
+                iv_kunnr TYPE kunnr
+                iv_kkber TYPE kkber
+                iv_zterm TYPE string
+                iv_kvgr3 TYPE string
+                iv_vzskz TYPE string.
+    METHODS reset_bp.
+ENDCLASS.
+
+
+CLASS lcl_credit IMPLEMENTATION.
+
+  METHOD head.
+    rt = VALUE #( ( `Customer code` ) ( `KKBER` ) ( `D0105` ) ( `D0110` ) ( `D0120` )
+                  ( `D0210` ) ( `D0220` ) ( `KLIMG` ) ( `KLIME` ) ( `WAERS` ) ( `KLIMK` )
+                  ( `CTLPC` ) ( `CRBLB` ) ( `SBGRP` ) ( `` ) ( `Payment Terms` )
+                  ( `Cust Grp 3` ) ( `Z1 Interest Indicator & Interest cycle` ) ).
+  ENDMETHOD.
+
+  METHOD want.
+    LOOP AT head( ) INTO DATA(lv_h).
+      DATA(lv_k) = lcl_util=>squash( lv_h ).
+      IF lv_k IS NOT INITIAL AND lv_k NP 'D0+++' AND lv_k <> 'SBGRP'.
+        APPEND lv_k TO rt.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD no_change.
+    DATA(lv_k) = lcl_util=>squash( iv_in ).
+    rv = xsdbool( lv_k IS INITIAL OR lv_k = 'NOCHANGE' OR lv_k = 'TBU' ).
+  ENDMETHOD.
+
+  METHOD amount.
+    CLEAR: ev_dec, ev_ok.
+    DATA(lv) = condense( iv_in ).
+    REPLACE ALL OCCURRENCES OF `,` IN lv WITH ``.
+    REPLACE ALL OCCURRENCES OF ` ` IN lv WITH ``.
+    IF lv IS INITIAL OR lv CN '0123456789.-E+e'.
+      RETURN.
+    ENDIF.
+    TRY.
+        DATA lv_f TYPE decfloat34.
+        lv_f = lv.
+        ev_dec = round( val = lv_f dec = 2 ).
+        ev_ok  = abap_true.
+      CATCH cx_sy_conversion_error cx_sy_arithmetic_error.
+        CLEAR ev_dec.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD download.
+    CLEAR: et_row, et_msg.
+    DATA(lo_cfg) = lcl_cfg=>get( ).
+    DATA(lv_cols) = lines( head( ) ).
+    LOOP AT it_key INTO DATA(ls_key).
+      IF lines( et_row ) >= p_max.
+        EXIT.
+      ENDIF.
+      DATA(lv_bp) = COND bu_partner( WHEN ls_key-partner IS NOT INITIAL THEN ls_key-partner
+                                     ELSE lo_cfg->cust_bp( ls_key-kunnr ) ).
+      DATA(lv_cust) = |{ ls_key-kunnr ALPHA = OUT }|.
+      DATA(lt_sgm) = lo_cfg->segments_of( lv_bp ).
+      DATA(lv_risk) = lo_cfg->stored_risk( lv_bp ).
+      DATA lv_n TYPE i.
+      CLEAR lv_n.
+      LOOP AT lt_sgm INTO DATA(ls_sgm).
+        DATA(lv_kkber) = lo_cfg->kkber_of( ls_sgm-sgmnt ).
+        IF lv_kkber IS INITIAL.
+          CONTINUE.                    " the main segment and the like
+        ENDIF.
+        DATA ls_row TYPE ty_row.
+        CLEAR ls_row.
+        DO lv_cols TIMES.
+          APPEND INITIAL LINE TO ls_row-cells.
+        ENDDO.
+        ls_row-cells[ 1 ]  = lv_cust.
+        ls_row-cells[ 2 ]  = lv_kkber.
+        ls_row-cells[ 10 ] = lo_cfg->segment_curr( ls_sgm-sgmnt ).
+        ls_row-cells[ 11 ] = |{ ls_sgm-amount }|.
+        ls_row-cells[ 12 ] = lv_risk.
+        ls_row-cells[ 13 ] = ls_sgm-blocked.
+        ls_row-cells[ 16 ] = `NO CHANGE`.
+        ls_row-cells[ 17 ] = `NO CHANGE`.
+        ls_row-cells[ 18 ] = `NO CHANGE`.
+        APPEND ls_row TO et_row.
+        lv_n = lv_n + 1.
+      ENDLOOP.
+      DATA(lv_ty) = COND bapi_mtype( WHEN lv_n > 0 THEN 'S' ELSE 'W' ).
+      APPEND VALUE #( icon    = COND #( WHEN lv_ty = 'S' THEN icon_green_light
+                                        ELSE icon_yellow_light )
+                      objkey  = lv_cust
+                      message = COND #( WHEN lv_n > 0 THEN |{ lv_n } credit segment(s) written|
+                                        ELSE `No credit segment yet - add a row with the credit control area to create one` ) )
+             TO et_msg.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD constructor.
+    mo_log  = io_log.
+    mo_cfg  = lcl_cfg=>get( ).
+    mo_cvis = NEW lcl_cvis( io_log ).
+  ENDMETHOD.
+
+  METHOD reset_bp.
+    TRY.
+        CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
+      CATCH cx_sy_dyn_call_illegal_func.
+        RETURN.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD columns.
+    " The workbook's own places, used where a heading is not found.
+    mv_kunnr = 1.  mv_kkber = 2.  mv_klimg = 8.  mv_klime = 9.
+    mv_waers = 10. mv_klimk = 11. mv_ctlpc = 12. mv_crblb = 13.
+    mv_zterm = 16. mv_kvgr3 = 17. mv_vzskz = 18.
+    DATA lv_c TYPE i.
+    LOOP AT it_head INTO DATA(lv_h).
+      lv_c = lv_c + 1.
+      DATA(lv_hk) = lcl_util=>squash( lv_h ).
+      CASE lv_hk.
+        WHEN 'KUNNR' OR 'CUSTOMERCODE'.                      mv_kunnr = lv_c.
+        WHEN 'KKBER' OR 'CREDITCONTROLAREA'.                 mv_kkber = lv_c.
+        WHEN 'KLIMG'.                                        mv_klimg = lv_c.
+        WHEN 'KLIME'.                                        mv_klime = lv_c.
+        WHEN 'WAERS' OR 'CURRENCYKEY'.                       mv_waers = lv_c.
+        WHEN 'KLIMK' OR 'CUSTOMERSCREDITLIMIT'.              mv_klimk = lv_c.
+        WHEN 'CTLPC' OR 'RISKCATEGORY' OR 'RISKCLASS'.       mv_ctlpc = lv_c.
+        WHEN 'CRBLB'.                                        mv_crblb = lv_c.
+        WHEN 'ZTERM' OR 'PAYMENTTERMS'.                      mv_zterm = lv_c.
+        WHEN 'KVGR3' OR 'CUSTGRP3' OR 'CUSTOMERGROUP3'.      mv_kvgr3 = lv_c.
+        WHEN 'VZSKZ' OR 'Z1INTERESTINDICATORINTERESTCYCLE'.  mv_vzskz = lv_c.
+      ENDCASE.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD run.
+    columns( it_head ).
+    LOOP AT it_row INTO DATA(ls_row).
+      " A data row is one whose customer cell holds a number; the
+      " workbook's description and type rows hold words there.
+      DATA(lv_k) = lcl_util=>cell( is_row = ls_row iv_col = mv_kunnr ).
+      IF lv_k IS INITIAL OR lv_k CN '0123456789'.
+        CONTINUE.
+      ENDIF.
+      one( ls_row ).
+      IF p_stop = abap_true AND mo_log->has_error( ls_row-row ) = abap_true.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD one.
+    DATA(lv_row) = is_row-row.
+    DATA(lv_in)  = lcl_util=>alpha( iv_in = lcl_util=>cell( is_row = is_row iv_col = mv_kunnr ) iv_len = 10 ).
+    DATA: lv_kunnr TYPE kunnr,
+          lv_frbp  TYPE bu_partner.
+    mo_cfg->cust_of( EXPORTING iv_in = CONV kunnr( lv_in )
+                     IMPORTING ev_kunnr = lv_kunnr ev_from_bp = lv_frbp ).
+    IF lv_kunnr IS INITIAL.
+      mo_log->add( iv_row = lv_row iv_type = 'E'
+                   iv_text = |{ lv_in ALPHA = OUT } is neither a customer nor the business partner of one| ).
+      RETURN.
+    ENDIF.
+    DATA(lv_bp) = mo_cfg->cust_bp( lv_kunnr ).
+    IF lv_bp IS INITIAL.
+      mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E'
+                   iv_text = 'The customer has no business partner (CVI_CUST_LINK) - credit data belongs to the partner' ).
+      RETURN.
+    ENDIF.
+
+    " ---- credit control area -> segment
+    DATA lv_kkber TYPE kkber.
+    lv_kkber = lcl_util=>cell( is_row = is_row iv_col = mv_kkber ).
+    IF lv_kkber IS INITIAL.
+      mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'KKBER'
+                   iv_text = 'No credit control area in this row' ).
+      RETURN.
+    ENDIF.
+    DATA(lv_sgmnt) = mo_cfg->segment_of( lv_kkber ).
+    IF lv_sgmnt IS INITIAL.
+      mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'KKBER'
+                   iv_text = |Credit control area { lv_kkber } has no credit segment (UKM_KKBER2SGM)| ).
+      RETURN.
+    ENDIF.
+
+    " ---- the segment limit: KLIMK, or KLIME where KLIMK is empty
+    DATA: lv_lim  TYPE ty_dec,
+          lv_ok   TYPE abap_bool,
+          lv_lim2 TYPE ty_dec,
+          lv_ok2  TYPE abap_bool,
+          lv_setl TYPE abap_bool.
+    DATA(lv_klimk) = lcl_util=>cell( is_row = is_row iv_col = mv_klimk ).
+    DATA(lv_klime) = lcl_util=>cell( is_row = is_row iv_col = mv_klime ).
+    IF no_change( lv_klimk ) = abap_false.
+      amount( EXPORTING iv_in = lv_klimk IMPORTING ev_dec = lv_lim ev_ok = lv_ok ).
+      IF lv_ok = abap_false.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'KLIMK'
+                     iv_text = |"{ lv_klimk }" is not an amount| ).
+      ELSE.
+        lv_setl = abap_true.
+      ENDIF.
+    ENDIF.
+    IF no_change( lv_klime ) = abap_false.
+      amount( EXPORTING iv_in = lv_klime IMPORTING ev_dec = lv_lim2 ev_ok = lv_ok2 ).
+      IF lv_ok2 = abap_false.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'KLIME'
+                     iv_text = |"{ lv_klime }" is not an amount| ).
+      ELSEIF lv_setl = abap_false.
+        lv_lim  = lv_lim2.
+        lv_setl = abap_true.
+      ELSEIF lv_lim2 <> lv_lim.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'W' iv_fld = 'KLIME'
+                     iv_text = |KLIMK and KLIME differ - a segment has one limit; KLIMK { lv_lim } is used| ).
+      ENDIF.
+    ENDIF.
+
+    " ---- the total across all areas -> the main segment. KLIMG holds X on
+    " every row of the workbook: a flag of the old recording, not an amount.
+    DATA: lv_tot TYPE ty_dec,
+          lv_okt TYPE abap_bool.
+    DATA(lv_klimg) = lcl_util=>cell( is_row = is_row iv_col = mv_klimg ).
+    IF no_change( lv_klimg ) = abap_false.
+      amount( EXPORTING iv_in = lv_klimg IMPORTING ev_dec = lv_tot ev_ok = lv_okt ).
+      IF lv_okt = abap_false.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'I' iv_fld = 'KLIMG'
+                     iv_text = |"{ lv_klimg }" in KLIMG is not an amount - the main segment is left as it is| ).
+      ELSE.
+        " The main segment has its own currency (EUR at Cipla), the file's
+        " amounts are in the credit control area's. Never across currencies.
+        DATA(lv_mcur) = mo_cfg->segment_curr( gc_main ).
+        DATA(lv_rcur) = mo_cfg->segment_curr( lv_sgmnt ).
+        IF lv_mcur <> lv_rcur.
+          mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'KLIMG'
+                       iv_text = |The main segment { gc_main } is held in { lv_mcur }, segment { lv_sgmnt } | &&
+                                 |in { lv_rcur } - leave KLIMG empty, or give the total in { lv_mcur }| ).
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    " ---- currency: the limit is held in the segment's currency
+    DATA lv_waers TYPE waers.
+    lv_waers = to_upper( lcl_util=>cell( is_row = is_row iv_col = mv_waers ) ).
+    IF lv_waers IS NOT INITIAL.
+      DATA(lv_scur) = mo_cfg->segment_curr( lv_sgmnt ).
+      IF lv_scur IS NOT INITIAL AND lv_scur <> lv_waers.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'WAERS'
+                     iv_text = |Currency { lv_waers } - segment { lv_sgmnt } is held in { lv_scur }| ).
+      ENDIF.
+    ENDIF.
+
+    " ---- risk class (one per partner) and blocked
+    DATA(lv_risk) = to_upper( lcl_util=>cell( is_row = is_row iv_col = mv_ctlpc ) ).
+    IF no_change( lv_risk ) = abap_true.
+      CLEAR lv_risk.
+    ELSEIF mo_cfg->value_ok( iv_tab = 'UKMBP_CMS' iv_fld = 'RISK_CLASS' iv_val = lv_risk ) = abap_false.
+      mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E' iv_fld = 'CTLPC'
+                   iv_text = |Risk class { lv_risk } does not exist in SAP Credit Management (UKM_RISK_CL)| ).
+    ELSE.
+      READ TABLE mt_risk INTO DATA(ls_rk) WITH TABLE KEY partner = lv_bp.
+      IF sy-subrc = 0 AND ls_rk-risk <> lv_risk.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'W' iv_fld = 'CTLPC'
+                     iv_text = |The risk class is one per business partner - row { ls_rk-row } gives | &&
+                               |{ ls_rk-risk }, so { lv_risk } from this row is not used| ).
+        CLEAR lv_risk.
+      ELSEIF sy-subrc <> 0.
+        INSERT VALUE #( partner = lv_bp risk = lv_risk row = lv_row ) INTO TABLE mt_risk.
+      ENDIF.
+    ENDIF.
+    DATA(lv_block) = to_upper( lcl_util=>cell( is_row = is_row iv_col = mv_crblb ) ).
+    IF no_change( lv_block ) = abap_true.
+      CLEAR lv_block.
+    ENDIF.
+
+    IF mo_log->has_error( lv_row ) = abap_true.
+      mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_type = 'E'
+                   iv_text = 'Row not posted - correct the errors above and load it again' ).
+      RETURN.
+    ENDIF.
+
+    IF lv_setl = abap_true OR lv_block IS NOT INITIAL OR lv_risk IS NOT INITIAL.
+      post_credit( iv_row = lv_row iv_kunnr = lv_kunnr iv_partner = lv_bp iv_sgmnt = lv_sgmnt
+                   iv_limit = lv_lim iv_set_lim = lv_setl iv_block = lv_block iv_risk = lv_risk ).
+    ENDIF.
+    IF lv_okt = abap_true.
+      post_credit( iv_row = lv_row iv_kunnr = lv_kunnr iv_partner = lv_bp iv_sgmnt = gc_main
+                   iv_limit = lv_tot iv_set_lim = abap_true iv_block = `` iv_risk = `` ).
+    ENDIF.
+
+    post_master( iv_row   = lv_row
+                 iv_kunnr = lv_kunnr
+                 iv_kkber = lv_kkber
+                 iv_zterm = lcl_util=>cell( is_row = is_row iv_col = mv_zterm )
+                 iv_kvgr3 = lcl_util=>cell( is_row = is_row iv_col = mv_kvgr3 )
+                 iv_vzskz = lcl_util=>cell( is_row = is_row iv_col = mv_vzskz ) ).
+  ENDMETHOD.
+
+  METHOD post_credit.
+    DATA: lv_old   TYPE ty_dec,
+          lv_oblk  TYPE abap_bool,
+          lv_found TYPE abap_bool,
+          lv_oreq  TYPE ty_dec.
+    mo_cfg->stored_limit( EXPORTING iv_partner = iv_partner iv_sgmnt = iv_sgmnt
+                          IMPORTING ev_limit = lv_old ev_block = lv_oblk ev_found = lv_found
+                                    ev_requested = lv_oreq ).
+    DATA(lv_orisk) = mo_cfg->stored_risk( iv_partner ).
+    IF lv_oreq IS NOT INITIAL AND lv_oreq <> lv_old.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'I' iv_fld = 'CRED_LIM_REQ'
+                   iv_text = |Segment { iv_sgmnt }: a limit request of { lv_oreq } is already waiting for approval| ).
+    ENDIF.
+
+    TRY.
+        " CL_UKM_FACADE is built through CREATE; BP_MAINTENANCE is the
+        " activity for maintaining credit master data. The partner is the
+        " one behind the customer in CVI_CUST_LINK.
+        DATA(lo_facade)  = cl_ukm_facade=>create( i_activity = cl_ukm_cnst_eventing=>bp_maintenance ).
+        DATA(lo_factory) = lo_facade->get_bupa_factory( ).
+        IF iv_set_lim = abap_true OR iv_block IS NOT INITIAL.
+          DATA(lo_account) = lo_factory->get_credit_account( i_partner      = iv_partner
+                                                             i_credit_sgmnt = iv_sgmnt ).
+          DATA ls_sgm TYPE ukm_s_bp_cms_sgm.
+          lo_account->get_bp_cms_sgm( IMPORTING es_bp_cms_sgm = ls_sgm ).
+          IF iv_set_lim = abap_true.
+            ls_sgm-credit_limit   = iv_limit.
+            ls_sgm-limit_chg_date = sy-datum.
+          ENDIF.
+          IF iv_block IS NOT INITIAL.
+            ls_sgm-xblocked = xsdbool( iv_block = 'X' OR iv_block = 'Y' OR iv_block = 'YES' ).
+          ENDIF.
+          lo_account->set_bp_cms_sgm( is_bp_cms_sgm = ls_sgm ).
+        ENDIF.
+        IF iv_risk IS NOT INITIAL.
+          DATA(lo_bp) = lo_factory->get_business_partner( i_partner = iv_partner ).
+          DATA ls_cms TYPE ukm_s_bp_cms.
+          lo_bp->get_bp_cms( IMPORTING es_bp_cms = ls_cms ).
+          ls_cms-risk_class = iv_risk.
+          lo_bp->set_bp_cms( is_bp_cms = ls_cms ).
+        ENDIF.
+        lo_factory->save_all( i_testrun = p_test i_upd_task = abap_false ).
+      CATCH cx_root INTO DATA(lx).
+        CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+        reset_bp( ).
+        DATA(lv_xt) = lx->get_text( ).
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'CREDIT'
+                     iv_text = |Segment { iv_sgmnt }: credit data not saved - { lv_xt }| ).
+        RETURN.
+    ENDTRY.
+
+    IF p_test = abap_true.
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+      reset_bp( ).
+      IF iv_set_lim = abap_true.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'I' iv_struc = 'CREDIT' iv_fld = 'CREDIT_LIMIT'
+                     iv_text = |Segment { iv_sgmnt }: limit { COND string( WHEN lv_found = abap_true
+                                                                           THEN |{ lv_old }| ELSE `(new segment)` ) } | &&
+                               |-> { iv_limit } (test run)| ).
+      ENDIF.
+      IF iv_risk IS NOT INITIAL.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'I' iv_struc = 'CREDIT' iv_fld = 'RISK_CLASS'
+                     iv_text = |Risk class { lv_orisk } -> { iv_risk } (test run)| ).
+      ENDIF.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S' iv_struc = 'CREDIT'
+                   iv_text = |Segment { iv_sgmnt }: test run OK - nothing was posted| ).
+      RETURN.
+    ENDIF.
+
+    DATA ls_ret TYPE bapiret2.
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING wait   = abap_true
+      IMPORTING return = ls_ret.
+    reset_bp( ).
+    IF ls_ret-type CA 'EAX'.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'CREDIT'
+                   iv_text = |Segment { iv_sgmnt }: the update did not go through - { ls_ret-message }| ).
+      RETURN.
+    ENDIF.
+
+    " Read back: a limit SAP kept back must not be reported as saved.
+    IF iv_set_lim = abap_true.
+      DATA: lv_now  TYPE ty_dec,
+            lv_nblk TYPE abap_bool,
+            lv_nfnd TYPE abap_bool,
+            lv_req  TYPE ty_dec.
+      mo_cfg->stored_limit( EXPORTING iv_partner = iv_partner iv_sgmnt = iv_sgmnt
+                            IMPORTING ev_limit = lv_now ev_block = lv_nblk ev_found = lv_nfnd
+                                      ev_requested = lv_req ).
+      IF lv_nfnd = abap_true AND lv_now <> iv_limit AND lv_req = iv_limit.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'W' iv_struc = 'CREDIT' iv_fld = 'CREDIT_LIMIT'
+                     iv_text = |Segment { iv_sgmnt }: { iv_limit } requested - the limit stays { lv_now } | &&
+                               |until the request is approved| ).
+        RETURN.
+      ELSEIF lv_nfnd = abap_false OR lv_now <> iv_limit.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'CREDIT' iv_fld = 'CREDIT_LIMIT'
+                     iv_text = |Segment { iv_sgmnt }: SAP holds { lv_now } after the save - { iv_limit } was not taken| ).
+        RETURN.
+      ENDIF.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S' iv_struc = 'CREDIT' iv_fld = 'CREDIT_LIMIT'
+                   iv_text = |Segment { iv_sgmnt }: limit { lv_old } -> { iv_limit } saved| ).
+    ENDIF.
+    IF iv_risk IS NOT INITIAL.
+      DATA(lv_nrisk) = mo_cfg->stored_risk( iv_partner ).
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = COND #( WHEN lv_nrisk = iv_risk THEN 'S' ELSE 'E' )
+                   iv_struc = 'CREDIT' iv_fld = 'RISK_CLASS'
+                   iv_text = COND string( WHEN lv_nrisk = iv_risk THEN |Risk class { lv_orisk } -> { iv_risk } saved|
+                                          ELSE |SAP holds risk class { lv_nrisk } after the save| ) ).
+    ENDIF.
+    IF iv_block IS NOT INITIAL.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'S' iv_struc = 'CREDIT' iv_fld = 'XBLOCKED'
+                   iv_text = |Segment { iv_sgmnt }: blocked { lv_oblk } -> { iv_block } saved| ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD post_master.
+    DATA(lv_zterm) = to_upper( iv_zterm ).
+    DATA(lv_kvgr3) = to_upper( iv_kvgr3 ).
+    DATA(lv_int)   = to_upper( iv_vzskz ).
+    IF no_change( lv_zterm ) = abap_true.
+      CLEAR lv_zterm.
+    ENDIF.
+    IF no_change( lv_kvgr3 ) = abap_true.
+      CLEAR lv_kvgr3.
+    ENDIF.
+    IF no_change( lv_int ) = abap_true.
+      CLEAR lv_int.
+    ENDIF.
+    IF lv_zterm IS INITIAL AND lv_kvgr3 IS INITIAL AND lv_int IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    " "Z1 3", "Z1/3": the indicator, then the interest cycle (KNB1-ZINRT).
+    DATA: lv_ind TYPE string,
+          lv_cyc TYPE string.
+    IF lv_int IS NOT INITIAL.
+      REPLACE ALL OCCURRENCES OF `/` IN lv_int WITH ` `.
+      REPLACE ALL OCCURRENCES OF `-` IN lv_int WITH ` `.
+      CONDENSE lv_int.
+      SPLIT lv_int AT ` ` INTO lv_ind lv_cyc.
+    ENDIF.
+
+    DATA lv_bad TYPE abap_bool.
+    IF lv_zterm IS NOT INITIAL AND mo_cfg->value_ok( iv_tab = 'KNB1' iv_fld = 'ZTERM' iv_val = lv_zterm ) = abap_false.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'KNB1' iv_fld = 'ZTERM'
+                   iv_text = |Payment terms { lv_zterm } do not exist| ).
+      lv_bad = abap_true.
+    ENDIF.
+    IF lv_kvgr3 IS NOT INITIAL AND mo_cfg->ok_kvgr3( lv_kvgr3 ) = abap_false.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'KNVV' iv_fld = 'KVGR3'
+                   iv_text = |Customer group 3 { lv_kvgr3 } is not in TVV3| ).
+      lv_bad = abap_true.
+    ENDIF.
+    IF lv_ind IS NOT INITIAL AND mo_cfg->value_ok( iv_tab = 'KNB1' iv_fld = 'VZSKZ' iv_val = lv_ind ) = abap_false.
+      mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'KNB1' iv_fld = 'VZSKZ'
+                   iv_text = |Interest indicator { lv_ind } does not exist| ).
+      lv_bad = abap_true.
+    ENDIF.
+    IF lv_bad = abap_true.
+      RETURN.
+    ENDIF.
+
+    DATA ls_cust TYPE cmds_ei_extern.
+    ls_cust-header-object_instance-kunnr = iv_kunnr.
+    ls_cust-header-object_task           = gc_u.
+
+    " The company code: the customer's one inside the credit control area.
+    IF lv_zterm IS NOT INITIAL OR lv_ind IS NOT INITIAL.
+      DATA(lt_b) = mo_cfg->cust_bukrs( iv_kunnr ).
+      DATA(lt_k) = mo_cfg->kkber_bukrs( iv_kkber ).
+      DATA lt_n TYPE lcl_cfg=>tt_bukrs.
+      LOOP AT lt_b INTO DATA(lv_b).
+        IF line_exists( lt_k[ table_line = lv_b ] ).
+          APPEND lv_b TO lt_n.
+        ENDIF.
+      ENDLOOP.
+      IF lines( lt_n ) <> 1.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'KNB1'
+                     iv_text = |Payment terms / interest not written - the customer is in { lines( lt_n ) } | &&
+                               |company code(s) of credit control area { iv_kkber }, and the file names none| ).
+      ELSE.
+        DATA ls_comp TYPE cmds_ei_company.
+        ls_comp-task           = gc_u.
+        ls_comp-data_key-bukrs = lt_n[ 1 ].
+        IF lv_zterm IS NOT INITIAL.
+          ls_comp-data-zterm  = lv_zterm.
+          ls_comp-datax-zterm = abap_true.
+        ENDIF.
+        IF lv_ind IS NOT INITIAL.
+          ls_comp-data-vzskz  = lv_ind.
+          ls_comp-datax-vzskz = abap_true.
+          IF lv_cyc IS NOT INITIAL AND lv_cyc CO '0123456789'.
+            ls_comp-data-zinrt  = lv_cyc.
+            ls_comp-datax-zinrt = abap_true.
+          ENDIF.
+        ENDIF.
+        APPEND ls_comp TO ls_cust-company_data-company.
+      ENDIF.
+    ENDIF.
+
+    " The sales area: the customer's only one.
+    IF lv_kvgr3 IS NOT INITIAL.
+      DATA(lt_s) = mo_cfg->cust_sales( iv_kunnr ).
+      IF lines( lt_s ) <> 1.
+        mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E' iv_struc = 'KNVV'
+                     iv_text = |Customer group 3 not written - the customer has { lines( lt_s ) } sales | &&
+                               |area(s), and the file names none| ).
+      ELSE.
+        DATA ls_sale TYPE cmds_ei_sales.
+        ls_sale-task           = gc_u.
+        ls_sale-data_key-vkorg = lt_s[ 1 ]-vkorg.
+        ls_sale-data_key-vtweg = lt_s[ 1 ]-vtweg.
+        ls_sale-data_key-spart = lt_s[ 1 ]-spart.
+        ls_sale-data-kvgr3     = lv_kvgr3.
+        ls_sale-datax-kvgr3    = abap_true.
+        APPEND ls_sale TO ls_cust-sales_data-sales.
+      ENDIF.
+    ENDIF.
+
+    IF ls_cust-company_data-company IS INITIAL AND ls_cust-sales_data-sales IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA ls_cvis TYPE cvis_ei_extern.
+    ls_cvis-partner-header-object_task                  = gc_u.
+    ls_cvis-partner-header-object_instance-bpartnerguid = mo_cfg->cust_guid( iv_kunnr ).
+    ls_cvis-customer = ls_cust.
+    mo_cvis->post( is_data = ls_cvis iv_row = iv_row iv_kunnr = iv_kunnr ).
+  ENDMETHOD.
+
+ENDCLASS.
+
+
 CLASS lcl_main DEFINITION FINAL.
   PUBLIC SECTION.
     " The template the selection screen currently points at, empty when
@@ -4130,6 +4889,7 @@ CLASS lcl_main IMPLEMENTATION.
     CASE abap_true.
       WHEN p_ext. rv = gc_tmpl_extn.
       WHEN p_blk. rv = gc_tmpl_blk.
+      WHEN p_crd. rv = gc_tmpl_cred.
       WHEN OTHERS.
         rv = lcl_tmpl=>resolve( iv_regn = p_regn iv_ktokd = p_ktokd ).
     ENDCASE.
@@ -4139,6 +4899,7 @@ CLASS lcl_main IMPLEMENTATION.
     CASE abap_true.
       WHEN p_ext. rv = 'CUST_EXTN'.
       WHEN p_blk. rv = 'BLOCK_UNBLOCK'.
+      WHEN p_crd. rv = 'CREDIT_LIMIT'.
       WHEN OTHERS.
         " The file keeps the country in its name, which is what the MDM
         " team files it under. Europe's four countries share one template,
@@ -4437,6 +5198,40 @@ CLASS lcl_main IMPLEMENTATION.
     ENDIF.
 
     DATA(lo_log) = NEW lcl_log( ).
+
+    " The credit limit template has a reader and a poster of its own.
+    IF lv_tmpl = gc_tmpl_cred.
+      DATA lt_crow TYPE tt_row.
+      DATA lt_chead TYPE string_table.
+      DATA lv_ctab TYPE string.
+      TRY.
+          NEW lcl_excel( )->read(
+            EXPORTING iv_file    = CONV string( p_file )
+                      iv_from_pc = p_pc
+                      iv_sheet   = label( )
+                      iv_skip    = p_skip
+                      it_want    = lcl_credit=>want( )
+            IMPORTING et_head    = lt_chead
+                      et_row     = lt_crow
+                      ev_sheet   = lv_ctab ).
+        CATCH lcx_dl INTO DATA(lx_cr).
+          lo_log->add( iv_row = 0 iv_type = 'E' iv_text = lx_cr->get_text( ) ).
+          lo_log->display( ).
+          RETURN.
+      ENDTRY.
+      DATA(lo_cred) = NEW lcl_credit( lo_log ).
+      lo_cred->run( it_head = lt_chead it_row = lt_crow ).
+      DATA: lv_cok   TYPE i,
+            lv_cerr  TYPE i,
+            lv_cskip TYPE i.
+      lo_log->counts( IMPORTING ev_ok = lv_cok ev_err = lv_cerr ev_skip = lv_cskip ).
+      DATA(lv_csum) = |{ label( ) }: { lv_cok } row(s) processed, { lv_cerr } with errors| &&
+                      COND string( WHEN lv_cskip > 0 THEN |, { lv_cskip } with nothing to change| ELSE `` ).
+      MESSAGE lv_csum TYPE 'S'.
+      lo_log->display( ).
+      RETURN.
+    ENDIF.
+
     DATA(lo_eng) = NEW lcl_engine( iv_tmpl = lv_tmpl io_log = lo_log ).
 
     DATA lt_row  TYPE tt_row.
@@ -4487,6 +5282,27 @@ CLASS lcl_main IMPLEMENTATION.
     IF lv_tmpl IS INITIAL.
       MESSAGE |No customer template exists for { lcl_tmpl=>region_text( p_regn ) } | &&
               |with account group { p_ktokd }| TYPE 'E'.
+      RETURN.
+    ENDIF.
+
+    " The credit limit template is not a customer master layout.
+    IF lv_tmpl = gc_tmpl_cred.
+      DATA lt_crow TYPE tt_row.
+      DATA lt_cmsg TYPE tt_msg.
+      IF p_empty = abap_false.
+        lcl_credit=>download( EXPORTING it_key = lcl_src=>keys( it_bp = s_bp[] it_kunnr = s_kunnr[] )
+                              IMPORTING et_row = lt_crow et_msg = lt_cmsg ).
+      ENDIF.
+      DATA(lt_chead) = lcl_credit=>head( ).
+      TRY.
+          DATA(lv_cx) = lcl_xlsx=>build( iv_sheet = label( ) it_head = lt_chead it_row = lt_crow ).
+          write( lv_cx ).
+        CATCH lcx_dl INTO DATA(lx_c).
+          DATA(lv_ct) = lx_c->get_text( ).
+          MESSAGE lv_ct TYPE 'E'.
+      ENDTRY.
+      MESSAGE |{ label( ) }: { lines( lt_crow ) } data row(s) written to { p_file }| TYPE 'S'.
+      show( lt_cmsg ).
       RETURN.
     ENDIF.
 

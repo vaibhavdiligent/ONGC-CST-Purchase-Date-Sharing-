@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from abap_parse import statements, unchain
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROGS = ['src/zsds_cust_tmpl_download.prog.abap', 'src/zsds_cust_credit_upload.prog.abap',
+PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap',
          'tools/cipla/download_skeleton.abap',
          'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',

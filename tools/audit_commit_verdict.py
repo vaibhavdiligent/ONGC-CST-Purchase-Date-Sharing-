@@ -20,7 +20,7 @@ So: every commit must read its verdict.
 import os, re, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PROGS = ['src/zsds_cust_tmpl_download.prog.abap', 'src/zsds_cust_credit_upload.prog.abap',
+PROGS = ['src/zsds_cust_tmpl_download.prog.abap',
          'src/zmms_bp_mass_upload.prog.abap']
 
 findings = []

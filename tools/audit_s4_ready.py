@@ -23,7 +23,7 @@ import json, os, re, sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 DD = json.load(open(os.path.join(ROOT, 'tools/ddic.json')))
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
-         'src/zsds_cust_tmpl_download.prog.abap', 'src/zsds_cust_credit_upload.prog.abap',
+         'src/zsds_cust_tmpl_download.prog.abap',
          'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',
          'src/#ccbji#rummmdr_vend_bp_maint.prog.abap']
 
