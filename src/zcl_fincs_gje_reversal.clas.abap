@@ -186,7 +186,7 @@ CLASS zcl_fincs_gje_reversal IMPLEMENTATION.
       ( selname = gc_sel-rvs_year    kind = 'P' low = ms_sel-rvs_ryear )
       ( selname = gc_sel-rvs_period  kind = 'P' low = ms_sel-rvs_poper )
       ( selname = gc_sel-no_reversed kind = 'P' low = abap_true )   " skip already reversed
-      ( selname = gc_sel-no_reversal kind = 'P' low = abap_true ) ) " skip reversal docs
+      ( selname = gc_sel-no_reversal kind = 'P' low = abap_true ) ).  " skip reversal docs
 
     IF ms_sel-rcongr IS NOT INITIAL.
       APPEND VALUE #( selname = gc_sel-congr kind = 'P' low = ms_sel-rcongr ) TO rt_seltab.
