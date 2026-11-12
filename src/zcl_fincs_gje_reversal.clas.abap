@@ -1,15 +1,15 @@
 "! <p class="shorttext synchronized">Group journal entry reversal helper (used by custom DM task)</p>
-"!
-"! Reverses group journal entries (ACDOCU) of a given consolidation document type
-"! for one version / fiscal year / period / consolidation unit selection.
-"!
-"! Reversal is delegated to the SAP standard mass-reversal program FICRVS00
-"! (transaction CXA0), so all standard checks, number ranges, reversal flags
-"! and document links are applied exactly as in CXA0.
-"!
-"! FICRVS00 selection names taken from the system (SE38 -> Selection Texts).
-"! FICRVS00 has NO test-run flag: in test mode this class only lists the
-"! documents and does not call CXA0.
+*
+* Reverses group journal entries (ACDOCU) of a given consolidation document type
+* for one version / fiscal year / period / consolidation unit selection.
+*
+* Reversal is delegated to the SAP standard mass-reversal program FICRVS00
+* (transaction CXA0), so all standard checks, number ranges, reversal flags
+* and document links are applied exactly as in CXA0.
+*
+* FICRVS00 selection names taken from the system (SE38 - Selection Texts).
+* FICRVS00 has NO test-run flag: in test mode this class only lists the
+* documents and does not call CXA0.
 CLASS zcl_fincs_gje_reversal DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
 

@@ -1,11 +1,9 @@
 "! <p class="shorttext synchronized">Custom Data Monitor task: reverse docs of a document type</p>
-"!
-"! Implementation of BAdI BADI_FINCS_CUST_DATAMON
-"! (enhancement implementation FINCS_CUSTOM_TASK_DATA_MONITOR).
-"! BAdI filter: CONSOLIDATIONTASK = <your custom task>
-"!
-"! Flow: EXECUTE (called by the Data Monitor) -> RUN_REVERSAL
-"!       -> ZCL_FINCS_GJE_REVERSAL->EXECUTE -> SUBMIT FICRVS00 (CXA0)
+* Implementation of BAdI BADI_FINCS_CUST_DATAMON
+* (enhancement implementation FINCS_CUSTOM_TASK_DATA_MONITOR).
+* BAdI filter: CONSOLIDATIONTASK = your custom task
+* Flow: EXECUTE (called by the Data Monitor) - RUN_REVERSAL
+*       - ZCL_FINCS_GJE_REVERSAL=>EXECUTE - SUBMIT FICRVS00 (CXA0)
 CLASS zcl_fincs_cdm_reverse_badi DEFINITION
   PUBLIC FINAL CREATE PUBLIC.
 
@@ -40,7 +38,8 @@ ENDCLASS.
 CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
 
   METHOD if_badi_fincs_cust_datamon~execute.
-    DATA lt_bunit TYPE zcl_fincs_gje_reversal=>ty_selection-rbunit.
+    DATA lt_bunit    TYPE zcl_fincs_gje_reversal=>ty_selection-rbunit.
+    DATA lt_messages TYPE bapiret2_t.
 
     "-- 1. Consolidation units of this run ----------------------------------
     "   CONSOLIDATIONUNITTAB = FINCS_T_UNIT = table of FC_BUNIT
@@ -58,12 +57,12 @@ CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
     DATA(lv_ok) = run_reversal(
       EXPORTING iv_rvers    = consolidationversion
                 iv_ryear    = fiscalyear
-                iv_poper    = CONV #( fiscalperiod )
+                iv_poper    = fiscalperiod
                 iv_ritclg   = consolidationchartofaccounts
                 iv_rcongr   = consolidationgroup
                 it_rbunit   = lt_bunit
                 iv_test_run = xsdbool( isconsolidationtasktestrun IS NOT INITIAL )
-      IMPORTING et_messages = DATA(lt_messages) ).
+      IMPORTING et_messages = lt_messages ).
 
     "-- 3. Task status (CHANGING, MANDATORY on every call) ------------------
     consolidationtaskstatus = COND #( WHEN lv_ok = abap_true
