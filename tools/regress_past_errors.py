@@ -147,6 +147,10 @@ CASES = [
      'audit_incident542.py',
      [(C, "        ref_fill( EXPORTING is_ref  = ls_rknb1\n", "        lcl_util=>noop( EXPORTING is_ref  = ls_rknb1\n"),
       (C, "        ref_fill( EXPORTING is_ref  = ls_rknvv\n", "        lcl_util=>noop( EXPORTING is_ref  = ls_rknvv\n")]),
+    ('Customer: GSTIN / Tax No 3 in KNA1 (SE16N) but not in BP - written into the customer only', C,
+     'audit_incident542.py',
+     [(C, "            APPEND VALUE #( fld = ls_m-fld val = lv_cell col = ls_m-col ) TO lt_txn.\n            CONTINUE.\n",
+          "")]),
     # ---- /CCBJI/RUSDMDR_CUST_BP_MAINT, first activation in Q4R ----------
     ('Unknown column name "CHECKTABLE" - SELECT on DD05S', K,
      'audit_release_syntax.py',

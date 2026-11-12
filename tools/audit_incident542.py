@@ -72,6 +72,13 @@ for k in ('REFERENCECOMPANYCODE', 'REFERENCESALESORGANIZATION'):
     if k not in master:
         fail.append(f'customer: the reference column {k} is not read - an extension gets no '
                     f'reconciliation account, sort key or Incoterms')
+# The customer had the supplier's tax number fault too: STCD* and STCEG
+# written into KNA1, where BP does not show them.
+if not re.search(r"WHEN gc_n_cent\.\s*\n\s*IF ls_m-fld = 'STCEG'[^\n]*\n\s*APPEND[^\n]*lt_txn\.\s*\n\s*CONTINUE\.", master):
+    fail.append('customer: tax numbers (STCD1-6, STCEG) are written into KNA1 instead of the business '
+                'partner - BP shows no tax number')
+if 'ls_bp-central_data-taxnumber-taxnumbers' not in master:
+    fail.append('customer: no tax number reaches the business partner')
 if 'ref_fill(' not in master:
     fail.append('customer: nothing is copied from the reference company code and sales area')
 

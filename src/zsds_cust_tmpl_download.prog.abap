@@ -207,6 +207,7 @@ CONSTANTS:
 CONSTANTS:
   gc_i     TYPE cmd_ei_object_task VALUE 'I',   " insert
   gc_u     TYPE cmd_ei_object_task VALUE 'U',   " update
+  gc_d     TYPE cmd_ei_object_task VALUE 'D',   " delete
   gc_clear TYPE string             VALUE '#BLANK#'.
 
 CONSTANTS:
@@ -3976,6 +3977,20 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
 
     " The company code and sales area a row copies from - XD01's "reference"
     " columns. Read only: what is copied goes to the API like any other value.
+    " Tax numbers belong to the business partner (DFKKBPTAXNUM), filed by
+    " tax number category (TFKTAXNUMTYPE); CVI copies them to KNA1-STCD*.
+    METHODS tax_type_ok IMPORTING VALUE(iv_type) TYPE bptaxtype
+                        RETURNING VALUE(rv)      TYPE abap_bool.
+    " The categories a country has, for the message when one is missing.
+    METHODS tax_types_of IMPORTING VALUE(iv_land) TYPE land1
+                         RETURNING VALUE(rv)      TYPE string.
+    " The number a partner holds under a category; RV says whether it has one.
+    METHODS taxnum_of   IMPORTING VALUE(iv_partner) TYPE bu_partner
+                                  VALUE(iv_type)    TYPE bptaxtype
+                        EXPORTING ev_num            TYPE bptaxnum
+                                  ev_numxl          TYPE bptaxnumxl
+                        RETURNING VALUE(rv)         TYPE abap_bool.
+
     METHODS ref_knb1    IMPORTING VALUE(iv_kunnr) TYPE kunnr
                                   VALUE(iv_bukrs) TYPE bukrs
                         RETURNING VALUE(rs)       TYPE knb1.
@@ -4214,6 +4229,33 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD ok_ktokd.
     rv = xsdbool( line_exists( mt_ktokd[ table_line = iv ] ) ).
+  ENDMETHOD.
+
+  METHOD tax_type_ok.
+    DATA lv TYPE abap_bool.
+    SELECT SINGLE @abap_true FROM tfktaxnumtype WHERE taxtype = @iv_type INTO @lv.
+    rv = xsdbool( lv = abap_true ).
+  ENDMETHOD.
+
+  METHOD tax_types_of.
+    DATA lt_t TYPE STANDARD TABLE OF bptaxtype WITH EMPTY KEY.
+    DATA(lv_pat) = |{ iv_land }%|.
+    SELECT taxtype FROM tfktaxnumtype WHERE taxtype LIKE @lv_pat
+      ORDER BY taxtype INTO TABLE @lt_t.
+    LOOP AT lt_t INTO DATA(lv_t).
+      rv = COND #( WHEN rv IS INITIAL THEN |{ lv_t }| ELSE |{ rv }, { lv_t }| ).
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD taxnum_of.
+    CLEAR: ev_num, ev_numxl.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE taxnum, taxnumxl FROM dfkkbptaxnum
+      WHERE partner = @iv_partner AND taxtype = @iv_type
+      INTO (@ev_num, @ev_numxl).
+    rv = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
   METHOD ref_knb1.
@@ -5496,6 +5538,15 @@ CLASS lcl_engine IMPLEMENTATION.
     " column whether its cell is filled or not.
     DATA lv_tnth TYPE i.
 
+    " The tax number columns (STCD1 .. STCD6, STCEG) of the row. They go to
+    " the business partner, not into KNA1 - see step 5a.
+    TYPES: BEGIN OF ty_txn,
+             fld TYPE fieldname,
+             val TYPE string,
+             col TYPE i,
+           END OF ty_txn.
+    DATA lt_txn TYPE STANDARD TABLE OF ty_txn WITH EMPTY KEY.
+
     LOOP AT mt_map INTO DATA(ls_m) WHERE node <> gc_n_key.
       DATA(lv_cell) = lcl_util=>cell( is_row = is_row iv_col = ls_m-col ).
       IF ls_m-node = gc_n_tax.
@@ -5515,6 +5566,10 @@ CLASS lcl_engine IMPLEMENTATION.
       CASE ls_m-node.
 
         WHEN gc_n_cent.
+          IF ls_m-fld = 'STCEG' OR ( ls_m-fld CP 'STCD+' AND ls_m-fld+4(1) CA '123456' ).
+            APPEND VALUE #( fld = ls_m-fld val = lv_cell col = ls_m-col ) TO lt_txn.
+            CONTINUE.
+          ENDIF.
           set_comp( EXPORTING iv_fld = ls_m-fld iv_val = lv_cell
                               iv_cnv = ls_m-cnv iv_row = is_row-row
                               iv_struc = 'KNA1'
@@ -5915,6 +5970,67 @@ CLASS lcl_engine IMPLEMENTATION.
       IF ls_adr-data-postal-datax IS NOT INITIAL.
         APPEND ls_adr TO ls_bp-central_data-address-addresses.
       ENDIF.
+    ENDIF.
+
+    " ---- 5a. tax numbers --------------------------------------------------
+    " In S/4HANA a tax number belongs to the business partner, filed under a
+    " tax number category: the country and a digit, the digit saying which
+    " KNA1 field CVI fills from it - IN3 is India's tax number 3 (GSTIN) in
+    " STCD3, xx0 the VAT registration number in STCEG. Written into KNA1
+    " instead, the number showed in SE16N and not in BP, and the next save
+    " in BP could lose it (the same fault the supplier upload had).
+    IF lt_txn IS NOT INITIAL.
+      DATA(lv_tland) = COND land1(
+        WHEN ls_cust-central_data-address-postal-datax-country = abap_true
+        THEN ls_cust-central_data-address-postal-data-country
+        ELSE lo_cfg->cust_land1( lv_kunnr ) ).
+      LOOP AT lt_txn INTO DATA(ls_txn).
+        IF lv_tland IS INITIAL.
+          mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                       iv_struc = 'TAXNUMBER' iv_fld = ls_txn-fld
+                       iv_text = |{ ls_txn-fld } (column { ls_txn-col }) needs the customer's country - | &&
+                                 |the tax number category is chosen by country| ).
+          CONTINUE.
+        ENDIF.
+        DATA(lv_digit) = COND string( WHEN ls_txn-fld = 'STCEG' THEN `0` ELSE ls_txn-fld+4(1) ).
+        DATA(lv_ttype) = CONV bptaxtype( |{ lv_tland }{ lv_digit }| ).
+        IF lo_cfg->tax_type_ok( lv_ttype ) = abap_false.
+          DATA(lv_have_t) = lo_cfg->tax_types_of( lv_tland ).
+          mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                       iv_struc = 'TAXNUMBER' iv_fld = ls_txn-fld
+                       iv_text = |{ ls_txn-fld } "{ ls_txn-val }" (column { ls_txn-col }): the business | &&
+                                 |partner files it under tax number category { lv_ttype }, which does not | &&
+                                 |exist. { lv_tland } has: { COND string( WHEN lv_have_t IS INITIAL THEN `none`
+                                                                         ELSE lv_have_t ) } - put the number | &&
+                                 |in the column of one of those, or maintain { lv_ttype }| ).
+          CONTINUE.
+        ENDIF.
+        DATA: lv_told   TYPE bptaxnum,
+              lv_toldxl TYPE bptaxnumxl.
+        DATA(lv_thas) = lo_cfg->taxnum_of( EXPORTING iv_partner = lv_bp iv_type = lv_ttype
+                                           IMPORTING ev_num = lv_told ev_numxl = lv_toldxl ).
+        DATA ls_ctx TYPE bus_ei_bupa_taxnumber.
+        CLEAR ls_ctx.
+        ls_ctx-data_key-taxtype = lv_ttype.
+        IF ls_txn-val = gc_clear.
+          IF lv_thas = abap_false.
+            CONTINUE.                            " nothing there to remove
+          ENDIF.
+          ls_ctx-task               = gc_d.
+          ls_ctx-data_key-taxnumber = lv_told.
+          ls_ctx-data_key-taxnumxl  = lv_toldxl.
+        ELSE.
+          ls_ctx-task = COND #( WHEN lv_thas = abap_true THEN gc_u ELSE gc_i ).
+          " Up to 20 characters the number is TAXNUM; longer ones only fit
+          " TAXNUMXL, which is where BP itself keeps them.
+          IF strlen( ls_txn-val ) > 20.
+            ls_ctx-data_key-taxnumxl  = ls_txn-val.
+          ELSE.
+            ls_ctx-data_key-taxnumber = ls_txn-val.
+          ENDIF.
+        ENDIF.
+        APPEND ls_ctx TO ls_bp-central_data-taxnumber-taxnumbers.
+      ENDLOOP.
     ENDIF.
 
     IF lv_adh IS NOT INITIAL.

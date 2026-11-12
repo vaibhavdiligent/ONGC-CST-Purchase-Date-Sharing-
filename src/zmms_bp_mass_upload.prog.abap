@@ -1786,6 +1786,9 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     "! tax number category (TFKTAXNUMTYPE); CVI copies them to LFA1-STCD*.
     METHODS tax_type_ok IMPORTING VALUE(iv_type) TYPE bptaxtype
                         RETURNING VALUE(rv)      TYPE abap_bool.
+    "! The categories a country has, for the message when one is missing.
+    METHODS tax_types_of IMPORTING VALUE(iv_land) TYPE land1
+                         RETURNING VALUE(rv)      TYPE string.
     "! The number a partner holds under a category, empty if none.
     METHODS taxnum_of   IMPORTING VALUE(iv_partner) TYPE bu_partner
                                   VALUE(iv_type)    TYPE bptaxtype
@@ -2005,6 +2008,16 @@ CLASS lcl_cfg IMPLEMENTATION.
     DATA lv TYPE abap_bool.
     SELECT SINGLE @abap_true FROM tfktaxnumtype WHERE taxtype = @iv_type INTO @lv.
     rv = xsdbool( lv = abap_true ).
+  ENDMETHOD.
+
+  METHOD tax_types_of.
+    DATA lt_t TYPE STANDARD TABLE OF bptaxtype WITH EMPTY KEY.
+    DATA(lv_pat) = |{ iv_land }%|.
+    SELECT taxtype FROM tfktaxnumtype WHERE taxtype LIKE @lv_pat
+      ORDER BY taxtype INTO TABLE @lt_t.
+    LOOP AT lt_t INTO DATA(lv_t).
+      rv = COND #( WHEN rv IS INITIAL THEN |{ lv_t }| ELSE |{ rv }, { lv_t }| ).
+    ENDLOOP.
   ENDMETHOD.
 
   METHOD taxnum_of.
@@ -2768,12 +2781,18 @@ CLASS lcl_h_create IMPLEMENTATION.
 
       DATA(lv_type) = CONV bptaxtype( |{ lv_land }{ lv_d }| ).
       IF mo_cfg->tax_type_ok( lv_type ) = abap_false.
+        " Say which categories the country does have: Kenya, Morocco and
+        " Uganda have no xx0, the UAE no AE3 - the number then belongs in
+        " another column, or the category has to be maintained.
+        DATA(lv_have) = mo_cfg->tax_types_of( lv_land ).
         mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
                      iv_st = 'TAXNUMBER' iv_fl = lv_f
                      iv_txt = |{ lv_f } "{ lv_v }" (column { lv_c }): the business partner files it | &&
-                              |under tax number category { lv_type }, which does not exist. Maintain | &&
-                              |it (Business Partner > Basic Settings > Tax Numbers > Maintain Tax | &&
-                              |Number Categories) or leave the column empty| ).
+                              |under tax number category { lv_type }, which does not exist. | &&
+                              |{ lv_land } has: { COND string( WHEN lv_have IS INITIAL THEN `none`
+                                                              ELSE lv_have ) } - put the number in | &&
+                              |the column of one of those, or maintain { lv_type } (Business Partner > | &&
+                              |Basic Settings > Tax Numbers > Maintain Tax Number Categories)| ).
         ev_bad = abap_true.
         CONTINUE.
       ENDIF.
