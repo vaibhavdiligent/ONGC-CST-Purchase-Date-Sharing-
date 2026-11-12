@@ -17,7 +17,10 @@ CLASS zcl_fincs_cdm_reverse_badi DEFINITION
     CONSTANTS:
       gc_doctype_to_reverse TYPE acdocu-docty  VALUE 'XX',  " <-- doc type to reverse
       gc_ledger             TYPE acdocu-rldnr  VALUE 'Y1',  " <-- group reporting ledger
-      gc_dimension          TYPE acdocu-rdimen VALUE 'Y1'.  " <-- consolidation dimension
+      gc_dimension          TYPE acdocu-rdimen VALUE 'Y1',  " <-- consolidation dimension
+      "-- Fixed values of domain FC_STATUS (SE11 -> domain FC_STATUS -> Value Range)
+      gc_status_ok          TYPE fc_status     VALUE '??',  " <-- "executed / no errors"
+      gc_status_error       TYPE fc_status     VALUE '??'.  " <-- "executed with errors"
 
     "! Business logic, independent of the BAdI signature
     CLASS-METHODS run_reversal
@@ -66,15 +69,16 @@ CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
                 iv_test_run = xsdbool( isconsolidationtasktestrun IS NOT INITIAL )
       IMPORTING et_messages = DATA(lt_messages) ).
 
-    "-- 3. Task status (MANDATORY on every call) ----------------------------
-    "   !!! Scroll down in the parameter list: use the real exporting/changing
-    "   !!! parameter name and the values of its domain (SE11) here.
-    " consolidationtaskstatus = COND #( WHEN lv_ok = abap_true
-    "                                   THEN '<value for OK / green>'
-    "                                   ELSE '<value for error / red>' ).
+    "-- 3. Task status (CHANGING, MANDATORY on every call) ------------------
+    consolidationtaskstatus = COND #( WHEN lv_ok = abap_true
+                                      THEN gc_status_ok
+                                      ELSE gc_status_error ).
 
-    " If the signature has a message table, pass LT_MESSAGES to it, e.g.:
-    " messages = CORRESPONDING #( lt_messages ).
+    "-- 4. Messages back to the monitor (CHANGING, optional) -----------------
+    "   Copies fields with equal names (BAPIRET2 -> FINCS_SYSTEMMESSAGE_S).
+    "   Check the fields of FINCS_SYSTEMMESSAGE_S in SE11; if they are named
+    "   differently (e.g. MSGTY/MSGID/MSGNO), add a MAPPING clause.
+    APPEND LINES OF CORRESPONDING fincs_systemmessage_t( lt_messages ) TO systemmessage.
   ENDMETHOD.
 
 
