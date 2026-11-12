@@ -13,7 +13,7 @@ CLASS zcl_fincs_cdm_reverse_badi DEFINITION
 
     "-- Customer settings for this task
     CONSTANTS:
-      gc_doctype_to_reverse TYPE acdocu-docty  VALUE 'XX',  " <-- doc type to reverse
+      gc_doctype_to_reverse TYPE acdocu-docty  VALUE 'ZR',  " Std-alone Re-groupings (PL01)
       gc_ledger             TYPE acdocu-rldnr  VALUE 'Y1',  " <-- group reporting ledger
       gc_dimension          TYPE acdocu-rdimen VALUE 'Y1',  " <-- consolidation dimension
       "-- Fixed values of domain FC_STATUS (SE11 -> domain FC_STATUS -> Value Range)
