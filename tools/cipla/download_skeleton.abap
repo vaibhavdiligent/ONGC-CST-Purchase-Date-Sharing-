@@ -1857,6 +1857,14 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
                                   ev_numxl          TYPE bptaxnumxl
                         RETURNING VALUE(rv)         TYPE abap_bool.
 
+    " A digits-only code as the check table of TAB-FLD knows it: "1" stays
+    " "1" when that key exists, becomes "01" when only that one does.
+    METHODS code_padded IMPORTING iv_tab    TYPE clike
+                                  iv_fld    TYPE clike
+                                  iv_val    TYPE string
+                                  iv_len    TYPE i
+                        RETURNING VALUE(rv) TYPE string.
+
     METHODS ref_knb1    IMPORTING VALUE(iv_kunnr) TYPE kunnr
                                   VALUE(iv_bukrs) TYPE bukrs
                         RETURNING VALUE(rs)       TYPE knb1.
@@ -1884,6 +1892,14 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
            BEGIN OF ty_r2b, ktokd TYPE ktokd, role     TYPE bu_role,  END OF ty_r2b.
     DATA mt_g2b TYPE SORTED TABLE OF ty_g2b WITH UNIQUE KEY ktokd.
     DATA mt_r2b TYPE SORTED TABLE OF ty_r2b WITH NON-UNIQUE KEY ktokd.
+
+    TYPES: BEGIN OF ty_pad,
+             tab TYPE tabname,
+             fld TYPE fieldname,
+             val TYPE string,
+             out TYPE string,
+           END OF ty_pad.
+    DATA mt_pad TYPE HASHED TABLE OF ty_pad WITH UNIQUE KEY tab fld val.
 
     METHODS constructor.
 ENDCLASS.
@@ -2095,6 +2111,64 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD ok_ktokd.
     rv = xsdbool( line_exists( mt_ktokd[ table_line = iv ] ) ).
+  ENDMETHOD.
+
+  METHOD code_padded.
+    rv = iv_val.
+    IF iv_val IS INITIAL OR iv_val CN '0123456789' OR strlen( iv_val ) >= iv_len OR iv_len > 10.
+      RETURN.
+    ENDIF.
+    DATA: lv_tab TYPE tabname,
+          lv_fld TYPE fieldname.
+    lv_tab = iv_tab.
+    lv_fld = iv_fld.
+    READ TABLE mt_pad INTO DATA(ls_pad) WITH TABLE KEY tab = lv_tab fld = lv_fld val = iv_val.
+    IF sy-subrc = 0.
+      rv = ls_pad-out.
+      RETURN.
+    ENDIF.
+
+    DATA(lv_pad) = iv_val.
+    WHILE strlen( lv_pad ) < iv_len.
+      lv_pad = |0{ lv_pad }|.
+    ENDWHILE.
+
+    " The field's check table, from the dictionary. Its key field carries the
+    " field's own name (TVSB-VSBED, TVKT-KTGRD, T151-KDGRP); where it does
+    " not, the dynamic read fails and the value is left as it is.
+    DATA: lv_obj   TYPE ddobjname,
+          lv_lfld  TYPE dfies-lfieldname,
+          ls_dfies TYPE dfies.
+    lv_obj  = lv_tab.
+    lv_lfld = lv_fld.
+    CALL FUNCTION 'DDIF_FIELDINFO_GET'
+      EXPORTING
+        tabname    = lv_obj
+        lfieldname = lv_lfld
+      IMPORTING
+        dfies_wa   = ls_dfies
+      EXCEPTIONS
+        OTHERS     = 1.
+    IF sy-subrc = 0 AND ls_dfies-checktable IS NOT INITIAL AND ls_dfies-checktable <> '*'.
+      DATA(lv_ct) = CONV string( ls_dfies-checktable ).
+      " Digits only, checked above - safe to write as literals.
+      DATA(lv_w_raw) = |{ lv_fld } = '{ iv_val }'|.
+      DATA(lv_w_pad) = |{ lv_fld } = '{ lv_pad }'|.
+      DATA: lv_raw TYPE abap_bool,
+            lv_hit TYPE abap_bool.
+      TRY.
+          SELECT SINGLE @abap_true FROM (lv_ct) WHERE (lv_w_raw) INTO @lv_raw.
+          IF lv_raw = abap_false.
+            SELECT SINGLE @abap_true FROM (lv_ct) WHERE (lv_w_pad) INTO @lv_hit.
+            IF lv_hit = abap_true.
+              rv = lv_pad.
+            ENDIF.
+          ENDIF.
+        CATCH cx_sy_dynamic_osql_error.
+          rv = iv_val.
+      ENDTRY.
+    ENDIF.
+    INSERT VALUE #( tab = lv_tab fld = lv_fld val = iv_val out = rv ) INTO TABLE mt_pad.
   ENDMETHOD.
 
   METHOD tax_type_ok.
@@ -3197,7 +3271,25 @@ CLASS lcl_engine IMPLEMENTATION.
             IF lv_w = 1 AND strlen( lv_in ) > 1.
               <lv_t> = lcl_util=>flag( lv_in ).
             ELSE.
-              <lv_t> = lv_in.
+              " Excel turns a code typed as 01 into the number 1. Shipping
+              " conditions, account assignment group, customer group and the
+              " like are character keys, and "1" is not "01" in their check
+              " table. A digits-only value shorter than the field is padded
+              " when only the padded key exists there.
+              DATA lv_kind TYPE c LENGTH 1.
+              DESCRIBE FIELD <lv_t> TYPE lv_kind.
+              DATA(lv_pv) = lv_in.
+              IF lv_kind = 'C' AND lv_w > 1.
+                lv_pv = lcl_cfg=>get( )->code_padded( iv_tab = iv_struc iv_fld = iv_fld
+                                                      iv_val = lv_in    iv_len = lv_w ).
+                IF lv_pv <> lv_in.
+                  mo_log->add( iv_row = iv_row iv_type = 'I'
+                               iv_struc = iv_struc iv_fld = iv_fld
+                               iv_text = |"{ lv_in }" read as "{ lv_pv }" - Excel drops the leading | &&
+                                         |zero of a code| ).
+                ENDIF.
+              ENDIF.
+              <lv_t> = lv_pv.
             ENDIF.
         ENDCASE.
         CATCH cx_sy_conversion_error.
@@ -3636,11 +3728,15 @@ CLASS lcl_engine IMPLEMENTATION.
     DATA lv_ncopy TYPE i.
     IF lv_rbukrs IS NOT INITIAL AND lv_bukrs IS NOT INITIAL.
       DATA(ls_rknb1) = lo_cfg->ref_knb1( iv_kunnr = lv_refk iv_bukrs = lv_rbukrs ).
+      " A reference without that company code is not an error: ZREM and ZNOT
+      " rows name a reference customer that has no company code data at
+      " all, because those account groups have none. Nothing is copied and
+      " the row goes on with what it carries itself.
       IF ls_rknb1 IS INITIAL.
-        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_bukrs = lv_bukrs iv_type = 'E'
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_bukrs = lv_bukrs iv_type = 'I'
                      iv_struc = 'KNB1'
-                     iv_text = |Reference company code { lv_rbukrs }: customer { lv_refk ALPHA = OUT } | &&
-                               |is not in it, so there is nothing to copy - correct the reference columns| ).
+                     iv_text = |Reference customer { lv_refk ALPHA = OUT } has no company code | &&
+                               |{ lv_rbukrs } - no company code data copied| ).
       ELSE.
         ref_fill( EXPORTING is_ref  = ls_rknb1
                             iv_except = `,MANDT,KUNNR,BUKRS,ERDAT,ERNAM,SPERR,LOEVM,NODEL,ALTKN,` &&
@@ -3659,11 +3755,10 @@ CLASS lcl_engine IMPLEMENTATION.
       DATA(ls_rknvv) = lo_cfg->ref_knvv( iv_kunnr = lv_refk iv_vkorg = lv_rvkorg
                                          iv_vtweg = lv_rvt  iv_spart = lv_rsp ).
       IF ls_rknvv IS INITIAL.
-        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_vkorg = lv_vkorg iv_type = 'E'
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_vkorg = lv_vkorg iv_type = 'I'
                      iv_struc = 'KNVV'
-                     iv_text = |Reference sales area { lv_rvkorg }/{ lv_rvt }/{ lv_rsp }: customer | &&
-                               |{ lv_refk ALPHA = OUT } is not in it, so there is nothing to copy - | &&
-                               |correct the reference columns| ).
+                     iv_text = |Reference customer { lv_refk ALPHA = OUT } has no sales area | &&
+                               |{ lv_rvkorg }/{ lv_rvt }/{ lv_rsp } - no sales area data copied| ).
       ELSE.
         ref_fill( EXPORTING is_ref  = ls_rknvv
                             iv_except = `,MANDT,KUNNR,VKORG,VTWEG,SPART,ERDAT,ERNAM,LOEVM,` &&

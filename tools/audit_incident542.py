@@ -79,6 +79,16 @@ if not re.search(r"WHEN gc_n_cent\.\s*\n\s*IF ls_m-fld = 'STCEG'[^\n]*\n\s*APPEN
                 'partner - BP shows no tax number')
 if 'ls_bp-central_data-taxnumber-taxnumbers' not in master:
     fail.append('customer: no tax number reaches the business partner')
+# ZREM / ZNOT rows name a reference customer with no company code data -
+# that must not stop the row.
+if re.search(r"IF ls_rknb1 IS INITIAL\.\s*\n(?:\s*\".*\n)*\s*mo_log->add\([^)]*iv_type = 'E'", master):
+    fail.append('customer: a reference customer without that company code stops the row - '
+                'ZREM and ZNOT rows fail although they carry no company code data')
+# Excel turns 01 into 1.
+setc = method(C, 'lcl_engine', 'set_comp')
+if 'code_padded(' not in setc:
+    fail.append('customer: a code Excel stripped of its leading zero (shipping conditions 1 for 01) '
+                'reaches SAP unpadded')
 if 'ref_fill(' not in master:
     fail.append('customer: nothing is copied from the reference company code and sales area')
 
