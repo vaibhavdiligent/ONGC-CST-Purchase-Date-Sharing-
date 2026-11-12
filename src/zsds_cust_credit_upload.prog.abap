@@ -579,6 +579,16 @@ CLASS lcl_up DEFINITION FINAL.
     DATA mo_log TYPE REF TO lcl_log.
     DATA mo_cfg TYPE REF TO lcl_cfg.
 
+    " The risk class each partner has been given by this file so far. In
+    " ECC the risk category was per credit control area (KNKK); in SAP Credit
+    " Management the risk class is one per business partner (UKMBP_CMS).
+    TYPES: BEGIN OF ty_risk,
+             partner TYPE bu_partner,
+             risk    TYPE string,
+             row     TYPE i,
+           END OF ty_risk.
+    DATA mt_risk TYPE HASHED TABLE OF ty_risk WITH UNIQUE KEY partner.
+
     METHODS columns IMPORTING it_rows TYPE tt_row.
     METHODS one     IMPORTING is_row  TYPE ty_row.
 
@@ -769,6 +779,18 @@ CLASS lcl_up IMPLEMENTATION.
         mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_partner = lv_bp iv_sgmnt = gc_main
                      iv_type = 'I' iv_field = 'KLIMG' iv_new = lv_klimg
                      iv_msg = |"{ lv_klimg }" in KLIMG is not an amount - the main segment's limit is left as it is| ).
+      ELSE.
+        " The main segment has a currency of its own (EUR at Cipla) and the
+        " template's amounts are in the credit control area's (INR for
+        " 1000). An amount is never written across currencies.
+        DATA(lv_mcur) = mo_cfg->segment_curr( gc_main ).
+        DATA(lv_rcur) = mo_cfg->segment_curr( lv_sgmnt ).
+        IF lv_mcur <> lv_rcur.
+          mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_partner = lv_bp iv_sgmnt = gc_main
+                       iv_type = 'E' iv_field = 'KLIMG' iv_new = lv_klimg
+                       iv_msg = |The main segment { gc_main } is held in { lv_mcur }, this row's segment | &&
+                                |{ lv_sgmnt } in { lv_rcur } - leave KLIMG empty, or give the total in { lv_mcur }| ).
+        ENDIF.
       ENDIF.
     ENDIF.
 
@@ -793,6 +815,19 @@ CLASS lcl_up IMPLEMENTATION.
                    iv_type = 'E' iv_field = 'CTLPC' iv_new = lv_risk
                    iv_msg = |Risk class { lv_risk } does not exist in SAP Credit Management - | &&
                             |the ECC risk category has to be one of its risk classes| ).
+    ELSE.
+      " One risk class per partner: two rows of one customer (two credit
+      " control areas) with different risk categories cannot both be kept.
+      READ TABLE mt_risk INTO DATA(ls_rk) WITH TABLE KEY partner = lv_bp.
+      IF sy-subrc = 0 AND ls_rk-risk <> lv_risk.
+        mo_log->add( iv_row = lv_row iv_kunnr = lv_kunnr iv_partner = lv_bp
+                     iv_type = 'W' iv_field = 'CTLPC' iv_new = lv_risk
+                     iv_msg = |The risk class is one per business partner - row { ls_rk-row } gives | &&
+                              |{ ls_rk-risk }, so { lv_risk } from this row is not used| ).
+        CLEAR lv_risk.
+      ELSEIF sy-subrc <> 0.
+        INSERT VALUE #( partner = lv_bp risk = lv_risk row = lv_row ) INTO TABLE mt_risk.
+      ENDIF.
     ENDIF.
     DATA(lv_block) = to_upper( lcl_util=>cell( is_row = is_row iv_col = mv_crblb ) ).
     IF lcl_util=>no_change( lv_block ) = abap_true.
