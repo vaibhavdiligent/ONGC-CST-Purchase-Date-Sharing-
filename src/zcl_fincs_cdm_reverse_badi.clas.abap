@@ -19,8 +19,8 @@ CLASS zcl_fincs_cdm_reverse_badi DEFINITION
       gc_ledger             TYPE acdocu-rldnr  VALUE 'Y1',  " <-- group reporting ledger
       gc_dimension          TYPE acdocu-rdimen VALUE 'Y1',  " <-- consolidation dimension
       "-- Fixed values of domain FC_STATUS (SE11 -> domain FC_STATUS -> Value Range)
-      gc_status_ok          TYPE fc_status     VALUE '??',  " <-- "executed / no errors"
-      gc_status_error       TYPE fc_status     VALUE '??'.  " <-- "executed with errors"
+      gc_status_ok          TYPE fc_status     VALUE '9',   " Task: No errors
+      gc_status_error       TYPE fc_status     VALUE '8'.   " Task: Error(s)
 
     "! Business logic, independent of the BAdI signature
     CLASS-METHODS run_reversal
@@ -75,10 +75,16 @@ CLASS zcl_fincs_cdm_reverse_badi IMPLEMENTATION.
                                       ELSE gc_status_error ).
 
     "-- 4. Messages back to the monitor (CHANGING, optional) -----------------
-    "   Copies fields with equal names (BAPIRET2 -> FINCS_SYSTEMMESSAGE_S).
-    "   Check the fields of FINCS_SYSTEMMESSAGE_S in SE11; if they are named
-    "   differently (e.g. MSGTY/MSGID/MSGNO), add a MAPPING clause.
-    APPEND LINES OF CORRESPONDING fincs_systemmessage_t( lt_messages ) TO systemmessage.
+    "   BAPIRET2 -> FINCS_SYSTEMMESSAGE_S (MSGTY/MSGID/MSGNR/MSGV1-4)
+    LOOP AT lt_messages INTO DATA(ls_msg).
+      APPEND VALUE #( systemmessagetype           = ls_msg-type
+                      systemmessageidentification = ls_msg-id
+                      systemmessagenumber         = ls_msg-number
+                      systemmessagevariable1      = ls_msg-message_v1
+                      systemmessagevariable2      = ls_msg-message_v2
+                      systemmessagevariable3      = ls_msg-message_v3
+                      systemmessagevariable4      = ls_msg-message_v4 ) TO systemmessage.
+    ENDLOOP.
   ENDMETHOD.
 
 
