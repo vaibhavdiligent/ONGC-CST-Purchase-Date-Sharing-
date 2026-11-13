@@ -183,3 +183,9 @@ The note now prints the discount total value in words under *Discount total valu
 2. **SFP – interface `ZCIS_PSD_APPR_NOTE`**: open, check, activate (WA_NOTE now includes AMT_WORDS).
 3. **SFP – form `ZCIS_PSD_APPR_NOTE`**: on the *Context* tab make sure `WA_NOTE-AMT_WORDS` is active (if WA_NOTE was dragged in as a whole it appears automatically; otherwise drag the field in). In the *Layout* re-import `ZCIS_PSD_APPR_NOTE_layout.XDP` – or add a text field `AMT_WORDS` (caption "Amount in words", multi-line, width 180 mm) below `DISC_TOTAL_VALUE`, binding `$.WA_NOTE.AMT_WORDS`. Activate.
 4. **YCIS_REBATE_REPORT** (YRVG052): copy the latest program and activate (new FORMs `amount_in_words`, `num_words`, `below_hundred`).
+
+## UAT 12.11.2026 – number format at L2–L6
+
+| Observation | Change | Programs |
+|---|---|---|
+| MCQ Qty, Group Lifted Qty, Individual Lifted Qty, MCQ % and Rebate Value shown in a wrong number format (L2 screen) | These YCIS_APPRVL fields are quantity / amount types that need a unit / currency field, which the list does not have, so the grid formatted them wrongly. The list now holds them as plain numbers with a fixed format: quantities (MT) 3 decimals, MCQ % 2 decimals, Rebate Value (Rs.) 2 decimals, right-aligned, Rebate Value totalled (new FORM `num_format`). | YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |

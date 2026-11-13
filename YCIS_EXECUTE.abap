@@ -50,12 +50,12 @@ TYPES: BEGIN OF ty_out,
          waiver_1    TYPE yrva_qais_data-waiver_1,
          waiver_2    TYPE yrva_qais_data-waiver_2,
          wv_stat     TYPE ycis_apprvl-wv_stat,     " Shortfall/Customer Waiver status
-         mcq_qty     TYPE ycis_apprvl-mcq_qty,
-         lft_qty     TYPE ycis_apprvl-lft_qty,       " group lifted qty
-         ind_lft_qty TYPE ycis_apprvl-ind_lft_qty,   " individual lifted qty
-         mcq_perc    TYPE ycis_apprvl-mcq_perc,
-         elig_qty    TYPE ycis_apprvl-elig_qty,
-         rebate_val  TYPE ycis_apprvl-rebate_val,
+         mcq_qty     TYPE p LENGTH 13 DECIMALS 3,
+         lft_qty     TYPE p LENGTH 13 DECIMALS 3,       " group lifted qty
+         ind_lft_qty TYPE p LENGTH 13 DECIMALS 3,   " individual lifted qty
+         mcq_perc    TYPE p LENGTH 7 DECIMALS 2,
+         elig_qty    TYPE p LENGTH 13 DECIMALS 3,
+         rebate_val  TYPE p LENGTH 15 DECIMALS 2,
          purch_no    TYPE ycis_apprvl-purch_no,
 *        L1 & L2 verification status captured for L3 onward processing
          l1_user     TYPE ycis_apprvl-l1_user,
@@ -295,6 +295,47 @@ FORM build_fieldcat.
     add_fc 'REJ_DATE'    'Rejected On'      ''.
     add_fc 'REJ_REMARKS' 'Reject Remark'    ''.
   ENDIF.
+  PERFORM num_format.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  num_format   (quantity / % / amount columns)
+*&---------------------------------------------------------------------*
+*   GAIL UAT 12.11.2026: MCQ Qty, Group / Individual Lifted Qty, MCQ % and
+*   Rebate Value were shown in a wrong number format. In YCIS_APPRVL these
+*   are quantity / amount fields that need a unit / currency field, which
+*   the list does not carry, so the grid formatted them wrongly. The list
+*   now holds them as plain numbers and the format is fixed here:
+*   quantities in MT with 3 decimals, MCQ % and Rebate Value (Rs.) with 2
+*   decimals, right-aligned; Rebate Value is totalled.
+*&---------------------------------------------------------------------*
+FORM num_format.
+  DATA ls_fc TYPE slis_fieldcat_alv.
+  LOOP AT gt_fcat INTO ls_fc.
+    CASE ls_fc-fieldname.
+      WHEN 'MCQ_QTY' OR 'LFT_QTY' OR 'IND_LFT_QTY' OR 'ELIG_QTY'.
+        ls_fc-inttype      = 'P'.
+        ls_fc-datatype     = 'DEC'.
+        ls_fc-decimals_out = '3'.
+        ls_fc-outputlen    = 15.
+        ls_fc-just         = 'R'.
+      WHEN 'MCQ_PERC'.
+        ls_fc-inttype      = 'P'.
+        ls_fc-datatype     = 'DEC'.
+        ls_fc-decimals_out = '2'.
+        ls_fc-outputlen    = 9.
+        ls_fc-just         = 'R'.
+      WHEN 'REBATE_VAL'.
+        ls_fc-inttype      = 'P'.
+        ls_fc-datatype     = 'DEC'.
+        ls_fc-decimals_out = '2'.
+        ls_fc-outputlen    = 18.
+        ls_fc-just         = 'R'.
+        ls_fc-do_sum       = 'X'.
+      WHEN OTHERS.
+        CONTINUE.
+    ENDCASE.
+    MODIFY gt_fcat FROM ls_fc.
+  ENDLOOP.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
