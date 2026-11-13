@@ -39,6 +39,11 @@ def check(cond, text):
         fail.append(text)
 
 
+def skip_reasons():
+    m = re.search(r'\n  METHOD skip_reason\.\n(.*?)\n  ENDMETHOD\.', SRC, re.S)
+    return set(re.findall(r"WHEN '(\w+)'", m.group(1))) | {'OTHER'} if m else set()
+
+
 def main():
     rows = ROW.findall(SRC)
     check(rows, 'the program carries no column map at all')
@@ -65,6 +70,13 @@ def main():
             check(fld != '', f'{where}: a constant column carries no constant')
         elif node == '-':
             check(fld == '', f'{where}: a column that reads nothing carries a field name')
+        elif node == 'N':
+            # Not loaded: the field is the reason SKIP_REASON gives, and the
+            # upload has to warn about a filled cell rather than drop it.
+            check(fld in skip_reasons(), f'{where}: {fld} is not a reason SKIP_REASON knows')
+            check(re.search(r"WHEN gc_n_skip\.\s*\n(?:\s*\".*\n)*\s*mo_log->add\([^)]*"
+                            r"iv_type = 'W'", SRC),
+                  f'{where}: the upload does not warn about a filled column it does not load')
         else:
             fail.append(f'{where}: node {node} is not one the engine handles')
         check(hdr.strip() != '', f'{where}: the heading is blank')

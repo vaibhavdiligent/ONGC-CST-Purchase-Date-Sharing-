@@ -35,7 +35,10 @@ def engine_nodes():
     start = SRC.index('METHOD cust.')
     end = SRC.index('  ENDMETHOD.', start)
     body = SRC[start:end]
-    return {m.group(1) for m in re.finditer(r"WHEN '(.)'(?:\s+OR\s+'.')*\.", body)}
+    out = set()
+    for m in re.finditer(r"WHEN ('.'(?:\s+OR\s+'.')*)\.", body):
+        out |= set(re.findall(r"'(.)'", m.group(1)))
+    return out
 
 
 def engine_inner(node):
@@ -65,7 +68,7 @@ def value_for(node, fld):
     """What the engine would put in the cell, for a customer that has everything."""
     if node == 'X':
         return fld                      # the constant the template asks for
-    if node == '-':
+    if node in ('-', 'N'):
         return ''                       # nothing to read, by design
     if node == 'K':
         return KEY.get(fld, '')
@@ -113,7 +116,7 @@ def main():
             elif v == '':
                 blank += 1
                 # only the copy-from-reference columns are meant to be empty
-                if node != '-':
+                if node not in ('-', 'N'):
                     findings.append(f'{tmpl} column {col} ("{hdr}"): node {node} field '
                                     f'{fld} produces nothing')
             else:

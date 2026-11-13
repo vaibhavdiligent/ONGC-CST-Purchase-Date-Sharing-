@@ -41,7 +41,9 @@ for prog, path, pattern in CASES:
     seen = collections.defaultdict(list)
     for m in re.finditer(pattern, src):
         scen, col, node, fld = m.group(1), int(m.group(2)), m.group(3), m.group(4)
-        if not fld or node in ('', '-'):
+        # N: a column the program does not load - nothing is written, the
+        # field only names the reason the upload gives.
+        if not fld or node in ('', '-', 'N'):
             continue
         # FIELD#n addresses the nth occurrence of a repeating node, so the
         # occurrence is part of what is written and stays in the key.
@@ -126,7 +128,7 @@ for prog, path, pattern in CASES:
             if i == 0 or i + 1 >= len(rows):
                 continue
             prv, nxt = rows[i - 1][1], rows[i + 1][1]
-            if node in ('', '-') or prv in ('', '-') or prv != nxt or node == prv:
+            if node in ('', '-', 'N') or prv in ('', '-', 'N') or prv != nxt or node == prv:
                 continue
             if (prog, scen, col) in ISLAND_OK or (prog, scen) in ISLAND_TAB:
                 continue

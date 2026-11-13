@@ -75,6 +75,11 @@ FIXED = {
     'KNA1':   ('K', 'KUNNR'),
     'MWST': ('T', 'MWST'), 'UTXJ': ('T', 'UTXJ'),
     'UTX2': ('T', 'UTX2'), 'UTX3': ('T', 'UTX3'),
+    # Columns the program does not load (Cipla INC's YVMI tab). The field
+    # names the reason the upload gives when such a cell is filled.
+    'NL_BANK': ('N', 'BANK'), 'NL_PARTNER': ('N', 'PARTNER'),
+    'NL_CREDIT': ('N', 'CREDIT'), 'NL_COMPANY': ('N', 'COMPANY'),
+    'NL_OTHER': ('N', 'OTHER'),
 }
 
 # How a stored value is written so that the upload reads it back unchanged.
@@ -242,8 +247,9 @@ def main():
         for col, (fld, desc) in enumerate(zip(names, fmt['desc']), 1):
             if not fld:                      # a description-only block
                 seen_desc[squash(desc)] += 1
-                fld = from_description(desc, seen_desc[squash(desc)],
-                                       all_desc[squash(desc)]) or desc
+                fld = (fmt.get('named', {}).get(str(col))
+                       or from_description(desc, seen_desc[squash(desc)],
+                                           all_desc[squash(desc)]) or desc)
             if fld == 'TCODE':
                 node, target = 'X', fmt.get('tcode') or 'XD01'
             else:

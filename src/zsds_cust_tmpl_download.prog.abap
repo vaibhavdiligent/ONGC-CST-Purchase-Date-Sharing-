@@ -19,11 +19,12 @@
 *& columns of all 24 templates to prove it.
 *&
 *& Pick a region and an account group and the template follows: the
-*& workbook Cipla supplied holds 24 layouts over 79 region and account
+*& workbooks Cipla supplied hold 25 layouts over 84 region and account
 *& group combinations, and a region and an account group name exactly one
 *& of them. It is a region and not a country because the two do not line
 *& up - Europe is four countries on one template, and the United States is
-*& two entities, Exelan and Invagen, with account groups in common.
+*& three entities, Exelan, Invagen and Cipla INC, with account groups in
+*& common.
 *&
 *& The upload replaces ZSDS_CUST_MASS_UPLOAD, which is retired. That
 *& program's seven hand-written layouts belong to the earlier LSMW workbook
@@ -146,8 +147,8 @@ TYPES: BEGIN OF ty_col,
 "
 " The workbook is organised by REGION, not by country, and the two do not
 " line up. Europe is one template for four countries; the United States has
-" two entities, Exelan and Invagen, sharing three account groups between
-" them. A country and an account group therefore do not name one template,
+" three entities, Exelan, Invagen and Cipla INC, sharing account groups
+" between them. A country and an account group therefore do not name one template,
 " which is why the screen asks for the region. The country is carried along
 " for the file name and the heading - it is derived, never typed.
 TYPES: BEGIN OF ty_combi,
@@ -205,6 +206,9 @@ CONSTANTS:
   gc_n_lic  TYPE char1 VALUE 'Z',
   gc_n_iden TYPE char1 VALUE 'I',
   gc_n_cont TYPE char1 VALUE 'P',
+  " A column the program does not load - bank details, partner functions,
+  " credit fields on a creation tab. Written empty, warned about when filled.
+  gc_n_skip TYPE char1 VALUE 'N',
   gc_n_const TYPE char1 VALUE 'X'.
 
 CONSTANTS:
@@ -1065,6 +1069,9 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( regn = 'AU' land = 'AU' ktokd = 'ZEXP' tmpl = 'ab38ead5' )
       ( regn = 'AU' land = 'AU' ktokd = 'ZPLN' tmpl = '42895e0e' )
       ( regn = 'AU' land = 'AU' ktokd = 'ZSHP' tmpl = '8a74041a' )
+      ( regn = 'CI' land = 'US' ktokd = 'YSHP' tmpl = '43156406' )
+      ( regn = 'CI' land = 'US' ktokd = 'YVMI' tmpl = '8e77bb9c' )
+      ( regn = 'CI' land = 'US' ktokd = 'YVSP' tmpl = '6e6467eb' )
       ( regn = 'EU' land = 'BE' ktokd = 'YSHP' tmpl = '43156406' )
       ( regn = 'EU' land = 'ES' ktokd = 'YSHP' tmpl = '43156406' )
       ( regn = 'EU' land = 'GB' ktokd = 'YSHP' tmpl = '43156406' )
@@ -1143,6 +1150,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
 
     mt_regn = VALUE tt_regn(
       ( regn = 'AU' text = 'Australia (AU)' )
+      ( regn = 'CI' text = 'Cipla INC (US)' )
       ( regn = 'AE' text = 'Dubai (AE)' )
       ( regn = 'EU' text = 'Europe (GB/BE/ES/NL)' )
       ( regn = 'EX' text = 'Exelan (US)' )
@@ -1544,11 +1552,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'EXTN' col = 48  hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
       ( tmpl = 'EXTN' col = 49  hdr = 'Exchange Rate Type' node = 'S' fld = 'KURST' fmt = '' cnv = '' )
     "  32831d38 - 88 columns - IN/ZPY1
-    ).
-  ENDMETHOD.
-
-  METHOD map_2.
-    rt = VALUE tt_col(
       ( tmpl = '32831d38' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 2   hdr = 'Ref Customer Code  as sample' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '32831d38' col = 3   hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' cnv = '' )
@@ -1582,6 +1585,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '32831d38' col = 31  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 32  hdr = 'Region (State, Province, County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 33  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_2.
+    rt = VALUE tt_col(
       ( tmpl = '32831d38' col = 34  hdr = 'First telephone no.: dialling code+number' node = 'M' fld = 'TEL' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 35  hdr = 'First Mobile Telephone No.: Dialing Code + Number' node = 'M' fld = 'MOB' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 36  hdr = 'First fax no.: dialling code+number' node = 'M' fld = 'FAX' fmt = '' cnv = '' )
@@ -1886,11 +1894,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '67849f38' col = 17  hdr = 'Name 3' node = 'A' fld = 'NAME_3' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 18  hdr = 'Name 4' node = 'A' fld = 'NAME_4' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 19  hdr = 'Search Term 1' node = 'A' fld = 'SORT1' fmt = '' cnv = '' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_3.
-    rt = VALUE tt_col(
       ( tmpl = '67849f38' col = 20  hdr = 'Search Term 2' node = 'A' fld = 'SORT2' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 21  hdr = 'c/o name' node = 'A' fld = 'C_O_NAME' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 22  hdr = 'Street 2' node = 'A' fld = 'STR_SUPPL1' fmt = '' cnv = '' )
@@ -1957,6 +1960,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '67849f38' col = 83  hdr = 'SD Document Currency' node = 'Z' fld = 'CURRENCY' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 84  hdr = 'BG Issue Date' node = 'Z' fld = 'BG_ISS_DT' fmt = '' cnv = 'DT' )
       ( tmpl = '67849f38' col = 85  hdr = 'BG Expiry Date' node = 'Z' fld = 'BG_EXP_DT' fmt = '' cnv = 'DT' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_3.
+    rt = VALUE tt_col(
       ( tmpl = '67849f38' col = 86  hdr = 'BG Issuing Bank' node = 'Z' fld = 'BG_ISS_BANK' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 87  hdr = 'Agreement Expiry Date' node = 'Z' fld = 'AGGR_EXPDT' fmt = '' cnv = 'DT' )
       ( tmpl = '67849f38' col = 88  hdr = 'Appointment Date' node = 'Z' fld = 'APPOINT_DT' fmt = '' cnv = 'DT' )
@@ -2228,11 +2236,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '6e6467eb' col = 34  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
       ( tmpl = '6e6467eb' col = 35  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 36  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_4.
-    rt = VALUE tt_col(
       ( tmpl = '6e6467eb' col = 37  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 38  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 39  hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' cnv = '' )
@@ -2332,6 +2335,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '80d23dd8' col = 57  hdr = 'Maximum Number of Partial Deliveries Allowed Per Item' node = 'S' fld = 'ANTLF' fmt = '' cnv = 'NM' )
       ( tmpl = '80d23dd8' col = 58  hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 59  hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_4.
+    rt = VALUE tt_col(
       ( tmpl = '80d23dd8' col = 60  hdr = 'Account Assignment Group for Customer' node = 'S' fld = 'KTGRD' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 61  hdr = 'Tax classification for customer' node = 'T' fld = 'MWST' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 62  hdr = 'UTX2' node = 'T' fld = 'UTX2' fmt = '' cnv = '' )
@@ -2462,6 +2470,204 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '8a74041a' col = 71  hdr = '21B. Lic. No.' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
       ( tmpl = '8a74041a' col = 72  hdr = 'SL_EXEMPT' node = 'Z' fld = 'SL_EXEMPT' fmt = '' cnv = '' )
       ( tmpl = '8a74041a' col = 73  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+    "  8e77bb9c - 197 columns - US/YVMI
+      ( tmpl = '8e77bb9c' col = 1   hdr = 'Customer Code' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
+      ( tmpl = '8e77bb9c' col = 2   hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 3   hdr = 'Sales Organization' node = 'K' fld = 'VKORG' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 4   hdr = 'Distribution Channel' node = 'K' fld = 'VTWEG' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 5   hdr = 'Division' node = 'K' fld = 'SPART' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 6   hdr = 'Customer Account Group' node = 'K' fld = 'KTOKD' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 7   hdr = 'Always X' node = 'X' fld = 'X' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 8   hdr = 'Title text' node = 'A' fld = 'TITLE' fmt = 'TT' cnv = 'TT' )
+      ( tmpl = '8e77bb9c' col = 9   hdr = 'Name 1' node = 'A' fld = 'NAME' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 10  hdr = 'Name 2' node = 'A' fld = 'NAME_2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 11  hdr = 'Name 3' node = 'A' fld = 'NAME_3' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 12  hdr = 'Name 4' node = 'A' fld = 'NAME_4' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 13  hdr = 'Search Term 1' node = 'A' fld = 'SORT1' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 14  hdr = 'Search Term 2' node = 'A' fld = 'SORT2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 15  hdr = 'C/O Name' node = 'A' fld = 'C_O_NAME' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 16  hdr = 'Street 2' node = 'A' fld = 'STR_SUPPL1' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 17  hdr = 'Street 3' node = 'A' fld = 'STR_SUPPL2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 18  hdr = 'Street' node = 'A' fld = 'STREET' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 19  hdr = 'House No' node = 'A' fld = 'HOUSE_NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 20  hdr = 'Street 4' node = 'A' fld = 'STR_SUPPL3' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 21  hdr = 'Street 5' node = 'A' fld = 'LOCATION' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 22  hdr = 'District' node = 'A' fld = 'DISTRICT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 23  hdr = 'City postal code' node = 'A' fld = 'POSTL_COD1' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 24  hdr = 'City' node = 'A' fld = 'CITY' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 25  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 26  hdr = 'Region (State Province County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 27  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
+      ( tmpl = '8e77bb9c' col = 28  hdr = 'First telephone no.: dialling code+number' node = 'M' fld = 'TEL' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 29  hdr = 'First Mobile Telephone No.: Dialing Code + Number' node = 'M' fld = 'MOB' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 30  hdr = 'First fax no.: dialling code+number' node = 'M' fld = 'FAX' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 31  hdr = 'E-Mail Address' node = 'M' fld = 'SMT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 32  hdr = 'Second Email Address' node = 'N' fld = 'OTHER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 33  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 34  hdr = 'Attribute 5' node = 'C' fld = 'KATR5' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 35  hdr = 'Attribute 8' node = 'C' fld = 'KATR8' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 36  hdr = 'Customer Classification' node = 'C' fld = 'KUKLA' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 37  hdr = 'Corporate Group' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 38  hdr = 'Tax Number 3' node = 'C' fld = 'STCD3' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 39  hdr = 'Pan No' node = 'C' fld = 'J_1IPANNO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 40  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
+      ( tmpl = '8e77bb9c' col = 41  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 42  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
+      ( tmpl = '8e77bb9c' col = 43  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 44  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 45  hdr = 'Prev. Account No.' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
+      ( tmpl = '8e77bb9c' col = 46  hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 47  hdr = 'Tolerance group' node = 'B' fld = 'TOGRU' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 48  hdr = 'Indicator: Record Payment History' node = 'B' fld = 'XZVER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 49  hdr = 'List of the Payment Methods to be Considered' node = 'B' fld = 'ZWELS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 50  hdr = 'Lockbox' node = 'B' fld = 'LOCKB' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 51  hdr = 'Clerk Abbrev.' node = 'B' fld = 'BUSAB' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 52  hdr = 'Account Statement' node = 'B' fld = 'XAUSZ' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 53  hdr = 'ID for mainly non-military use' node = 'C' fld = 'CIVVE' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 54  hdr = 'Sales district' node = 'S' fld = 'BZIRK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 55  hdr = 'Order probab.   100' node = 'S' fld = 'AWAHR' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 56  hdr = 'Sales Office' node = 'S' fld = 'VKBUR' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 57  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 58  hdr = 'Customer group' node = 'S' fld = 'KDGRP' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 59  hdr = 'Customer classification (ABC analysis)' node = 'S' fld = 'KLABC' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 60  hdr = 'Currency' node = 'S' fld = 'WAERS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 61  hdr = 'Price group' node = 'S' fld = 'KONDA' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 62  hdr = 'Cust.pric.proc.' node = 'S' fld = 'KALKS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 63  hdr = 'Cust.Stats.Grp' node = 'S' fld = 'VERSG' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 64  hdr = 'Delivery Prior.' node = 'S' fld = 'LPRIO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 65  hdr = 'Order Combination Indicator' node = 'S' fld = 'KZAZU' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 66  hdr = 'Shipping Conditions' node = 'S' fld = 'VSBED' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 67  hdr = 'Delivering Plant' node = 'S' fld = 'VWERK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 68  hdr = 'Complete Delivery CheckBox' node = 'S' fld = 'AUTLF' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 69  hdr = 'Partial delivery per item' node = 'S' fld = 'KZTLF' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 70  hdr = 'Maximum Number of Partial Deliveries Allowed Per Item' node = 'S' fld = 'ANTLF' fmt = '' cnv = 'NM' )
+      ( tmpl = '8e77bb9c' col = 71  hdr = 'Incoterms' node = 'S' fld = 'INCO1' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 72  hdr = 'Incoterms2' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 73  hdr = 'Terms of Payment Key' node = 'S' fld = 'ZTERM' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 74  hdr = 'Account Assignment Group for Customer' node = 'S' fld = 'KTGRD' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 75  hdr = 'Tax classification for MWST' node = 'T' fld = 'MWST' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 76  hdr = 'Tax classification for UTX2' node = 'T' fld = 'UTX2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 77  hdr = 'Tax classification for UTX3' node = 'T' fld = 'UTX3' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 78  hdr = 'Tax classification for UTXJ' node = 'T' fld = 'UTXJ' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 79  hdr = 'Customer group 1' node = 'S' fld = 'KVGR1' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 80  hdr = 'Customer group 2' node = 'S' fld = 'KVGR2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 81  hdr = 'Customer group 3' node = 'S' fld = 'KVGR3' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 82  hdr = 'Customer group 4' node = 'S' fld = 'KVGR4' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 83  hdr = 'Customer group 5' node = 'S' fld = 'KVGR5' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 84  hdr = 'Bank Country 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 85  hdr = 'Bank Key 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 86  hdr = 'Bank Account Number 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 87  hdr = 'Bank Account Holder Name 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 88  hdr = 'Partner Bank Type 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 89  hdr = 'Reference Details 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 90  hdr = 'Collection Authorisation 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 91  hdr = 'Bank Control Key 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 92  hdr = 'Bank Name 1' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 93  hdr = 'Bank Country 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 94  hdr = 'Bank Key 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 95  hdr = 'Bank Account Number 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 96  hdr = 'Bank Accoutn Holder Name 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 97  hdr = 'Partner Bank Type 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 98  hdr = 'Reference Details 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 99  hdr = 'Collection Authorisation 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 100 hdr = 'Bank Control Key 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 101 hdr = 'Bank Name 2' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 102 hdr = 'Bank Country 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 103 hdr = 'Bank Key 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 104 hdr = 'Bank Account Number 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 105 hdr = 'Bank Accoutn Holder Name 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 106 hdr = 'Partner Bank Type 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 107 hdr = 'Reference Details 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 108 hdr = 'Collection Authorisation 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 109 hdr = 'Bank Control Key 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 110 hdr = 'Bank Name 3' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 111 hdr = 'Bank Country 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 112 hdr = 'Bank Key 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 113 hdr = 'Bank Account Number 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 114 hdr = 'Bank Accoutn Holder Name 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 115 hdr = 'Partner Bank Type 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 116 hdr = 'Reference Details 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 117 hdr = 'Collection Authorisation 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 118 hdr = 'Bank Control Key 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 119 hdr = 'Bank Name 4' node = 'N' fld = 'BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 120 hdr = 'Partner Functn add Ship to party' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 121 hdr = 'Partner Functn add Payer' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 122 hdr = 'Partner Functn add Bill to Party' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 123 hdr = 'Ship to party code' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 124 hdr = 'Payercode' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 125 hdr = 'Bill to party  code' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 126 hdr = 'Default Partner' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 127 hdr = 'Default Partner' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 128 hdr = 'Default Partner' node = 'N' fld = 'PARTNER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 129 hdr = 'Plant' node = 'Z' fld = 'WERKS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 130 hdr = 'Transit Day' node = 'Z' fld = 'CUST_TRNST_DAYS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 131 hdr = 'Distance in kms.' node = 'Z' fld = 'KMSUM' fmt = '' cnv = 'NM' )
+      ( tmpl = '8e77bb9c' col = 132 hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 133 hdr = 'DEA_exempt' node = 'Z' fld = 'DEA_EXEMPT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 134 hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 135 hdr = 'SL_EXEMPT' node = 'Z' fld = 'SL_EXEMPT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 136 hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 137 hdr = 'Food Lic' node = 'Z' fld = 'FOODSLICENSE' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 138 hdr = 'Food Lic Valid Date' node = 'Z' fld = 'FL_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 139 hdr = 'Sch. X Wh.Sale Lic No' node = 'Z' fld = 'SCHXNO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 140 hdr = 'Schedule-X Wh.Sale Lic. Exp. Date' node = 'Z' fld = 'SCHX_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 141 hdr = 'Sch. X Retail Lic No' node = 'Z' fld = 'SCHXRNO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 142 hdr = 'Sch. X Retail Lic Exp. Date' node = 'Z' fld = 'SCHXR_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 143 hdr = 'Retails Lic No (20 and 21 )' node = 'Z' fld = 'RETAIL_LIC_NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 144 hdr = 'SC_EXEMPT' node = 'Z' fld = 'SC_EXEMPT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 145 hdr = 'Retails Lic Exp date' node = 'Z' fld = 'RETAIL_EXP' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 146 hdr = 'Mfg License (Gen) Number' node = 'Z' fld = 'MFGLIC1NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 147 hdr = 'Mfg License (Nar) Number' node = 'Z' fld = 'MFGLIC2NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 148 hdr = 'Mfg License (CC) Number' node = 'Z' fld = 'MFGLIC3NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 149 hdr = 'Bank Guarantee(Y/N)' node = 'Z' fld = 'BGYN' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 150 hdr = 'Bank Guarantee No' node = 'Z' fld = 'BG_NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 151 hdr = 'BG Amount' node = 'Z' fld = 'BG_AMT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 152 hdr = 'SD Document Currency' node = 'Z' fld = 'CURRENCY' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 153 hdr = 'BG Issue Date' node = 'Z' fld = 'BG_ISS_DT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 154 hdr = 'BG Expiry Date' node = 'Z' fld = 'BG_EXP_DT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 155 hdr = 'BG Issuing Bank' node = 'Z' fld = 'BG_ISS_BANK' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 156 hdr = 'Agreement Expiry Date' node = 'Z' fld = 'AGGR_EXPDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 157 hdr = 'Appointment Date' node = 'Z' fld = 'APPOINT_DT' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 158 hdr = 'Customer group' node = 'Z' fld = 'KDGRP' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 159 hdr = 'AIOCD Code' node = 'Z' fld = 'AIOCD_CODE' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 160 hdr = 'Customer Bank Name' node = 'Z' fld = 'CUST_BNK_NAME' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 161 hdr = 'Destination of Booking' node = 'Z' fld = 'DST_BOOKING' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 162 hdr = 'Route Code' node = 'Z' fld = 'ZTROUT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 163 hdr = 'Extension' node = 'Z' fld = 'EXTENSION' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 164 hdr = 'Route' node = 'Z' fld = 'ZCROUT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 165 hdr = 'GLN URI Format' node = 'Z' fld = 'GLN_URI_FORMAT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 166 hdr = 'DUNS_Number' node = 'Z' fld = 'DUNS_NUMBER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 167 hdr = 'DEA From Date' node = 'Z' fld = 'DEA_FROM_DATE' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 168 hdr = 'DEA To Date' node = 'Z' fld = 'DEA_TO_DATE' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 169 hdr = 'Import_License/MIA' node = 'Z' fld = 'ZIMP_LIC_MIA' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 170 hdr = 'State From Date' node = 'Z' fld = 'STATE_FROM_DATE' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 171 hdr = 'State To Date' node = 'Z' fld = 'STATE_TO_DATE' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 172 hdr = 'IMPL/MIA_From_Date' node = 'Z' fld = 'ZIMP_FROMDT_MIA' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 173 hdr = 'IMPL/MIA_To_Date' node = 'Z' fld = 'ZIMP_VALIDDT_MIA' fmt = '' cnv = 'DT' )
+      ( tmpl = '8e77bb9c' col = 174 hdr = 'CHECK_DIGIT' node = 'Z' fld = 'CHECK_DIGIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 175 hdr = 'Global Company Prefi' node = 'Z' fld = 'GLOBAL_COM' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 176 hdr = 'Location Number' node = 'Z' fld = 'LOCATION_NUMBER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 177 hdr = 'Backorder Days' node = 'Z' fld = 'BO_DAYS' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 178 hdr = 'SHIP_FULL_LOT' node = 'N' fld = 'OTHER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 179 hdr = 'Credit Control Area' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 180 hdr = 'Credit limit: Total limit across all control areas' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 181 hdr = 'Credit limit: Limit for individual control area' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 182 hdr = 'Currency Key' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 183 hdr = 'Customer''s credit limit' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 184 hdr = 'Customer''s account number with credit limit reference' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 185 hdr = 'Date of credit horizon' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 186 hdr = 'Credit management: Risk category' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 187 hdr = 'Indicator: Blocked by credit management ?' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 188 hdr = 'Credit representative group for credit management' node = 'N' fld = 'CREDIT' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 189 hdr = 'Company Code' node = 'N' fld = 'COMPANY' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 190 hdr = 'Tolerance' node = 'N' fld = 'COMPANY' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 191 hdr = 'UPS Text' node = 'N' fld = 'OTHER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 192 hdr = 'ZFDX' node = 'N' fld = 'OTHER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 193 hdr = 'ZUPS' node = 'N' fld = 'OTHER' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 194 hdr = 'Attribute 7' node = 'C' fld = 'KATR7' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 195 hdr = 'PDP ID' node = 'Z' fld = 'PDPID' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 196 hdr = 'NPI_NO' node = 'Z' fld = 'NPI_NO' fmt = '' cnv = '' )
+      ( tmpl = '8e77bb9c' col = 197 hdr = 'AUTH_CODE' node = 'Z' fld = 'AUTH_CODE' fmt = '' cnv = '' )
     "  9c914100 - 140 columns - AU/ZCDP, BE/ZCDP, ES/ZCDP, GB/ZCDP, IN/ZCDP, MA/ZCDP, MA/ZOTC, NL/ZCDP, UG/ZCDP, UG/ZOTC, US/ZCDP
       ( tmpl = '9c914100' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 2   hdr = 'Ref Customer Code  as sample' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
@@ -2504,6 +2710,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '9c914100' col = 39  hdr = 'Attribute 1' node = 'C' fld = 'KATR1' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 40  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 41  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_5.
+    rt = VALUE tt_col(
       ( tmpl = '9c914100' col = 42  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 43  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 44  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
@@ -2570,11 +2781,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '9c914100' col = 105 hdr = 'Sch. X Retail Lic Exp. Date' node = 'Z' fld = 'SCHXR_VALIDDT' fmt = '' cnv = 'DT' )
       ( tmpl = '9c914100' col = 106 hdr = 'Retails Lic No (20 and 21 )' node = 'Z' fld = 'RETAIL_LIC_NO' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 107 hdr = 'SC_EXEMPT' node = 'Z' fld = 'SC_EXEMPT' fmt = '' cnv = '' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_5.
-    rt = VALUE tt_col(
       ( tmpl = '9c914100' col = 108 hdr = 'Retails Lic Exp date' node = 'Z' fld = 'RETAIL_EXP' fmt = '' cnv = 'DT' )
       ( tmpl = '9c914100' col = 109 hdr = 'Mfg License (Gen) Number' node = 'Z' fld = 'MFGLIC1NO' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 110 hdr = 'Mfg License (Nar) Number' node = 'Z' fld = 'MFGLIC2NO' fmt = '' cnv = '' )
@@ -2879,6 +3085,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 28  hdr = 'District' node = 'A' fld = 'DISTRICT' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 29  hdr = 'City postal code' node = 'A' fld = 'POSTL_COD1' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 30  hdr = 'City' node = 'A' fld = 'CITY' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_6.
+    rt = VALUE tt_col(
       ( tmpl = 'e10ec770' col = 31  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 32  hdr = 'Region (State, Province, County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 33  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
@@ -2912,11 +3123,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 61  hdr = 'Indicator: Record Payment History ?' node = 'B' fld = 'XZVER' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 62  hdr = 'List of the Payment Methods to be Considered' node = 'B' fld = 'ZWELS' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 63  hdr = 'Sales district' node = 'S' fld = 'BZIRK' fmt = '' cnv = '' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_6.
-    rt = VALUE tt_col(
       ( tmpl = 'e10ec770' col = 64  hdr = 'Order probab.' node = 'S' fld = 'AWAHR' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 65  hdr = 'Sales Office' node = 'S' fld = 'VKBUR' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 66  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
@@ -3625,7 +3831,9 @@ CLASS lcl_eng IMPLEMENTATION.
 
               " Copying from a reference is an XD01 feature. A customer
               " that exists has no reference, so the column stays empty.
-            WHEN '-'.
+              " N is a column the program does not load (bank details,
+              " partner functions, credit fields); it stays empty as well.
+            WHEN '-' OR 'N'.
               CLEAR lv_val.
 
             WHEN 'K'.
@@ -5094,6 +5302,11 @@ CLASS lcl_engine DEFINITION FINAL.
 
     METHODS master IMPORTING is_row TYPE ty_row.
 
+    " Why a column of the kind IV_WHAT (BANK, PARTNER, CREDIT, COMPANY,
+    " OTHER) is not loaded, and where it is maintained instead.
+    METHODS skip_reason IMPORTING iv_what   TYPE clike
+                        RETURNING VALUE(rv) TYPE string.
+
     " Fills, from a stored KNB1 or KNVV row, every field of the API data the
     " file did not fill itself - what XD01 did with its reference columns.
     " The file always wins: a field whose DATAX flag is already set is left
@@ -5471,6 +5684,24 @@ CLASS lcl_engine IMPLEMENTATION.
                            |{ lv_kunnr ALPHA = OUT } is used| ).
     rv = lv_kunnr.
   ENDMETHOD.
+
+  METHOD skip_reason.
+    CASE iv_what.
+      WHEN 'BANK'.
+        rv = `bank details belong to the business partner; maintain them in transaction BP`.
+      WHEN 'PARTNER'.
+        rv = `partner functions are not loaded here; maintain them in transaction BP, ` &&
+             `sales area data, Partner Functions`.
+      WHEN 'CREDIT'.
+        rv = `credit limits are loaded with the Credit limit template of this program`.
+      WHEN 'COMPANY'.
+        rv = `only one company code is loaded from a row; a further one is added with the ` &&
+             `Customer extension template`.
+      WHEN OTHERS.
+        rv = `this program has no customer master field for it`.
+    ENDCASE.
+  ENDMETHOD.
+
 
   METHOD set_comp.
     ASSIGN COMPONENT iv_fld OF STRUCTURE cs_data TO FIELD-SYMBOL(<lv_t>).
@@ -5918,6 +6149,15 @@ CLASS lcl_engine IMPLEMENTATION.
                        iv_text = |Column { ls_m-col } ({ ls_m-fld }) is a contact person | &&
                                  |field - contact persons are separate business partners and | &&
                                  |are not loaded here; maintain them in transaction BP| ).
+
+        WHEN gc_n_skip.
+          " Cipla INC's YVMI tab carries columns this program has nowhere to
+          " put: four bank blocks, partner functions, the credit fields, a
+          " second company code. A filled cell is reported, never dropped
+          " silently, so the file's owner knows to maintain it elsewhere.
+          mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                       iv_struc = 'FILE' iv_fld = ls_m-fld
+                       iv_text = |Column { ls_m-col } is not loaded - { skip_reason( ls_m-fld ) }| ).
 
         WHEN gc_n_const OR '-'.
           " The transaction code the old recording carried, the "always X"

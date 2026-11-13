@@ -19,11 +19,12 @@
 *& columns of all 24 templates to prove it.
 *&
 *& Pick a region and an account group and the template follows: the
-*& workbook Cipla supplied holds 24 layouts over 79 region and account
+*& workbooks Cipla supplied hold 25 layouts over 84 region and account
 *& group combinations, and a region and an account group name exactly one
 *& of them. It is a region and not a country because the two do not line
 *& up - Europe is four countries on one template, and the United States is
-*& two entities, Exelan and Invagen, with account groups in common.
+*& three entities, Exelan, Invagen and Cipla INC, with account groups in
+*& common.
 *&
 *& The upload replaces ZSDS_CUST_MASS_UPLOAD, which is retired. That
 *& program's seven hand-written layouts belong to the earlier LSMW workbook
@@ -146,8 +147,8 @@ TYPES: BEGIN OF ty_col,
 "
 " The workbook is organised by REGION, not by country, and the two do not
 " line up. Europe is one template for four countries; the United States has
-" two entities, Exelan and Invagen, sharing three account groups between
-" them. A country and an account group therefore do not name one template,
+" three entities, Exelan, Invagen and Cipla INC, sharing account groups
+" between them. A country and an account group therefore do not name one template,
 " which is why the screen asks for the region. The country is carried along
 " for the file name and the heading - it is derived, never typed.
 TYPES: BEGIN OF ty_combi,
@@ -205,6 +206,9 @@ CONSTANTS:
   gc_n_lic  TYPE char1 VALUE 'Z',
   gc_n_iden TYPE char1 VALUE 'I',
   gc_n_cont TYPE char1 VALUE 'P',
+  " A column the program does not load - bank details, partner functions,
+  " credit fields on a creation tab. Written empty, warned about when filled.
+  gc_n_skip TYPE char1 VALUE 'N',
   gc_n_const TYPE char1 VALUE 'X'.
 
 CONSTANTS:
@@ -1491,7 +1495,9 @@ CLASS lcl_eng IMPLEMENTATION.
 
               " Copying from a reference is an XD01 feature. A customer
               " that exists has no reference, so the column stays empty.
-            WHEN '-'.
+              " N is a column the program does not load (bank details,
+              " partner functions, credit fields); it stays empty as well.
+            WHEN '-' OR 'N'.
               CLEAR lv_val.
 
             WHEN 'K'.
@@ -2960,6 +2966,11 @@ CLASS lcl_engine DEFINITION FINAL.
 
     METHODS master IMPORTING is_row TYPE ty_row.
 
+    " Why a column of the kind IV_WHAT (BANK, PARTNER, CREDIT, COMPANY,
+    " OTHER) is not loaded, and where it is maintained instead.
+    METHODS skip_reason IMPORTING iv_what   TYPE clike
+                        RETURNING VALUE(rv) TYPE string.
+
     " Fills, from a stored KNB1 or KNVV row, every field of the API data the
     " file did not fill itself - what XD01 did with its reference columns.
     " The file always wins: a field whose DATAX flag is already set is left
@@ -3337,6 +3348,24 @@ CLASS lcl_engine IMPLEMENTATION.
                            |{ lv_kunnr ALPHA = OUT } is used| ).
     rv = lv_kunnr.
   ENDMETHOD.
+
+  METHOD skip_reason.
+    CASE iv_what.
+      WHEN 'BANK'.
+        rv = `bank details belong to the business partner; maintain them in transaction BP`.
+      WHEN 'PARTNER'.
+        rv = `partner functions are not loaded here; maintain them in transaction BP, ` &&
+             `sales area data, Partner Functions`.
+      WHEN 'CREDIT'.
+        rv = `credit limits are loaded with the Credit limit template of this program`.
+      WHEN 'COMPANY'.
+        rv = `only one company code is loaded from a row; a further one is added with the ` &&
+             `Customer extension template`.
+      WHEN OTHERS.
+        rv = `this program has no customer master field for it`.
+    ENDCASE.
+  ENDMETHOD.
+
 
   METHOD set_comp.
     ASSIGN COMPONENT iv_fld OF STRUCTURE cs_data TO FIELD-SYMBOL(<lv_t>).
@@ -3784,6 +3813,15 @@ CLASS lcl_engine IMPLEMENTATION.
                        iv_text = |Column { ls_m-col } ({ ls_m-fld }) is a contact person | &&
                                  |field - contact persons are separate business partners and | &&
                                  |are not loaded here; maintain them in transaction BP| ).
+
+        WHEN gc_n_skip.
+          " Cipla INC's YVMI tab carries columns this program has nowhere to
+          " put: four bank blocks, partner functions, the credit fields, a
+          " second company code. A filled cell is reported, never dropped
+          " silently, so the file's owner knows to maintain it elsewhere.
+          mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                       iv_struc = 'FILE' iv_fld = ls_m-fld
+                       iv_text = |Column { ls_m-col } is not loaded - { skip_reason( ls_m-fld ) }| ).
 
         WHEN gc_n_const OR '-'.
           " The transaction code the old recording carried, the "always X"

@@ -37,6 +37,10 @@ def allowed(head, mine, theirs):
     # person's on the one that carries a contact person.
     if node == 'P' and squash(head) == 'NAME1':
         return True
+    # Cipla INC's YVMI tab repeats "Company Code" near its end for a second
+    # company code, which is not loaded from that tab.
+    if node == 'N':
+        return True
     return False
 
 

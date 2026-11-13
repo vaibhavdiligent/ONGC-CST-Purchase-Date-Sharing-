@@ -45,6 +45,9 @@ SHEET_COUNTRY = {
     'SAGA':      ['ZA'],    # inferred from the sample rows, no country word on the sheet
     'cust extn': ['*'],     # extension template, valid for any country
     'block unblock': ['*'],  # XD05, valid for any country
+    # Cipla USA (company code and sales organisation 5000), sent separately on
+    # 13 November 2026 as docs/cipla/customer_template_cipla_inc.xlsx.
+    'Cipla INC':     ['US'],
 }
 
 # The workbook is organised by REGION, not by country, and the two do not line up:
@@ -66,6 +69,7 @@ SHEET_REGION = {
     'SAGA':          ('ZA', 'SAGA'),
     'cust extn':     ('CX', 'Customer extension'),
     'block unblock': ('BU', 'Block / unblock'),
+    'Cipla INC':     ('CI', 'Cipla INC'),
 }
 
 # The QCIL export block holds two layouts at once: a technical row copied from the
@@ -103,7 +107,51 @@ ADD_COLUMNS = {
 # same indirect and tolling customers as Exelan; the dropdown for Invagen did not
 # offer YVMI and YVTO. They take the layout of Invagen's own US sold-to block.
 ADD_COMBOS = [('Invagen', 'YVMI', ('Invagen', 'YVSP')),
-              ('Invagen', 'YVTO', ('Invagen', 'YVSP'))]
+              ('Invagen', 'YVTO', ('Invagen', 'YVSP')),
+              # Cipla INC's "INC - YVSP" tab has Exelan's YVSP columns, and
+              # "INC-YSHP" Exelan's YSHP columns, field for field.
+              ('Cipla INC', 'YVSP', ('Exelan', 'YVSP')),
+              ('Cipla INC', 'YSHP', ('Exelan', 'YSHP'))]
+
+# Cipla INC's "INC-YVMI" tab is a layout of its own: 197 columns, one heading
+# row of descriptions and no technical row, the data from row 2. The columns
+# the description alone cannot name are given here by column number; the
+# others are read from the description as on every description-only tab.
+# BANK, PARTNER, CREDIT, COMPANY and OTHER are columns the program does not
+# load: the download leaves them empty and the upload warns when one is filled.
+INC_BOOK = 'docs/cipla/customer_template_cipla_inc.xlsx'
+INC_TABS = [('INC-YVMI', 'YVMI')]
+INC_NAMED = {
+    19: 'HOUSE_NUM1',  32: 'NL_OTHER',    # a second e-mail address
+    34: 'KATR5', 35: 'KATR8', 36: 'KUKLA', 37: 'KONZS', 39: 'J_1IPANNO',
+    45: 'ALTKN', 51: 'BUSAB', 52: 'XAUSZ', 55: 'AWAHR', 62: 'KALKS', 63: 'VERSG',
+    68: 'AUTLF', 69: 'KZTLF', 71: 'INCO1', 72: 'INCO2',
+    75: 'MWST', 76: 'UTX2', 77: 'UTX3', 78: 'UTXJ',
+    **{c: 'NL_BANK' for c in range(84, 120)},      # four bank blocks of nine
+    **{c: 'NL_PARTNER' for c in range(120, 129)},  # ship-to, payer, bill-to
+    173: 'ZIMP_VALIDDT_MIA', 178: 'NL_OTHER',      # SHIP_FULL_LOT
+    **{c: 'NL_CREDIT' for c in range(179, 189)},   # credit control area .. group
+    189: 'NL_COMPANY', 190: 'NL_COMPANY',          # a second company code, tolerance
+    191: 'NL_OTHER', 192: 'NL_OTHER', 193: 'NL_OTHER',   # UPS text, ZFDX, ZUPS
+    194: 'KATR7', 195: 'PDPID', 196: 'NPI_NO', 197: 'AUTH_CODE',
+}
+
+
+def inc_blocks(path):
+    """The description-only tabs of the Cipla INC workbook."""
+    wb = openpyxl.load_workbook(path, data_only=True)
+    out = []
+    for tab, ktokd in INC_TABS:
+        ws = wb[tab]
+        cols = [c for c in range(1, ws.max_column + 1)
+                if str(ws.cell(1, c).value or '').strip()]
+        assert cols == list(range(1, len(cols) + 1)), f'{tab}: a gap in the heading row'
+        out.append(dict(sheet='Cipla INC', tech_row=None, desc_row=1, ncol=len(cols),
+                        inconsistent=False, tcode='XD01', fields=[],
+                        desc=[str(ws.cell(1, c).value).strip() for c in cols],
+                        typ=[], length=[], mo=[], sample_rows=[2], ktokd=[ktokd],
+                        named={str(c): f for c, f in INC_NAMED.items()}))
+    return out
 
 
 def blocks_of(ws):
@@ -199,6 +247,7 @@ def main(path, out):
             all_blocks.append(block_unblock(ws))
             continue
         all_blocks += blocks_of(ws)
+    all_blocks += inc_blocks(INC_BOOK)
 
     # A block that borrows another block's layout takes its field list before the
     # formats are worked out.
@@ -220,6 +269,8 @@ def main(path, out):
                                  desc=b['desc'], typ=b['typ'], length=b['length'],
                                  tcode=b.get('tcode') or 'XD01',
                                  has_tech=bool(b['fields'])))
+        if b.get('named'):
+            fmt[sig]['named'] = b['named']
         rg, rtext = SHEET_REGION.get(b['sheet'], ('??', b['sheet']))
         for k in (b['ktokd'] or ['?']):
             for ctry in SHEET_COUNTRY.get(b['sheet'], ['?']):
@@ -240,7 +291,8 @@ def main(path, out):
         for c in [c for c in combo if (c['sheet'], c['ktokd']) == (src_sheet, src_ktokd)]:
             if not any((d['sheet'], d['ktokd'], d['country']) == (sheet, ktokd, c['country'])
                        for d in combo):
-                combo.append(dict(c, ktokd=ktokd, added=True))
+                combo.append(dict(c, sheet=sheet, region=SHEET_REGION[sheet][0],
+                                  ktokd=ktokd, added=True))
 
     # The region list the selection screen shows, each with the country or
     # countries behind it, so the user picks a place and not a key.
@@ -254,13 +306,14 @@ def main(path, out):
     json.dump(dict(formats=fmt, combinations=combo, sheet_country=SHEET_COUNTRY,
                    regions=regions), open(out, 'w'), indent=1)
 
-    # A country and an account group must name exactly one format, or the selection
-    # screen cannot resolve what the user asked for.
+    # A region, country and account group must name exactly one format, or the
+    # selection screen cannot resolve what the user asked for. A country alone
+    # need not: the United States has three entities with layouts of their own.
     key = {}
     for c in combo:
-        key.setdefault((c['country'], c['ktokd']), set()).add(c['format'])
+        key.setdefault((c['region'], c['country'], c['ktokd']), set()).add(c['format'])
     clash = {k: v for k, v in key.items() if len(v) > 1}
-    print(f'{len(key)} country + account-group keys, {len(clash)} ambiguous')
+    print(f'{len(key)} region + country + account-group keys, {len(clash)} ambiguous')
     for k, v in clash.items():
         print(f'   {k} -> {sorted(v)}')
     print(f'{len(all_blocks)} blocks, {len(fmt)} distinct formats, '
