@@ -715,6 +715,9 @@ FORM show_lift_breakup USING p_index TYPE i
            vtweg   TYPE s922-vtweg,
            kvgr2   TYPE s922-kvgr2,
            ummenge TYPE s922-ummenge,
+*          GAIL UAT 12.11.2026: displayed qty as a plain number (MT, 3 dec.)
+*          - S922-UMMENGE needs its unit field, which the popup does not show
+           qty     TYPE p LENGTH 13 DECIMALS 3,
          END OF ty_brk.
   DATA: lt_brk   TYPE STANDARD TABLE OF ty_brk,
         ls_brk   TYPE ty_brk,
@@ -778,8 +781,9 @@ FORM show_lift_breakup USING p_index TYPE i
     READ TABLE lt_kna1 INTO ls_kna1 WITH KEY kunnr = ls_brk-pkunag.
     IF sy-subrc = 0.
       ls_brk-name1 = ls_kna1-name1.
-      MODIFY lt_brk FROM ls_brk.
     ENDIF.
+    ls_brk-qty = ls_brk-ummenge.
+    MODIFY lt_brk FROM ls_brk.
   ENDLOOP.
 
   DEFINE brk_fc.
@@ -797,7 +801,13 @@ FORM show_lift_breakup USING p_index TYPE i
   brk_fc 'KONDM'   'Grade (Mat. Grp)'  ''.
   brk_fc 'VTWEG'   'Dist. Channel'     ''.
   brk_fc 'KVGR2'   'Customer Group'    ''.
-  brk_fc 'UMMENGE' 'Sales Qty'         'X'.
+  brk_fc 'QTY'     'Sales Qty (MT)'    'X'.
+  ls_fc-inttype      = 'P'.
+  ls_fc-datatype     = 'DEC'.
+  ls_fc-decimals_out = '3'.
+  ls_fc-outputlen    = 15.
+  ls_fc-just         = 'R'.
+  MODIFY lt_fc FROM ls_fc INDEX lines( lt_fc ).
 
   ls_sort-fieldname = 'PKUNAG'. ls_sort-up = 'X'. ls_sort-subtot = 'X'.
   APPEND ls_sort TO lt_sort.

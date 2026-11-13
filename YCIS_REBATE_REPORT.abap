@@ -52,11 +52,11 @@ TYPES: BEGIN OF ty_out,
          sales_off  TYPE vkbur,        " sales office
          kondm      TYPE kondm,        " grade
          kondm_txt  TYPE maktx,        " material name (from YRVA_GRADE_CISD -> MAKT)
-         mcq_qty    TYPE ycis_apprvl-mcq_qty,  " MCQ / committed qty of the customer (UAT 23.10.2026)
-         lft_qty    TYPE menge_d,      " lifted qty of this grade
-         elig_qty   TYPE menge_d,      " discounted qty of this grade (capping-split)
+         mcq_qty    TYPE p LENGTH 13 DECIMALS 3,  " MCQ / committed qty of the customer (UAT 23.10.2026)
+         lft_qty    TYPE p LENGTH 13 DECIMALS 3, " lifted qty of this grade
+         elig_qty   TYPE p LENGTH 13 DECIMALS 3, " discounted qty of this grade (capping-split)
          meins      TYPE meins,        " unit
-         rebate_val TYPE ycis_apprvl-rebate_val,  " rebate amount of this grade
+         rebate_val TYPE p LENGTH 15 DECIMALS 2,  " rebate amount of this grade
          waers      TYPE waers,        " currency
 *        workflow status (visible for every record - pending / approved /
 *        returned / completed), plus the last rejection detail
@@ -467,6 +467,47 @@ FORM build_fieldcat.
         gs_fcat-reptext_ddic = gs_fcat-seltext_l.
         MODIFY gt_fcat FROM gs_fcat INDEX sy-tabix.
     ENDCASE.
+  ENDLOOP.
+  PERFORM num_format.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  num_format   (quantity / % / amount columns)
+*&---------------------------------------------------------------------*
+*   GAIL UAT 12.11.2026: MCQ Qty, Group / Individual Lifted Qty, MCQ % and
+*   Rebate Value were shown in a wrong number format. In YCIS_APPRVL these
+*   are quantity / amount fields that need a unit / currency field, which
+*   the list does not carry, so the grid formatted them wrongly. The list
+*   now holds them as plain numbers and the format is fixed here:
+*   quantities in MT with 3 decimals, MCQ % and Rebate Value (Rs.) with 2
+*   decimals, right-aligned; Rebate Value is totalled.
+*&---------------------------------------------------------------------*
+FORM num_format.
+  DATA ls_fc TYPE slis_fieldcat_alv.
+  LOOP AT gt_fcat INTO ls_fc.
+    CASE ls_fc-fieldname.
+      WHEN 'MCQ_QTY' OR 'LFT_QTY' OR 'IND_LFT_QTY' OR 'ELIG_QTY'.
+        ls_fc-inttype      = 'P'.
+        ls_fc-datatype     = 'DEC'.
+        ls_fc-decimals_out = '3'.
+        ls_fc-outputlen    = 15.
+        ls_fc-just         = 'R'.
+      WHEN 'MCQ_PERC'.
+        ls_fc-inttype      = 'P'.
+        ls_fc-datatype     = 'DEC'.
+        ls_fc-decimals_out = '2'.
+        ls_fc-outputlen    = 9.
+        ls_fc-just         = 'R'.
+      WHEN 'REBATE_VAL'.
+        ls_fc-inttype      = 'P'.
+        ls_fc-datatype     = 'DEC'.
+        ls_fc-decimals_out = '2'.
+        ls_fc-outputlen    = 18.
+        ls_fc-just         = 'R'.
+        ls_fc-do_sum       = 'X'.
+      WHEN OTHERS.
+        CONTINUE.
+    ENDCASE.
+    MODIFY gt_fcat FROM ls_fc.
   ENDLOOP.
 ENDFORM.
 
