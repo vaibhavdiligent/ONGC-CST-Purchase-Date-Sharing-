@@ -148,6 +148,14 @@ for ktokd, tabname, techr, datar in CASES:
         if f in head or any(m['fld'] == f and mp.index(m) in done for m in mp):
             fail.append(f'{ktokd}: tab "{tab}" now carries {f} - take it out of ABSENT')
 
+# -- a row of another account group's layout is not read with this one -----
+m = re.search(r'\n  METHOD master\.\n(.*?)\n  ENDMETHOD\.', SRC, re.S)
+if not m or not re.search(r"lv_ktokd <> p_ktokd\.\s*\n\s*DATA\(lv_rtmpl\) = lcl_tmpl=>resolve\("
+                          r"[^)]*\)\.\s*\n\s*IF lv_rtmpl <> mv_tmpl\.\s*\n\s*mo_log->add\("
+                          r"[^)]*iv_type = 'E'", m.group(1)):
+    fail.append('upload: a row whose account group has another layout than the one selected '
+                'is read with the selected one - YSHP rows in the YVSP file land in wrong fields')
+
 if fail:
     print(f'{len(fail)} problem(s):')
     for f in fail:

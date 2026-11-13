@@ -190,6 +190,13 @@ CASES = [
      'audit_release_syntax.py',
      [(K, "      DATA(lv_trim) = condense( lv_line ).\n      IF lv_trim IS INITIAL.\n",
           "      IF condense( lv_line ) IS INITIAL.\n")]),
+    # ---- Cipla INC, November 2026 ----------------------------------------
+    ('Cipla INC: the YSHP file loaded with YVSP selected - cells in wrong fields', C,
+     'cipla/audit_cipla_inc.py',
+     [(C, "      IF lv_rtmpl <> mv_tmpl.\n", "      IF lv_rtmpl = mv_tmpl AND lv_rtmpl <> mv_tmpl.\n")]),
+    ('Cipla INC: YVMI Lockbox column mapped by its heading no more', C,
+     'cipla/audit_cipla_inc.py',
+     [(C, "tmpl = '8e77bb9c' col = 50  hdr = 'Lockbox'", "tmpl = '8e77bb9c' col = 50  hdr = 'Lockbox number'")]),
     ('A selection text SAP cuts short - "Vendor / BP creation - all com"', VX,
      'audit_screen_and_texts.py',
      [(VX, '.Vendor / BP creation - all CC<', '.Vendor / BP creation - all company codes<')]),

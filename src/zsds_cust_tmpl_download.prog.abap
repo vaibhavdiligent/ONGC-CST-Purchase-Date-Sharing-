@@ -5901,6 +5901,27 @@ CLASS lcl_engine IMPLEMENTATION.
                    iv_text = |Account group { lv_ktokd } does not exist| ).
       RETURN.
     ENDIF.
+    " One file per account group: Cipla INC sends YVSP, YSHP and YVMI as
+    " three tabs or three files, and the screen names the one being loaded.
+    " A row of another account group whose template has other columns was
+    " laid out for that template - read with this one, its cells would land
+    " in the wrong fields. Account groups sharing a layout (Exelan's YVSP,
+    " YVMI and YVTO) may still share a file.
+    IF p_crt = abap_true AND lv_ktokd IS NOT INITIAL AND lv_ktokd <> p_ktokd.
+      DATA(lv_rtmpl) = lcl_tmpl=>resolve( iv_regn = p_regn iv_ktokd = lv_ktokd ).
+      IF lv_rtmpl <> mv_tmpl.
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'E'
+                     iv_fld = 'KTOKD'
+                     iv_text = COND #(
+                       WHEN lv_rtmpl IS INITIAL
+                       THEN |Account group { lv_ktokd } is not offered for | &&
+                            |{ lcl_tmpl=>region_text( p_regn ) } - the row is not loaded|
+                       ELSE |Row is account group { lv_ktokd }, but { p_ktokd } is selected | &&
+                            |and the two have different columns - choose { lv_ktokd } on the | &&
+                            |screen and load its own file or tab| ) ).
+        RETURN.
+      ENDIF.
+    ENDIF.
 
     DATA(lv_exists) = COND abap_bool(
       WHEN lv_kunnr IS INITIAL THEN abap_false
