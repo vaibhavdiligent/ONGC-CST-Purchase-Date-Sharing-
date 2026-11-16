@@ -45,6 +45,17 @@ if 'fill_tax(' not in run:
 if re.search(r"iv_ty = 'W'\s*\n\s*iv_txt = 'Posted, but the new vendor number", V):
     fail.append('supplier: a creation that left no supplier behind is only a warning')
 
+# Cipla's vendor template of November 2026: column 40 is IND_SECTOR, the
+# business partner's industry sector, no longer LFA1-BRSCH.
+if re.search(r'\|BRSCH;40;', central):
+    fail.append('supplier: column 40 (IND_SECTOR) is written into LFA1-BRSCH - it is the business '
+                'partner\'s industry sector')
+ind = method(V, 'lcl_h_create', 'fill_industry')
+if 'cs_data-partner-central_data-industry-industries' not in ind:
+    fail.append('supplier: the industry sector of column 40 does not reach the business partner')
+if 'fill_industry(' not in run:
+    fail.append('supplier: the creation tab never calls FILL_INDUSTRY')
+
 # ---- customer -------------------------------------------------------------
 master = method(C, 'lcl_engine', 'master')
 if not master:

@@ -926,7 +926,7 @@ CLASS lcl_map IMPLEMENTATION.
       ( scen = 'R1' col = 37   hdr = 'STCEG' node = 'V' fld = 'STCEG' fmt = '' )
       ( scen = 'R1' col = 38   hdr = 'J_1KFTBUS' node = 'V' fld = 'J_1KFTBUS' fmt = '' )
       ( scen = 'R1' col = 39   hdr = 'STENR' node = 'V' fld = 'STENR' fmt = '' )
-      ( scen = 'R1' col = 40   hdr = 'BRSCH' node = 'V' fld = 'BRSCH' fmt = '' )
+      ( scen = 'R1' col = 40   hdr = 'IND_SECTOR' node = 'I' fld = 'IND_SECTOR' fmt = '' )
       ( scen = 'R1' col = 41   hdr = 'BANKS_01' node = 'N' fld = 'BANKS#1' fmt = '' )
       ( scen = 'R1' col = 42   hdr = 'BANKL_01' node = 'N' fld = 'BANKL#1' fmt = '' )
       ( scen = 'R1' col = 43   hdr = 'BANKN_01' node = 'N' fld = 'BANKN#1' fmt = '' )
@@ -1789,6 +1789,14 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     "! The categories a country has, for the message when one is missing.
     METHODS tax_types_of IMPORTING VALUE(iv_land) TYPE land1
                          RETURNING VALUE(rv)      TYPE string.
+    "! The industry systems (TB038A) that hold an industry sector.
+    METHODS ind_systems IMPORTING VALUE(iv_sector) TYPE bu_indsect
+                        RETURNING VALUE(rt)        TYPE string_table.
+    "! Whether a partner already has an industry sector (BUT0IS).
+    METHODS has_industry IMPORTING VALUE(iv_partner) TYPE bu_partner
+                                   VALUE(iv_istype)  TYPE bu_istype
+                                   VALUE(iv_sector)  TYPE bu_indsect
+                         RETURNING VALUE(rv)         TYPE abap_bool.
     "! The number a partner holds under a category, empty if none.
     METHODS taxnum_of   IMPORTING VALUE(iv_partner) TYPE bu_partner
                                   VALUE(iv_type)    TYPE bptaxtype
@@ -2018,6 +2026,26 @@ CLASS lcl_cfg IMPLEMENTATION.
     LOOP AT lt_t INTO DATA(lv_t).
       rv = COND #( WHEN rv IS INITIAL THEN |{ lv_t }| ELSE |{ rv }, { lv_t }| ).
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD ind_systems.
+    DATA lt_sys TYPE STANDARD TABLE OF bu_istype WITH EMPTY KEY.
+    SELECT istype FROM tb038a WHERE ind_sector = @iv_sector
+      ORDER BY istype INTO TABLE @lt_sys.
+    LOOP AT lt_sys INTO DATA(lv_sys).
+      APPEND CONV string( lv_sys ) TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD has_industry.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lv TYPE abap_bool.
+    SELECT SINGLE @abap_true FROM but0is
+      WHERE partner = @iv_partner AND istype = @iv_istype AND ind_sector = @iv_sector
+      INTO @lv.
+    rv = xsdbool( lv = abap_true ).
   ENDMETHOD.
 
   METHOD taxnum_of.
@@ -2527,6 +2555,11 @@ CLASS lcl_h_create DEFINITION INHERITING FROM lcl_base FINAL.
                                    iv_lifnr TYPE lifnr OPTIONAL
                          EXPORTING ev_bad   TYPE abap_bool
                          CHANGING  cs_data  TYPE cvis_ei_extern.
+    "! Column 40, the business partner's industry sector (BP > Industries).
+    METHODS fill_industry IMPORTING is_row   TYPE ty_row
+                                    iv_lifnr TYPE lifnr OPTIONAL
+                          EXPORTING ev_bad   TYPE abap_bool
+                          CHANGING  cs_data  TYPE cvis_ei_extern.
 ENDCLASS.
 
 CLASS lcl_h_create IMPLEMENTATION.
@@ -2710,8 +2743,12 @@ CLASS lcl_h_create IMPLEMENTATION.
     " KUNNR is CHAR 10 and VBUND is CHAR 6, so they pad differently.
     "   KUNNR  domain KUNNR  - ALPHA, 10
     "   VBUND  domain RCOMP  - ALPHA, 6
-    " KONZS, BRSCH, J_1I* and VEN_CLASS have no conversion exit and are
-    " passed through unchanged.
+    " KONZS, J_1I* and VEN_CLASS have no conversion exit and are passed
+    " through unchanged.
+    "
+    " Column 40 was BRSCH, the supplier's industry key. Cipla's template of
+    " November 2026 heads it IND_SECTOR: it is the business partner's
+    " industry sector, which FILL_INDUSTRY sends - LFA1-BRSCH is not written.
     "
     " STCD3, STCD5 and STCEG (columns 35 to 37) are not sent here. Written
     " into the supplier they reached LFA1 and nothing else: SE16N showed the
@@ -2721,7 +2758,7 @@ CLASS lcl_h_create IMPLEMENTATION.
     DATA(lt_map) = VALUE string_table(
       ( |KTOKK;5;|  ) ( |KUNNR;32;10| ) ( |VBUND;33;6| ) ( |KONZS;34;| )
       ( |J_1KFTBUS;38;| )
-      ( |STENR;39;| ) ( |BRSCH;40;|  )
+      ( |STENR;39;| )
       " CIN - LFA1 fields, confirmed present in VMDS_EI_VMD_CENTRAL
       ( |VEN_CLASS;55;| ) ( |J_1ISSIST;56;| ) ( |J_1IPANNO;57;| ) ).
 
@@ -2735,6 +2772,85 @@ CLASS lcl_h_create IMPLEMENTATION.
                      CHANGING  cs_data  = cs_data-vendor-central_data-central-data
                                cs_datax = cs_data-vendor-central_data-central-datax ).
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD fill_industry.
+    " The business partner's industry sector, filed under an industry
+    " system (TB038A): BP > Industries, table BUT0IS. The cell gives the
+    " sector ("0001"); the system is the one that holds it. Where several
+    " systems hold the same sector the cell names the system as well,
+    " SYSTEM/SECTOR. A new partner's industry is its standard one.
+    CLEAR ev_bad.
+    DATA(lv_cell) = to_upper( condense( lcl_util=>cell( is_row = is_row iv_col = 40 ) ) ).
+    IF lv_cell IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    DATA: lv_sys TYPE bu_istype,
+          lv_sec TYPE bu_indsect.
+    IF lv_cell CA '/'.
+      SPLIT lv_cell AT '/' INTO DATA(lv_s1) DATA(lv_s2).
+      lv_sys = condense( lv_s1 ).
+      lv_sec = condense( lv_s2 ).
+    ELSE.
+      lv_sec = lv_cell.
+    ENDIF.
+
+    DATA(lt_sys) = mo_cfg->ind_systems( lv_sec ).
+    DATA lv_list TYPE string.
+    LOOP AT lt_sys INTO DATA(lv_one).
+      lv_list = COND #( WHEN lv_list IS INITIAL THEN lv_one ELSE |{ lv_list }, { lv_one }| ).
+    ENDLOOP.
+    IF lt_sys IS INITIAL.
+      mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
+                   iv_st = 'INDUSTRY' iv_fl = 'IND_SECTOR'
+                   iv_txt = |Industry sector "{ lv_sec }" (column 40) is in no industry system | &&
+                            |(TB038A) - maintain it, or correct the file| ).
+      ev_bad = abap_true.
+      RETURN.
+    ENDIF.
+    DATA(lv_first) = lt_sys[ 1 ].
+    IF lv_sys IS INITIAL.
+      IF lines( lt_sys ) > 1.
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
+                     iv_st = 'INDUSTRY' iv_fl = 'IND_SECTOR'
+                     iv_txt = |Industry sector "{ lv_sec }" (column 40) is in industry systems | &&
+                              |{ lv_list } - write it as SYSTEM/SECTOR, e.g. { lv_first }/{ lv_sec }| ).
+        ev_bad = abap_true.
+        RETURN.
+      ENDIF.
+      lv_sys = lv_first.
+    ELSE.
+      DATA(lv_want) = CONV string( lv_sys ).
+      IF NOT line_exists( lt_sys[ table_line = lv_want ] ).
+        mo_log->add( iv_row = is_row-row iv_k1 = iv_lifnr iv_ty = 'E'
+                     iv_st = 'INDUSTRY' iv_fl = 'IND_SECTOR'
+                     iv_txt = |Industry sector "{ lv_sec }" (column 40) is not in industry system | &&
+                              |{ lv_sys } - it is in { lv_list }| ).
+        ev_bad = abap_true.
+        RETURN.
+      ENDIF.
+    ENDIF.
+
+    " Already there - nothing to send. A second insert would be refused.
+    DATA lv_bp TYPE bu_partner.
+    IF iv_lifnr IS NOT INITIAL.
+      lv_bp = mo_cfg->vend_bp( iv_lifnr ).
+    ENDIF.
+    IF mo_cfg->has_industry( iv_partner = lv_bp iv_istype = lv_sys iv_sector = lv_sec ) = abap_true.
+      RETURN.
+    ENDIF.
+
+    DATA ls_is TYPE bus_ei_bupa_industrysector.
+    CLEAR ls_is.
+    ls_is-task                = gc_i.
+    ls_is-data_key-keysystem  = lv_sys.
+    ls_is-data_key-ind_sector = lv_sec.
+    IF lv_bp IS INITIAL.
+      ls_is-data-ind_default  = abap_true.
+      ls_is-datax-ind_default = abap_true.
+    ENDIF.
+    APPEND ls_is TO cs_data-partner-central_data-industry-industries.
   ENDMETHOD.
 
   METHOD fill_tax.
@@ -2928,6 +3044,17 @@ CLASS lcl_h_create IMPLEMENTATION.
                 IMPORTING ev_bad = lv_badtax
                 CHANGING  cs_data = ls_data ).
       IF lv_badtax = abap_true.
+        IF p_stop = abap_true.
+          EXIT.
+        ENDIF.
+        CONTINUE.
+      ENDIF.
+      DATA lv_badind TYPE abap_bool.
+      CLEAR lv_badind.
+      fill_industry( EXPORTING is_row = ls_row iv_lifnr = lv_lifnr
+                     IMPORTING ev_bad = lv_badind
+                     CHANGING  cs_data = ls_data ).
+      IF lv_badind = abap_true.
         IF p_stop = abap_true.
           EXIT.
         ENDIF.
@@ -4468,6 +4595,12 @@ CLASS lcl_dl_src DEFINITION FINAL.
       IMPORTING iv_title  TYPE clike
       RETURNING VALUE(rv) TYPE string.
 
+    " The business partner's standard industry sector (BUT0IS) - column 40.
+    CLASS-METHODS industry
+      IMPORTING VALUE(iv_lifnr)   TYPE lifnr
+                VALUE(iv_partner) TYPE bu_partner
+      RETURNING VALUE(rv)         TYPE string.
+
     " Two things the supplier interface does not carry: the bank master
     " behind the vendor's own bank details, and the TAN exemption blocks.
     " Passed by value with the dictionary type they are read with: an Open
@@ -4691,6 +4824,27 @@ CLASS lcl_dl_src IMPLEMENTATION.
     ASSIGN COMPONENT iv_fld OF STRUCTURE is_row TO <lv>.
     IF sy-subrc = 0.
       rv = lcl_util=>text( iv_value = <lv> iv_fmt = '' ).
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD industry.
+    DATA(lv_bp) = iv_partner.
+    IF lv_bp IS INITIAL.
+      SELECT SINGLE b~partner FROM but000 AS b
+        INNER JOIN cvi_vend_link AS l ON l~partner_guid = b~partner_guid
+        WHERE l~vendor = @iv_lifnr INTO @lv_bp.
+    ENDIF.
+    IF lv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    " The standard one first; a partner with industries but none marked
+    " standard still shows one.
+    SELECT istype, ind_sector, isdef FROM but0is WHERE partner = @lv_bp
+      ORDER BY isdef DESCENDING, istype, ind_sector
+      INTO TABLE @DATA(lt_is) UP TO 1 ROWS.
+    READ TABLE lt_is INTO DATA(ls_is) INDEX 1.
+    IF sy-subrc = 0.
+      rv = ls_is-ind_sector.
     ENDIF.
   ENDMETHOD.
 
@@ -4929,6 +5083,10 @@ CLASS lcl_dl_eng IMPLEMENTATION.
             WHEN 'V'.
               lv_val = comp( is_any = ls_v-central_data-central-data
                              iv_fld = lv_fld iv_fmt = ls_col-fmt ).
+
+            WHEN 'I'.
+              lv_val = lcl_dl_src=>industry( iv_lifnr   = is_key-lifnr
+                                             iv_partner = is_key-partner ).
 
             WHEN 'A'.
               lv_val = comp( is_any = ls_v-central_data-address-postal-data

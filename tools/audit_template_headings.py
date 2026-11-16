@@ -35,6 +35,8 @@ ALLOWED = {
     ('R1', 50): 'the template heads both 50 and 62 ZTERM - one is the company '
                 'code term, the other the purchasing organisation term',
     ('R1', 62): 'as above',
+    ('R1', 40): "Cipla's vendor template of November 2026 heads it IND_SECTOR: the business "
+                "partner's industry sector, which replaced LFA1-BRSCH",
     ('R6',  5): 'the template repeats LIFNR, BUKRS and EKORG for the reference '
                 'company code and purchasing organisation; naming them REF keeps '
                 'each heading unique, which is what lets a moved column be found',
