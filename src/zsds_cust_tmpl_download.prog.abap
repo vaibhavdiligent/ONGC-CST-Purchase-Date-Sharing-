@@ -19,7 +19,7 @@
 *& columns of all 24 templates to prove it.
 *&
 *& Pick a region and an account group and the template follows: the
-*& workbooks Cipla supplied hold 25 layouts over 84 region and account
+*& workbooks Cipla supplied hold 27 layouts over 84 region and account
 *& group combinations, and a region and an account group name exactly one
 *& of them. It is a region and not a country because the two do not line
 *& up - Europe is four countries on one template, and the United States is
@@ -160,9 +160,12 @@ TYPES: BEGIN OF ty_combi,
        tt_combi TYPE STANDARD TABLE OF ty_combi WITH EMPTY KEY.
 
 " The regions the dropdown offers, each with its countries in brackets.
+" TAB is the region's tab in Cipla's workbook ("Moroccco" for Morocco), so
+" an upload can tell two tabs of the same layout apart by their names.
 TYPES: BEGIN OF ty_regn,
          regn TYPE char2,
          text TYPE char40,
+         tab  TYPE char30,
        END OF ty_regn,
        tt_regn TYPE STANDARD TABLE OF ty_regn WITH EMPTY KEY.
 
@@ -1001,7 +1004,7 @@ ENDCLASS.
 *   Generated from "customer code templates.xlsx". The workbook is LSMW
 *   shaped: every sheet is a country or a legal entity and the templates
 *   are stacked inside it, one per account group. 61 blocks collapse to
-*   24 distinct column lists over 81 combinations, and a country with an
+*   27 distinct column lists over 84 combinations, and a region with an
 *   account group names exactly one of them.
 *----------------------------------------------------------------------*
 CLASS lcl_tmpl DEFINITION FINAL.
@@ -1025,6 +1028,14 @@ CLASS lcl_tmpl DEFINITION FINAL.
     CLASS-METHODS region_text
       IMPORTING iv_regn   TYPE char2
       RETURNING VALUE(rv) TYPE char40.
+
+    " What a tab name holds when the tab is this region's: its name without
+    " the countries ("Invagen") and its tab in Cipla's workbook ("Moroccco"),
+    " squashed. Exelan and Invagen share a layout, so their tabs look alike
+    " to the reader and only the name says which is which.
+    CLASS-METHODS region_hints
+      IMPORTING iv_regn   TYPE char2
+      RETURNING VALUE(rt) TYPE string_table.
 
     CLASS-METHODS cols
       IMPORTING iv_tmpl   TYPE char8
@@ -1069,9 +1080,9 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( regn = 'AU' land = 'AU' ktokd = 'ZEXP' tmpl = 'ab38ead5' )
       ( regn = 'AU' land = 'AU' ktokd = 'ZPLN' tmpl = '42895e0e' )
       ( regn = 'AU' land = 'AU' ktokd = 'ZSHP' tmpl = '8a74041a' )
-      ( regn = 'CI' land = 'US' ktokd = 'YSHP' tmpl = '43156406' )
+      ( regn = 'CI' land = 'US' ktokd = 'YSHP' tmpl = 'e891845c' )
       ( regn = 'CI' land = 'US' ktokd = 'YVMI' tmpl = '8e77bb9c' )
-      ( regn = 'CI' land = 'US' ktokd = 'YVSP' tmpl = '6e6467eb' )
+      ( regn = 'CI' land = 'US' ktokd = 'YVSP' tmpl = '4387ad5a' )
       ( regn = 'EU' land = 'BE' ktokd = 'YSHP' tmpl = '43156406' )
       ( regn = 'EU' land = 'ES' ktokd = 'YSHP' tmpl = '43156406' )
       ( regn = 'EU' land = 'GB' ktokd = 'YSHP' tmpl = '43156406' )
@@ -1149,17 +1160,17 @@ CLASS lcl_tmpl IMPLEMENTATION.
     ).
 
     mt_regn = VALUE tt_regn(
-      ( regn = 'AU' text = 'Australia (AU)' )
-      ( regn = 'CI' text = 'Cipla INC (US)' )
-      ( regn = 'AE' text = 'Dubai (AE)' )
-      ( regn = 'EU' text = 'Europe (GB/BE/ES/NL)' )
-      ( regn = 'EX' text = 'Exelan (US)' )
-      ( regn = 'IN' text = 'India (IN)' )
-      ( regn = 'IV' text = 'Invagen (US)' )
-      ( regn = 'KE' text = 'Kenya (KE)' )
-      ( regn = 'MA' text = 'Morocco (MA)' )
-      ( regn = 'UG' text = 'QCIL (UG)' )
-      ( regn = 'ZA' text = 'SAGA (ZA)' )
+      ( regn = 'AU' text = 'Australia (AU)' tab = 'Australia' )
+      ( regn = 'CI' text = 'Cipla INC (US)' tab = 'Cipla INC' )
+      ( regn = 'AE' text = 'Dubai (AE)' tab = 'Dubai' )
+      ( regn = 'EU' text = 'Europe (GB/BE/ES/NL)' tab = 'Europe' )
+      ( regn = 'EX' text = 'Exelan (US)' tab = 'Exelan' )
+      ( regn = 'IN' text = 'India (IN)' tab = 'India' )
+      ( regn = 'IV' text = 'Invagen (US)' tab = 'Invagen' )
+      ( regn = 'KE' text = 'Kenya (KE)' tab = 'Kenya' )
+      ( regn = 'MA' text = 'Morocco (MA)' tab = 'Moroccco' )
+      ( regn = 'UG' text = 'QCIL (UG)' tab = 'QCIL' )
+      ( regn = 'ZA' text = 'SAGA (ZA)' tab = 'SAGA' )
     ).
   ENDMETHOD.
 
@@ -1190,6 +1201,25 @@ CLASS lcl_tmpl IMPLEMENTATION.
     READ TABLE mt_regn INTO DATA(ls_rg) WITH KEY regn = iv_regn.
     IF sy-subrc = 0.
       rv = ls_rg-text.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD region_hints.
+    load( ).
+    READ TABLE mt_regn INTO DATA(ls_rg) WITH KEY regn = iv_regn.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    DATA: lv_name TYPE string,
+          lv_rest TYPE string.
+    SPLIT ls_rg-text AT '(' INTO lv_name lv_rest.
+    DATA(lv_h1) = lcl_util=>squash( lv_name ).
+    DATA(lv_h2) = lcl_util=>squash( ls_rg-tab ).
+    IF lv_h1 IS NOT INITIAL.
+      APPEND lv_h1 TO rt.
+    ENDIF.
+    IF lv_h2 IS NOT INITIAL AND lv_h2 <> lv_h1.
+      APPEND lv_h2 TO rt.
     ENDIF.
   ENDMETHOD.
 
@@ -1585,11 +1615,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '32831d38' col = 31  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 32  hdr = 'Region (State, Province, County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 33  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_2.
-    rt = VALUE tt_col(
       ( tmpl = '32831d38' col = 34  hdr = 'First telephone no.: dialling code+number' node = 'M' fld = 'TEL' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 35  hdr = 'First Mobile Telephone No.: Dialing Code + Number' node = 'M' fld = 'MOB' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 36  hdr = 'First fax no.: dialling code+number' node = 'M' fld = 'FAX' fmt = '' cnv = '' )
@@ -1613,6 +1638,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '32831d38' col = 54  hdr = 'List of the Payment Methods to be Considered' node = 'B' fld = 'ZWELS' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 55  hdr = 'Block Key for Payment' node = 'B' fld = 'ZAHLS' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 56  hdr = 'Sales district' node = 'S' fld = 'BZIRK' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_2.
+    rt = VALUE tt_col(
       ( tmpl = '32831d38' col = 57  hdr = 'Order probab.' node = 'S' fld = 'AWAHR' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 58  hdr = 'Sales Office' node = 'S' fld = 'VKBUR' fmt = '' cnv = '' )
       ( tmpl = '32831d38' col = 59  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
@@ -1849,6 +1879,83 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '43156406' col = 61  hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
       ( tmpl = '43156406' col = 62  hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
       ( tmpl = '43156406' col = 63  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+    "  4387ad5a - 76 columns - US/YVSP
+      ( tmpl = '4387ad5a' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 2   hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 3   hdr = 'Sales Organization' node = 'K' fld = 'VKORG' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 4   hdr = 'Distribution Channel' node = 'K' fld = 'VTWEG' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 5   hdr = 'Division' node = 'K' fld = 'SPART' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 6   hdr = 'Customer Account Group' node = 'K' fld = 'KTOKD' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 7   hdr = 'Always X' node = 'X' fld = 'X' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 8   hdr = 'Title text' node = 'A' fld = 'TITLE' fmt = 'TT' cnv = 'TT' )
+      ( tmpl = '4387ad5a' col = 9   hdr = 'Name 1' node = 'A' fld = 'NAME' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 10  hdr = 'Name 2' node = 'A' fld = 'NAME_2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 11  hdr = 'Name 3' node = 'A' fld = 'NAME_3' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 12  hdr = 'Name 4' node = 'A' fld = 'NAME_4' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 13  hdr = 'Search Term 1' node = 'A' fld = 'SORT1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 14  hdr = 'Search Term 2' node = 'A' fld = 'SORT2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 15  hdr = 'Street 2' node = 'A' fld = 'STR_SUPPL1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 16  hdr = 'Street 3' node = 'A' fld = 'STR_SUPPL2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 17  hdr = 'Street' node = 'A' fld = 'STREET' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 18  hdr = 'Street 4' node = 'A' fld = 'STR_SUPPL3' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 19  hdr = 'Street 5' node = 'A' fld = 'LOCATION' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 20  hdr = 'District' node = 'A' fld = 'DISTRICT' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 21  hdr = 'City postal code' node = 'A' fld = 'POSTL_COD1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 22  hdr = 'City' node = 'A' fld = 'CITY' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 23  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 24  hdr = 'Region (State, Province, County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 25  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
+      ( tmpl = '4387ad5a' col = 26  hdr = 'First telephone no.: dialling code+number' node = 'M' fld = 'TEL' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 27  hdr = 'First Mobile Telephone No.: Dialing Code + Number' node = 'M' fld = 'MOB' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 28  hdr = 'First fax no.: dialling code+number' node = 'M' fld = 'FAX' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 29  hdr = 'E-Mail Address' node = 'M' fld = 'SMT' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 30  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 31  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 32  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 33  hdr = 'ID for mainly non-military use' node = 'C' fld = 'CIVVE' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 34  hdr = 'Reconciliation Account in General Ledger' node = 'B' fld = 'AKONT' fmt = 'GL' cnv = 'GL' )
+      ( tmpl = '4387ad5a' col = 35  hdr = 'Key for sorting according to assignment numbers' node = 'B' fld = 'ZUAWA' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 36  hdr = 'Planning group' node = 'B' fld = 'FDGRV' fmt = 'AL' cnv = 'AL' )
+      ( tmpl = '4387ad5a' col = 37  hdr = 'Interest calculation indicator' node = 'B' fld = 'VZSKZ' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 38  hdr = 'Interest calculation frequency in months' node = 'B' fld = 'ZINRT' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 39  hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 40  hdr = 'Indicator: Record Payment History ?' node = 'B' fld = 'XZVER' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 41  hdr = 'List of the Payment Methods to be Considered' node = 'B' fld = 'ZWELS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 42  hdr = 'Sales district' node = 'S' fld = 'BZIRK' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 43  hdr = 'Order probability of the item' node = 'S' fld = 'AWAHR' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 44  hdr = 'Sales Office' node = 'S' fld = 'VKBUR' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 45  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 46  hdr = 'Customer group' node = 'S' fld = 'KDGRP' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 47  hdr = 'Customer classification (ABC analysis)' node = 'S' fld = 'KLABC' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 48  hdr = 'Currency' node = 'S' fld = 'WAERS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 49  hdr = 'Pricing procedure assigned to this customer' node = 'S' fld = 'KALKS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 50  hdr = 'Customer Statistics Group' node = 'S' fld = 'VERSG' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 51  hdr = 'Delivery Priority' node = 'S' fld = 'LPRIO' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 52  hdr = 'Order Combination Indicator' node = 'S' fld = 'KZAZU' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 53  hdr = 'Shipping Conditions' node = 'S' fld = 'VSBED' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 54  hdr = 'Delivering Plant (Own or External)' node = 'S' fld = 'VWERK' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 55  hdr = 'Maximum Number of Partial Deliveries Allowed Per Item' node = 'S' fld = 'ANTLF' fmt = '' cnv = 'NM' )
+      ( tmpl = '4387ad5a' col = 56  hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 57  hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 58  hdr = 'Terms of Payment Key' node = 'S' fld = 'ZTERM' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 59  hdr = 'Customer Account Assignment Group' node = 'S' fld = 'KTGRD' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 60  hdr = 'Tax classification for customer' node = 'T' fld = '#1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 61  hdr = 'Tax classification for customer' node = 'T' fld = '#2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 62  hdr = 'Tax classification for customer' node = 'T' fld = '#3' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 63  hdr = 'Tax classification for customer' node = 'T' fld = '#4' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 64  hdr = 'Customer group 1' node = 'S' fld = 'KVGR1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 65  hdr = 'Customer group 2' node = 'S' fld = 'KVGR2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 66  hdr = 'Customer group 3' node = 'S' fld = 'KVGR3' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 67  hdr = 'Customer group 4' node = 'S' fld = 'KVGR4' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 68  hdr = 'Customer group 5' node = 'S' fld = 'KVGR5' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 69  hdr = 'Plant' node = 'Z' fld = 'WERKS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 70  hdr = 'Transit Day' node = 'Z' fld = 'CUST_TRNST_DAYS' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 71  hdr = 'Distance in kms.' node = 'Z' fld = 'KMSUM' fmt = '' cnv = 'NM' )
+      ( tmpl = '4387ad5a' col = 72  hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 73  hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 74  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = '4387ad5a' col = 75  hdr = 'Lock Box' node = 'B' fld = 'LOCKB' fmt = '' cnv = '' )
+      ( tmpl = '4387ad5a' col = 76  hdr = 'GLN' node = 'Z' fld = 'GLN_URI_FORMAT' fmt = '' cnv = '' )
     "  647cd8ca - 24 columns - IN/ZBMR
       ( tmpl = '647cd8ca' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '647cd8ca' col = 2   hdr = 'Customer Code' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
@@ -1929,6 +2036,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '67849f38' col = 52  hdr = 'Tax classification for customer' node = 'T' fld = 'JTX2' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 53  hdr = 'Tax classification for customer' node = 'T' fld = 'JTX3' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 54  hdr = 'Tax classification for customer' node = 'T' fld = 'JTX4' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_3.
+    rt = VALUE tt_col(
       ( tmpl = '67849f38' col = 55  hdr = 'Customer group 1' node = 'S' fld = 'KVGR1' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 56  hdr = 'Customer group 2' node = 'S' fld = 'KVGR2' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 57  hdr = 'Customer group 3' node = 'S' fld = 'KVGR3' fmt = '' cnv = '' )
@@ -1960,11 +2072,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '67849f38' col = 83  hdr = 'SD Document Currency' node = 'Z' fld = 'CURRENCY' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 84  hdr = 'BG Issue Date' node = 'Z' fld = 'BG_ISS_DT' fmt = '' cnv = 'DT' )
       ( tmpl = '67849f38' col = 85  hdr = 'BG Expiry Date' node = 'Z' fld = 'BG_EXP_DT' fmt = '' cnv = 'DT' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_3.
-    rt = VALUE tt_col(
       ( tmpl = '67849f38' col = 86  hdr = 'BG Issuing Bank' node = 'Z' fld = 'BG_ISS_BANK' fmt = '' cnv = '' )
       ( tmpl = '67849f38' col = 87  hdr = 'Agreement Expiry Date' node = 'Z' fld = 'AGGR_EXPDT' fmt = '' cnv = 'DT' )
       ( tmpl = '67849f38' col = 88  hdr = 'Appointment Date' node = 'Z' fld = 'APPOINT_DT' fmt = '' cnv = 'DT' )
@@ -2274,7 +2381,7 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '6e6467eb' col = 72  hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 73  hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
       ( tmpl = '6e6467eb' col = 74  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
-      ( tmpl = '6e6467eb' col = 75  hdr = 'Lockbox' node = 'B' fld = 'LOCKB' fmt = '' cnv = '' )
+      ( tmpl = '6e6467eb' col = 75  hdr = 'Lock Box' node = 'B' fld = 'LOCKB' fmt = '' cnv = '' )
     "  80d23dd8 - 76 columns - AE/ZSHP, US/ZSHP
       ( tmpl = '80d23dd8' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 2   hdr = 'Customer code' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
@@ -2327,6 +2434,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '80d23dd8' col = 49  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 50  hdr = 'Customer group' node = 'S' fld = 'KDGRP' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 51  hdr = 'Customer classification (ABC analysis)' node = 'S' fld = 'KLABC' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_4.
+    rt = VALUE tt_col(
       ( tmpl = '80d23dd8' col = 52  hdr = 'Customer Statistics Group' node = 'S' fld = 'VERSG' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 53  hdr = 'Delivery Priority' node = 'S' fld = 'LPRIO' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 54  hdr = 'Order Combination Indicator' node = 'S' fld = 'KZAZU' fmt = '' cnv = '' )
@@ -2335,11 +2447,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '80d23dd8' col = 57  hdr = 'Maximum Number of Partial Deliveries Allowed Per Item' node = 'S' fld = 'ANTLF' fmt = '' cnv = 'NM' )
       ( tmpl = '80d23dd8' col = 58  hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 59  hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_4.
-    rt = VALUE tt_col(
       ( tmpl = '80d23dd8' col = 60  hdr = 'Account Assignment Group for Customer' node = 'S' fld = 'KTGRD' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 61  hdr = 'Tax classification for customer' node = 'T' fld = 'MWST' fmt = '' cnv = '' )
       ( tmpl = '80d23dd8' col = 62  hdr = 'UTX2' node = 'T' fld = 'UTX2' fmt = '' cnv = '' )
@@ -2710,11 +2817,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '9c914100' col = 39  hdr = 'Attribute 1' node = 'C' fld = 'KATR1' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 40  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 41  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_5.
-    rt = VALUE tt_col(
       ( tmpl = '9c914100' col = 42  hdr = 'Account Number of Vendor or Creditor' node = 'C' fld = 'LIFNR' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 43  hdr = 'Company ID of Trading Partner' node = 'C' fld = 'VBUND' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 44  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
@@ -2730,6 +2832,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = '9c914100' col = 54  hdr = 'Previous Master Record Number' node = 'B' fld = 'ALTKN' fmt = 'AL' cnv = 'AL' )
       ( tmpl = '9c914100' col = 55  hdr = 'Terms of Payment Key' node = 'B' fld = 'ZTERM' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 56  hdr = 'Tolerance group for the business partner/G/L account' node = 'B' fld = 'TOGRU' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_5.
+    rt = VALUE tt_col(
       ( tmpl = '9c914100' col = 57  hdr = 'Indicator: Record Payment History ?' node = 'B' fld = 'XZVER' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 58  hdr = 'List of the Payment Methods to be Considered' node = 'B' fld = 'ZWELS' fmt = '' cnv = '' )
       ( tmpl = '9c914100' col = 59  hdr = 'Block Key for Payment' node = 'B' fld = 'ZAHLS' fmt = '' cnv = '' )
@@ -3085,11 +3192,6 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 28  hdr = 'District' node = 'A' fld = 'DISTRICT' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 29  hdr = 'City postal code' node = 'A' fld = 'POSTL_COD1' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 30  hdr = 'City' node = 'A' fld = 'CITY' fmt = '' cnv = '' )
-    ).
-  ENDMETHOD.
-
-  METHOD map_6.
-    rt = VALUE tt_col(
       ( tmpl = 'e10ec770' col = 31  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 32  hdr = 'Region (State, Province, County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 33  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
@@ -3128,6 +3230,11 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 66  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 67  hdr = 'Customer group' node = 'S' fld = 'KDGRP' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 68  hdr = 'Customer classification (ABC analysis)' node = 'S' fld = 'KLABC' fmt = '' cnv = '' )
+    ).
+  ENDMETHOD.
+
+  METHOD map_6.
+    rt = VALUE tt_col(
       ( tmpl = 'e10ec770' col = 69  hdr = 'Currency' node = 'S' fld = 'WAERS' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 70  hdr = 'Exch. Rate Type' node = 'S' fld = 'KURST' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 71  hdr = 'Price group (customer)' node = 'S' fld = 'KONDA' fmt = '' cnv = '' )
@@ -3197,6 +3304,71 @@ CLASS lcl_tmpl IMPLEMENTATION.
       ( tmpl = 'e10ec770' col = 135 hdr = 'Global Company Prefix' node = 'Z' fld = 'GLOBAL_COM' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 136 hdr = 'Backorder Days' node = 'Z' fld = 'BO_DAYS' fmt = '' cnv = '' )
       ( tmpl = 'e10ec770' col = 137 hdr = 'Location Number' node = 'Z' fld = 'LOCATION_NUMBER' fmt = '' cnv = '' )
+    "  e891845c - 64 columns - US/YSHP
+      ( tmpl = 'e891845c' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 2   hdr = 'Company Code' node = 'K' fld = 'BUKRS' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 3   hdr = 'Sales Organization' node = 'K' fld = 'VKORG' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 4   hdr = 'Distribution Channel' node = 'K' fld = 'VTWEG' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 5   hdr = 'Division' node = 'K' fld = 'SPART' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 6   hdr = 'Customer Account Group' node = 'K' fld = 'KTOKD' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 7   hdr = 'Always X' node = 'X' fld = 'X' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 8   hdr = 'Title text' node = 'A' fld = 'TITLE' fmt = 'TT' cnv = 'TT' )
+      ( tmpl = 'e891845c' col = 9   hdr = 'Name 1' node = 'A' fld = 'NAME' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 10  hdr = 'Name 2' node = 'A' fld = 'NAME_2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 11  hdr = 'Name 3' node = 'A' fld = 'NAME_3' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 12  hdr = 'Name 4' node = 'A' fld = 'NAME_4' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 13  hdr = 'Search Term 1' node = 'A' fld = 'SORT1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 14  hdr = 'Search Term 2' node = 'A' fld = 'SORT2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 15  hdr = 'c/o name' node = 'A' fld = 'C_O_NAME' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 16  hdr = 'Street 2' node = 'A' fld = 'STR_SUPPL1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 17  hdr = 'Street 3' node = 'A' fld = 'STR_SUPPL2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 18  hdr = 'Street' node = 'A' fld = 'STREET' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 19  hdr = 'Street 4' node = 'A' fld = 'STR_SUPPL3' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 20  hdr = 'Street 5' node = 'A' fld = 'LOCATION' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 21  hdr = 'District' node = 'A' fld = 'DISTRICT' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 22  hdr = 'City postal code' node = 'A' fld = 'POSTL_COD1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 23  hdr = 'City' node = 'A' fld = 'CITY' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 24  hdr = 'Country Key' node = 'A' fld = 'COUNTRY' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 25  hdr = 'Region (State, Province, County)' node = 'A' fld = 'REGION' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 26  hdr = 'Language Key' node = 'A' fld = 'LANGU' fmt = '' cnv = 'LG' )
+      ( tmpl = 'e891845c' col = 27  hdr = 'First telephone no.: dialling code+number' node = 'M' fld = 'TEL' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 28  hdr = 'First Mobile Telephone No.: Dialing Code + Number' node = 'M' fld = 'MOB' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 29  hdr = 'First fax no.: dialling code+number' node = 'M' fld = 'FAX' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 30  hdr = 'E-Mail Address' node = 'M' fld = 'SMT' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 31  hdr = 'Group key' node = 'C' fld = 'KONZS' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 32  hdr = 'Attribute 3' node = 'C' fld = 'KATR3' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 33  hdr = 'Attribute 4' node = 'C' fld = 'KATR4' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 34  hdr = 'ID for mainly non-military use' node = 'C' fld = 'CIVVE' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 35  hdr = 'Sales district' node = 'S' fld = 'BZIRK' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 36  hdr = 'Sales Office' node = 'S' fld = 'VKBUR' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 37  hdr = 'Sales Group' node = 'S' fld = 'VKGRP' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 38  hdr = 'Customer group' node = 'S' fld = 'KDGRP' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 39  hdr = 'ABC class' node = 'S' fld = 'KLABC' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 40  hdr = 'Customer Statistics Group' node = 'S' fld = 'VERSG' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 41  hdr = 'Delivery Priority' node = 'S' fld = 'LPRIO' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 42  hdr = 'Order Combination Indicator' node = 'S' fld = 'KZAZU' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 43  hdr = 'Shipping Conditions' node = 'S' fld = 'VSBED' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 44  hdr = 'Delivering Plant (Own or External)' node = 'S' fld = 'VWERK' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 45  hdr = 'Maximum Number of Partial Deliveries Allowed Per Item' node = 'S' fld = 'ANTLF' fmt = '' cnv = 'NM' )
+      ( tmpl = 'e891845c' col = 46  hdr = 'Incoterms (Part 1)' node = 'S' fld = 'INCO1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 47  hdr = 'Incoterms (Part 2)' node = 'S' fld = 'INCO2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 48  hdr = 'Customer Account Assignment Group' node = 'S' fld = 'KTGRD' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 49  hdr = 'Tax classification for customer' node = 'T' fld = '#1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 50  hdr = 'Tax classification for customer' node = 'T' fld = '#2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 51  hdr = 'Tax classification for customer' node = 'T' fld = '#3' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 52  hdr = 'Tax classification for customer' node = 'T' fld = '#4' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 53  hdr = 'Customer group 1' node = 'S' fld = 'KVGR1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 54  hdr = 'Customer group 2' node = 'S' fld = 'KVGR2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 55  hdr = 'Customer group 3' node = 'S' fld = 'KVGR3' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 56  hdr = 'Customer group 4' node = 'S' fld = 'KVGR4' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 57  hdr = 'Customer group 5' node = 'S' fld = 'KVGR5' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 58  hdr = 'Plant' node = 'Z' fld = 'WERKS' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 59  hdr = 'Transit Day' node = 'Z' fld = 'CUST_TRNST_DAYS' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 60  hdr = 'Distance in kms.' node = 'Z' fld = 'KMSUM' fmt = '' cnv = 'NM' )
+      ( tmpl = 'e891845c' col = 61  hdr = '20B. Lic. No' node = 'Z' fld = 'DRUGLICENSE1' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 62  hdr = '21B. Lic. No' node = 'Z' fld = 'DRUGLICENSE2' fmt = '' cnv = '' )
+      ( tmpl = 'e891845c' col = 63  hdr = '20B and 21B Expiry Date' node = 'Z' fld = 'DL1_DL2_VALIDDT' fmt = '' cnv = 'DT' )
+      ( tmpl = 'e891845c' col = 64  hdr = 'GLN' node = 'Z' fld = 'GLN_URI_FORMAT' fmt = '' cnv = '' )
     "  f10a66f5 - 36 columns - IN/ZSUB, UG/ZSUB
       ( tmpl = 'f10a66f5' col = 1   hdr = 'Transaction Code' node = 'X' fld = 'XD01' fmt = '' cnv = '' )
       ( tmpl = 'f10a66f5' col = 2   hdr = 'Customer Code  as sample' node = 'K' fld = 'KUNNR' fmt = 'AL' cnv = 'AL' )
@@ -4992,6 +5164,7 @@ CLASS lcl_excel DEFINITION FINAL.
                 iv_sheet   TYPE string
                 iv_skip    TYPE i DEFAULT 1
                 it_want    TYPE string_table OPTIONAL
+                it_hint    TYPE string_table OPTIONAL
       EXPORTING et_head    TYPE string_table
                 et_row     TYPE tt_row
                 ev_sheet   TYPE string
@@ -5146,9 +5319,21 @@ CLASS lcl_excel IMPLEMENTATION.
     " What actually decides is the heading row: over every tab, and over the
     " first few lines of each, the line carrying the most of the columns this
     " scenario expects wins. So the tab name does not matter, and neither
-    " does a title line above the headings. Where two tabs are equally good
-    " the one named for the scenario is taken.
+    " does a title line above the headings.
+    "
+    " Two tabs can be equally good: Exelan's and Invagen's YVSP tabs have
+    " the same columns, and so do Australia's and Morocco's ZDOM. Taking the
+    " first loaded the Exelan rows when Invagen was chosen. A tie goes to the
+    " tab named for the scenario, then to the one whose name holds the
+    " region (IT_HINT); a tie nothing resolves stops the upload rather than
+    " guess.
     CONSTANTS lc_scan TYPE i VALUE 10.
+    TYPES: BEGIN OF ty_tsc,
+             name TYPE string,
+             sc   TYPE i,
+             row  TYPE i,
+           END OF ty_tsc.
+    DATA lt_tsc  TYPE STANDARD TABLE OF ty_tsc WITH EMPTY KEY.
     DATA lv_hit  TYPE string.
     DATA lt_hit  TYPE tt_row.
     DATA lv_best TYPE i.
@@ -5158,18 +5343,57 @@ CLASS lcl_excel IMPLEMENTATION.
         DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = lv_n2 ).
         DATA(lv_max) = COND i( WHEN lines( lt_r ) < lc_scan THEN lines( lt_r )
                                ELSE lc_scan ).
+        DATA(ls_tsc) = VALUE ty_tsc( name = lv_n2 ).
         DO lv_max TIMES.
           DATA(lv_r)  = sy-index.
           DATA(lv_sc) = score( it_head = lt_r[ lv_r ]-cells it_want = it_want ).
-          IF lv_sc > lv_best
-          OR ( lv_sc > 0 AND lv_sc = lv_best AND lv_n2 = lv_named AND lv_hit <> lv_named ).
-            lv_best = lv_sc.
-            lv_hit  = lv_n2.
-            lt_hit  = lt_r.
-            lv_hrow = lv_r.
+          IF lv_sc > ls_tsc-sc.
+            ls_tsc-sc  = lv_sc.
+            ls_tsc-row = lv_r.
           ENDIF.
         ENDDO.
+        IF ls_tsc-sc > lv_best.
+          lv_best = ls_tsc-sc.
+        ENDIF.
+        APPEND ls_tsc TO lt_tsc.
       ENDLOOP.
+      DELETE lt_tsc WHERE sc < lv_best OR sc = 0.
+
+      IF lines( lt_tsc ) > 1.
+        DATA ls_pick TYPE ty_tsc.
+        READ TABLE lt_tsc INTO ls_pick WITH KEY name = lv_named.
+        IF sy-subrc <> 0.
+          DATA lt_hinted LIKE lt_tsc.
+          LOOP AT lt_tsc INTO DATA(ls_t).
+            DATA(lv_tn) = lcl_util=>squash( ls_t-name ).
+            LOOP AT it_hint INTO DATA(lv_hn) WHERE table_line IS NOT INITIAL.
+              IF lv_tn CS lv_hn.
+                APPEND ls_t TO lt_hinted.
+                EXIT.
+              ENDIF.
+            ENDLOOP.
+          ENDLOOP.
+          IF lines( lt_hinted ) <> 1.
+            DATA lv_tie TYPE string.
+            LOOP AT lt_tsc INTO DATA(ls_t2).
+              lv_tie = COND string( WHEN lv_tie IS INITIAL THEN |"{ ls_t2-name }"|
+                                    ELSE |{ lv_tie }, "{ ls_t2-name }"| ).
+            ENDLOOP.
+            RAISE EXCEPTION TYPE lcx_dl
+              EXPORTING iv_text = |Tabs { lv_tie } all carry the columns of "{ iv_sheet }" | &&
+                                  |and none is named for the region - keep only the tab to | &&
+                                  |load in the file, or put the region in its name|.
+          ENDIF.
+          ls_pick = lt_hinted[ 1 ].
+        ENDIF.
+        lt_tsc = VALUE #( ( ls_pick ) ).
+      ENDIF.
+
+      IF lt_tsc IS NOT INITIAL.
+        lv_hit  = lt_tsc[ 1 ]-name.
+        lv_hrow = lt_tsc[ 1 ]-row.
+        lt_hit  = sheet_rows( io_xl = lo_xl iv_name = lv_hit ).
+      ENDIF.
     ENDIF.
 
     " No tab recognisable by its headings - fall back to the name, then to
@@ -7639,6 +7863,7 @@ CLASS lcl_main IMPLEMENTATION.
                     iv_sheet   = label( )
                     iv_skip    = p_skip
                     it_want    = lo_eng->headings( )
+                    it_hint    = lcl_tmpl=>region_hints( p_regn )
           IMPORTING et_head    = lt_head
                     et_row     = lt_row
                     ev_sheet   = gv_tab ).

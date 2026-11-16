@@ -105,6 +105,7 @@ ISLAND_OK = {
     ('ZMMS_BP_MASS_UPLOAD', 'R9',  6): 'SPERR_1 is the company code block of an otherwise central tab',
     ('ZMMS_BP_MASS_UPLOAD', 'R9',  8): 'SPERM_1 is the purchasing block of an otherwise central tab',
     ('ZSDS_CUST_TMPL_DOWNLOAD', '08585a5a', 66): 'one tax classification column among the sales area columns',
+    ('ZSDS_CUST_TMPL_DOWNLOAD', '4387ad5a', 75): "Cipla INC's YVSP tab puts Lock Box between the licence columns",
     ('ZSDS_CUST_TMPL_DOWNLOAD', '8a74041a', 61): 'one tax classification column among the sales area columns',
     ('ZSDS_CUST_TMPL_DOWNLOAD', 'd7ee33bb', 54): 'one tax classification column among the sales area columns',
     ('ZSDS_CUST_TMPL_DOWNLOAD', 'e10ec770', 83): 'one tax classification column among the sales area columns',

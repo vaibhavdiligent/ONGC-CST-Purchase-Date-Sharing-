@@ -46,7 +46,8 @@ SHEET_COUNTRY = {
     'cust extn': ['*'],     # extension template, valid for any country
     'block unblock': ['*'],  # XD05, valid for any country
     # Cipla USA (company code and sales organisation 5000), sent separately on
-    # 13 November 2026 as docs/cipla/customer_template_cipla_inc.xlsx.
+    # 13 November 2026 and revised on 16 November as
+    # docs/cipla/customer_template_cipla_inc.xlsx.
     'Cipla INC':     ['US'],
 }
 
@@ -88,7 +89,8 @@ ADD_COLUMNS = {
     # YVSP, YVMI and YVTO: the field status of the account group makes the
     # lockbox a required entry ("Lockbox (KNB1-LOCKB) is a required entry
     # field") and the workbook has no column for it.
-    ('Exelan', 'YVSP'): [('LOCKB', 'Lockbox')],
+    # Cipla's own YVSP template of 16 November 2026 carries it as "Lock Box".
+    ('Exelan', 'YVSP'): [('LOCKB', 'Lock Box')],
     # Customer extension: a new company code and a new sales area need these,
     # and the extension tab carries none of them - "Reconciliation acct
     # (KNB1-AKONT) is a required entry field", Sort key, Record payment
@@ -107,11 +109,14 @@ ADD_COLUMNS = {
 # same indirect and tolling customers as Exelan; the dropdown for Invagen did not
 # offer YVMI and YVTO. They take the layout of Invagen's own US sold-to block.
 ADD_COMBOS = [('Invagen', 'YVMI', ('Invagen', 'YVSP')),
-              ('Invagen', 'YVTO', ('Invagen', 'YVSP')),
-              # Cipla INC's "INC - YVSP" tab has Exelan's YVSP columns, and
-              # "INC-YSHP" Exelan's YSHP columns, field for field.
-              ('Cipla INC', 'YVSP', ('Exelan', 'YVSP')),
-              ('Cipla INC', 'YSHP', ('Exelan', 'YSHP'))]
+              ('Invagen', 'YVTO', ('Invagen', 'YVSP'))]
+
+# The Cipla INC workbook of 16 November 2026. Its "INC - YVSP" and "INC-YSHP"
+# tabs are laid out as the main workbook's blocks - technical row, types,
+# lengths, descriptions, data - and are read the same way: Exelan's YVSP
+# columns with Lockbox and GLN at the end, and Exelan's YSHP columns with GLN.
+# They are Cipla INC's own layouts; Exelan and Invagen keep theirs.
+INC_BLOCK_TABS = ['INC - YVSP', 'INC-YSHP']
 
 # Cipla INC's "INC-YVMI" tab is a layout of its own: 197 columns, one heading
 # row of descriptions and no technical row, the data from row 2. The columns
@@ -141,6 +146,10 @@ def inc_blocks(path):
     """The description-only tabs of the Cipla INC workbook."""
     wb = openpyxl.load_workbook(path, data_only=True)
     out = []
+    for tab in INC_BLOCK_TABS:
+        for b in blocks_of(wb[tab]):
+            b['sheet'] = 'Cipla INC'
+            out.append(b)
     for tab, ktokd in INC_TABS:
         ws = wb[tab]
         cols = [c for c in range(1, ws.max_column + 1)

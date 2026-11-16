@@ -19,7 +19,7 @@
 *& columns of all 24 templates to prove it.
 *&
 *& Pick a region and an account group and the template follows: the
-*& workbooks Cipla supplied hold 25 layouts over 84 region and account
+*& workbooks Cipla supplied hold 27 layouts over 84 region and account
 *& group combinations, and a region and an account group name exactly one
 *& of them. It is a region and not a country because the two do not line
 *& up - Europe is four countries on one template, and the United States is
@@ -160,9 +160,12 @@ TYPES: BEGIN OF ty_combi,
        tt_combi TYPE STANDARD TABLE OF ty_combi WITH EMPTY KEY.
 
 " The regions the dropdown offers, each with its countries in brackets.
+" TAB is the region's tab in Cipla's workbook ("Moroccco" for Morocco), so
+" an upload can tell two tabs of the same layout apart by their names.
 TYPES: BEGIN OF ty_regn,
          regn TYPE char2,
          text TYPE char40,
+         tab  TYPE char30,
        END OF ty_regn,
        tt_regn TYPE STANDARD TABLE OF ty_regn WITH EMPTY KEY.
 
@@ -1001,7 +1004,7 @@ ENDCLASS.
 *   Generated from "customer code templates.xlsx". The workbook is LSMW
 *   shaped: every sheet is a country or a legal entity and the templates
 *   are stacked inside it, one per account group. 61 blocks collapse to
-*   24 distinct column lists over 81 combinations, and a country with an
+*   27 distinct column lists over 84 combinations, and a region with an
 *   account group names exactly one of them.
 *----------------------------------------------------------------------*
 CLASS lcl_tmpl DEFINITION FINAL.
@@ -1025,6 +1028,14 @@ CLASS lcl_tmpl DEFINITION FINAL.
     CLASS-METHODS region_text
       IMPORTING iv_regn   TYPE char2
       RETURNING VALUE(rv) TYPE char40.
+
+    " What a tab name holds when the tab is this region's: its name without
+    " the countries ("Invagen") and its tab in Cipla's workbook ("Moroccco"),
+    " squashed. Exelan and Invagen share a layout, so their tabs look alike
+    " to the reader and only the name says which is which.
+    CLASS-METHODS region_hints
+      IMPORTING iv_regn   TYPE char2
+      RETURNING VALUE(rt) TYPE string_table.
 
     CLASS-METHODS cols
       IMPORTING iv_tmpl   TYPE char8
@@ -1097,6 +1108,25 @@ CLASS lcl_tmpl IMPLEMENTATION.
     READ TABLE mt_regn INTO DATA(ls_rg) WITH KEY regn = iv_regn.
     IF sy-subrc = 0.
       rv = ls_rg-text.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD region_hints.
+    load( ).
+    READ TABLE mt_regn INTO DATA(ls_rg) WITH KEY regn = iv_regn.
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    DATA: lv_name TYPE string,
+          lv_rest TYPE string.
+    SPLIT ls_rg-text AT '(' INTO lv_name lv_rest.
+    DATA(lv_h1) = lcl_util=>squash( lv_name ).
+    DATA(lv_h2) = lcl_util=>squash( ls_rg-tab ).
+    IF lv_h1 IS NOT INITIAL.
+      APPEND lv_h1 TO rt.
+    ENDIF.
+    IF lv_h2 IS NOT INITIAL AND lv_h2 <> lv_h1.
+      APPEND lv_h2 TO rt.
     ENDIF.
   ENDMETHOD.
 
@@ -2656,6 +2686,7 @@ CLASS lcl_excel DEFINITION FINAL.
                 iv_sheet   TYPE string
                 iv_skip    TYPE i DEFAULT 1
                 it_want    TYPE string_table OPTIONAL
+                it_hint    TYPE string_table OPTIONAL
       EXPORTING et_head    TYPE string_table
                 et_row     TYPE tt_row
                 ev_sheet   TYPE string
@@ -2810,9 +2841,21 @@ CLASS lcl_excel IMPLEMENTATION.
     " What actually decides is the heading row: over every tab, and over the
     " first few lines of each, the line carrying the most of the columns this
     " scenario expects wins. So the tab name does not matter, and neither
-    " does a title line above the headings. Where two tabs are equally good
-    " the one named for the scenario is taken.
+    " does a title line above the headings.
+    "
+    " Two tabs can be equally good: Exelan's and Invagen's YVSP tabs have
+    " the same columns, and so do Australia's and Morocco's ZDOM. Taking the
+    " first loaded the Exelan rows when Invagen was chosen. A tie goes to the
+    " tab named for the scenario, then to the one whose name holds the
+    " region (IT_HINT); a tie nothing resolves stops the upload rather than
+    " guess.
     CONSTANTS lc_scan TYPE i VALUE 10.
+    TYPES: BEGIN OF ty_tsc,
+             name TYPE string,
+             sc   TYPE i,
+             row  TYPE i,
+           END OF ty_tsc.
+    DATA lt_tsc  TYPE STANDARD TABLE OF ty_tsc WITH EMPTY KEY.
     DATA lv_hit  TYPE string.
     DATA lt_hit  TYPE tt_row.
     DATA lv_best TYPE i.
@@ -2822,18 +2865,57 @@ CLASS lcl_excel IMPLEMENTATION.
         DATA(lt_r) = sheet_rows( io_xl = lo_xl iv_name = lv_n2 ).
         DATA(lv_max) = COND i( WHEN lines( lt_r ) < lc_scan THEN lines( lt_r )
                                ELSE lc_scan ).
+        DATA(ls_tsc) = VALUE ty_tsc( name = lv_n2 ).
         DO lv_max TIMES.
           DATA(lv_r)  = sy-index.
           DATA(lv_sc) = score( it_head = lt_r[ lv_r ]-cells it_want = it_want ).
-          IF lv_sc > lv_best
-          OR ( lv_sc > 0 AND lv_sc = lv_best AND lv_n2 = lv_named AND lv_hit <> lv_named ).
-            lv_best = lv_sc.
-            lv_hit  = lv_n2.
-            lt_hit  = lt_r.
-            lv_hrow = lv_r.
+          IF lv_sc > ls_tsc-sc.
+            ls_tsc-sc  = lv_sc.
+            ls_tsc-row = lv_r.
           ENDIF.
         ENDDO.
+        IF ls_tsc-sc > lv_best.
+          lv_best = ls_tsc-sc.
+        ENDIF.
+        APPEND ls_tsc TO lt_tsc.
       ENDLOOP.
+      DELETE lt_tsc WHERE sc < lv_best OR sc = 0.
+
+      IF lines( lt_tsc ) > 1.
+        DATA ls_pick TYPE ty_tsc.
+        READ TABLE lt_tsc INTO ls_pick WITH KEY name = lv_named.
+        IF sy-subrc <> 0.
+          DATA lt_hinted LIKE lt_tsc.
+          LOOP AT lt_tsc INTO DATA(ls_t).
+            DATA(lv_tn) = lcl_util=>squash( ls_t-name ).
+            LOOP AT it_hint INTO DATA(lv_hn) WHERE table_line IS NOT INITIAL.
+              IF lv_tn CS lv_hn.
+                APPEND ls_t TO lt_hinted.
+                EXIT.
+              ENDIF.
+            ENDLOOP.
+          ENDLOOP.
+          IF lines( lt_hinted ) <> 1.
+            DATA lv_tie TYPE string.
+            LOOP AT lt_tsc INTO DATA(ls_t2).
+              lv_tie = COND string( WHEN lv_tie IS INITIAL THEN |"{ ls_t2-name }"|
+                                    ELSE |{ lv_tie }, "{ ls_t2-name }"| ).
+            ENDLOOP.
+            RAISE EXCEPTION TYPE lcx_dl
+              EXPORTING iv_text = |Tabs { lv_tie } all carry the columns of "{ iv_sheet }" | &&
+                                  |and none is named for the region - keep only the tab to | &&
+                                  |load in the file, or put the region in its name|.
+          ENDIF.
+          ls_pick = lt_hinted[ 1 ].
+        ENDIF.
+        lt_tsc = VALUE #( ( ls_pick ) ).
+      ENDIF.
+
+      IF lt_tsc IS NOT INITIAL.
+        lv_hit  = lt_tsc[ 1 ]-name.
+        lv_hrow = lt_tsc[ 1 ]-row.
+        lt_hit  = sheet_rows( io_xl = lo_xl iv_name = lv_hit ).
+      ENDIF.
     ENDIF.
 
     " No tab recognisable by its headings - fall back to the name, then to
@@ -5303,6 +5385,7 @@ CLASS lcl_main IMPLEMENTATION.
                     iv_sheet   = label( )
                     iv_skip    = p_skip
                     it_want    = lo_eng->headings( )
+                    it_hint    = lcl_tmpl=>region_hints( p_regn )
           IMPORTING et_head    = lt_head
                     et_row     = lt_row
                     ev_sheet   = gv_tab ).

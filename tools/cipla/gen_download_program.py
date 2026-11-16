@@ -59,7 +59,7 @@ def main():
 
     # The regions the dropdown offers. The two that belong to no country are
     # reached by their own radio button, so they are not in the list.
-    region = [f"      ( regn = '{r['region']}' text = '{r['text']}' )"
+    region = [f"      ( regn = '{r['region']}' text = '{r['text']}' tab = '{r['sheet']}' )"
               for r in reg['regions'] if r['countries']]
 
     text = open(SKEL).read()

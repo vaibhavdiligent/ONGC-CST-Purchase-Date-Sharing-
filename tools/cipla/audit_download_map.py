@@ -90,6 +90,8 @@ def main():
     NO_CUSTOMER_COLUMN = {
         '43156406',   # 63 columns, the YSHP ship-to template
         '6e6467eb',   # 74 columns, YVSP / YVMI / YVTO
+        '4387ad5a',   # Cipla INC YVSP - Exelan's YVSP with Lock Box and GLN
+        'e891845c',   # Cipla INC YSHP - Exelan's YSHP with GLN
         'ab38ead5',   # 79 columns, the ZEXP export template
     }
     has_kunnr = collections.defaultdict(bool)
@@ -168,7 +170,7 @@ def main():
 
     # Every region the dropdown offers has at least one template behind it,
     # and every region a combination names is in the dropdown.
-    shown = set(re.findall(r"\(\s*regn = '(\w+)' text = '[^']*'\s*\)", SRC))
+    shown = set(re.findall(r"\(\s*regn = '(\w+)' text = '[^']*'(?:\s+tab = '[^']*')?\s*\)", SRC))
     used  = {r for r, _, _, _ in combis}
     for r in sorted(shown - used):
         fail.append(f'the dropdown offers region {r}, which has no template')
