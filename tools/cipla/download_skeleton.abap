@@ -5079,6 +5079,17 @@ CLASS lcl_main DEFINITION FINAL.
   PRIVATE SECTION.
     CLASS-METHODS download.
     CLASS-METHODS upload.
+    TYPES tt_hkey TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    " The other template whose columns the file carries better than the
+    " chosen one's - the block file uploaded with "Customer extension"
+    " chosen - or empty when the chosen one fits best.
+    CLASS-METHODS other_fit IMPORTING it_head   TYPE string_table
+                                      iv_tmpl   TYPE char8
+                            RETURNING VALUE(rv) TYPE string.
+    " How many of a template's headings the file's heading line carries.
+    CLASS-METHODS fit IMPORTING it_keys   TYPE tt_hkey
+                                iv_tmpl   TYPE char8
+                      RETURNING VALUE(rv) TYPE i.
     CLASS-DATA mv_last TYPE string.
     " The file name last proposed for a download.
     CLASS-DATA mv_file TYPE ty_path.
@@ -5087,6 +5098,59 @@ CLASS lcl_main DEFINITION FINAL.
 ENDCLASS.
 
 CLASS lcl_main IMPLEMENTATION.
+
+  METHOD other_fit.
+    DATA lt_k TYPE tt_hkey.
+    LOOP AT it_head INTO DATA(lv_h).
+      DATA(lv_k) = lcl_util=>squash( lv_h ).
+      IF lv_k IS NOT INITIAL.
+        INSERT lv_k INTO TABLE lt_k.
+      ENDIF.
+    ENDLOOP.
+    IF lt_k IS INITIAL.
+      RETURN.
+    ENDIF.
+
+    TYPES: BEGIN OF ty_cand,
+             tmpl TYPE char8,
+             name TYPE string,
+           END OF ty_cand.
+    DATA lt_cand TYPE STANDARD TABLE OF ty_cand WITH EMPTY KEY.
+    lt_cand = VALUE #( ( tmpl = gc_tmpl_blk  name = `Block / unblock` )
+                       ( tmpl = gc_tmpl_extn name = `Customer extension` )
+                       ( tmpl = gc_tmpl_cred name = `Credit limit` ) ).
+    IF p_regn IS NOT INITIAL AND p_ktokd IS NOT INITIAL.
+      DATA(lv_crt) = lcl_tmpl=>resolve( iv_regn = p_regn iv_ktokd = p_ktokd ).
+      IF lv_crt IS NOT INITIAL.
+        APPEND VALUE #( tmpl = lv_crt name = |Customer creation, { p_ktokd }| ) TO lt_cand.
+      ENDIF.
+    ENDIF.
+
+    DATA(lv_own) = fit( it_keys = lt_k iv_tmpl = iv_tmpl ).
+    DATA lv_best TYPE i.
+    LOOP AT lt_cand INTO DATA(ls_cand) WHERE tmpl <> iv_tmpl.
+      DATA(lv_sc) = fit( it_keys = lt_k iv_tmpl = ls_cand-tmpl ).
+      IF lv_sc > lv_own AND lv_sc > lv_best.
+        lv_best = lv_sc.
+        rv = ls_cand-name.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD fit.
+    DATA lt_want TYPE string_table.
+    IF iv_tmpl = gc_tmpl_cred.
+      lt_want = lcl_credit=>want( ).
+    ELSE.
+      DATA(lo_eng) = NEW lcl_engine( iv_tmpl = iv_tmpl io_log = NEW lcl_log( ) ).
+      lt_want = lo_eng->headings( ).
+    ENDIF.
+    LOOP AT lt_want INTO DATA(lv_w).
+      IF line_exists( it_keys[ table_line = lv_w ] ).
+        rv = rv + 1.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
 
   METHOD chosen.
     CASE abap_true.
@@ -5422,6 +5486,15 @@ CLASS lcl_main IMPLEMENTATION.
           lo_log->display( ).
           RETURN.
       ENDTRY.
+      DATA(lv_cfit) = other_fit( it_head = lt_chead iv_tmpl = lv_tmpl ).
+      IF lv_cfit IS NOT INITIAL.
+        lo_log->add( iv_row = 0 iv_type = 'E'
+                     iv_text = |This file has the columns of the { lv_cfit } template, not of the | &&
+                               |Credit limit template chosen on the screen - choose { lv_cfit } and | &&
+                               |upload again. Nothing was loaded| ).
+        lo_log->display( ).
+        RETURN.
+      ENDIF.
       DATA(lo_cred) = NEW lcl_credit( lo_log ).
       lo_cred->run( it_head = lt_chead it_row = lt_crow ).
       DATA: lv_cok   TYPE i,
@@ -5462,6 +5535,21 @@ CLASS lcl_main IMPLEMENTATION.
     IF lt_row IS INITIAL.
       lo_log->add( iv_row = 0 iv_type = 'E'
                    iv_text = |Tab "{ gv_tab }" holds no data below its heading row| ).
+      lo_log->display( ).
+      RETURN.
+    ENDIF.
+
+    " The block / unblock file uploaded with "Customer extension" chosen
+    " (CRS, November 2026): five headings matched, the other columns were
+    " read by position, and the company code posting block "X" was taken
+    " for the account group - "Account group X does not exist". A file
+    " that is plainly another template's is not read at all.
+    DATA(lv_fit) = other_fit( it_head = lt_head iv_tmpl = lv_tmpl ).
+    IF lv_fit IS NOT INITIAL.
+      lo_log->add( iv_row = 0 iv_type = 'E'
+                   iv_text = |This file has the columns of the { lv_fit } template, not of the | &&
+                             |{ label( ) } template chosen on the screen - choose { lv_fit } and | &&
+                             |upload again. Nothing was loaded| ).
       lo_log->display( ).
       RETURN.
     ENDIF.
