@@ -89,6 +89,19 @@ setc = method(C, 'lcl_engine', 'set_comp')
 if 'code_padded(' not in setc:
     fail.append('customer: a code Excel stripped of its leading zero (shipping conditions 1 for 01) '
                 'reaches SAP unpadded')
+# Unblocking, November 2026: "not unblocking the customer in the sales area".
+# A downloaded file carries the current blocks; marked "for Unblocking" and
+# uploaded as it was, it sent them all back with no word in the log.
+if not re.search(r"ELSEIF lv_unblk = abap_true AND lv_cell <> gc_clear[\s\S]{0,900}?"
+                 r"mo_log->add\([^)]*iv_type = 'W'", master):
+    fail.append('customer: a filled block cell on an unblocking row keeps the block without a warning')
+if not re.search(r"IF lv_unblk = abap_true AND lv_vkorg IS INITIAL\.\s*\n\s*mo_log->add\(", master):
+    fail.append('customer: an unblocking row without a sales area leaves the sales area blocks '
+                'without a warning')
+for f in ('BUKRS', 'VKORG', 'VTWEG', 'SPART'):
+    if not re.search(rf"WHEN '{f}'\. lv_\w+ = key_padded\(", master):
+        fail.append(f'customer: the {f} key is taken as Excel left it - 01 read as 1 finds no '
+                    f'sales area, and nothing is blocked or unblocked there')
 if 'ref_fill(' not in master:
     fail.append('customer: nothing is copied from the reference company code and sales area')
 

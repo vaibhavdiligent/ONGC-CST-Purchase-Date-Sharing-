@@ -3048,6 +3048,14 @@ CLASS lcl_engine DEFINITION FINAL.
 
     METHODS master IMPORTING is_row TYPE ty_row.
 
+    " A company code or sales area key from the file, with the leading
+    " zeros Excel dropped put back (KNB1-BUKRS, KNVV-VKORG/VTWEG/SPART).
+    METHODS key_padded IMPORTING iv_fld   TYPE clike
+                                 iv_val   TYPE string
+                                 iv_len   TYPE i
+                                 iv_row   TYPE i
+                       RETURNING VALUE(rv) TYPE string.
+
     " Why a column of the kind IV_WHAT (BANK, PARTNER, CREDIT, COMPANY,
     " OTHER) is not loaded, and where it is maintained instead.
     METHODS skip_reason IMPORTING iv_what   TYPE clike
@@ -3431,6 +3439,16 @@ CLASS lcl_engine IMPLEMENTATION.
     rv = lv_kunnr.
   ENDMETHOD.
 
+  METHOD key_padded.
+    DATA(lv_tab) = COND string( WHEN iv_fld = 'BUKRS' THEN `KNB1` ELSE `KNVV` ).
+    rv = lcl_cfg=>get( )->code_padded( iv_tab = lv_tab iv_fld = iv_fld
+                                       iv_val = iv_val iv_len = iv_len ).
+    IF rv <> iv_val.
+      mo_log->add( iv_row = iv_row iv_type = 'I' iv_struc = lv_tab iv_fld = iv_fld
+                   iv_text = |"{ iv_val }" read as "{ rv }" - Excel drops the leading zero of a code| ).
+    ENDIF.
+  ENDMETHOD.
+
   METHOD skip_reason.
     CASE iv_what.
       WHEN 'BANK'.
@@ -3619,10 +3637,15 @@ CLASS lcl_engine IMPLEMENTATION.
       DATA(lv_v) = lcl_util=>cell( is_row = is_row iv_col = ls_k-col ).
       CASE ls_k-fld.
         WHEN 'KUNNR'. lv_kunnr = key_kunnr( iv_cell = lv_v iv_row = is_row-row ).
-        WHEN 'BUKRS'. lv_bukrs = lv_v.
-        WHEN 'VKORG'. lv_vkorg = lv_v.
-        WHEN 'VTWEG'. lv_vtweg = lv_v.
-        WHEN 'SPART'. lv_spart = lv_v.
+          " Excel turns a key typed as 01 into the number 1, and sales area
+          " 1000/1/0 is then not the customer's 1000/01/00 - the row was
+          " told "not in sales area" and nothing was blocked or unblocked
+          " there. A digits-only key is padded when only the padded one is
+          " in its check table.
+        WHEN 'BUKRS'. lv_bukrs = key_padded( iv_fld = 'BUKRS' iv_val = lv_v iv_len = 4 iv_row = is_row-row ).
+        WHEN 'VKORG'. lv_vkorg = key_padded( iv_fld = 'VKORG' iv_val = lv_v iv_len = 4 iv_row = is_row-row ).
+        WHEN 'VTWEG'. lv_vtweg = key_padded( iv_fld = 'VTWEG' iv_val = lv_v iv_len = 2 iv_row = is_row-row ).
+        WHEN 'SPART'. lv_spart = key_padded( iv_fld = 'SPART' iv_val = lv_v iv_len = 2 iv_row = is_row-row ).
         WHEN 'KTOKD'.
           " Some tabs put a picking list in this cell, for example
           " "ZDOM - Sold-to Customer" followed by more lines. Keep only the
@@ -3785,6 +3808,20 @@ CLASS lcl_engine IMPLEMENTATION.
       IF lv_unblk = abap_true AND lv_cell IS INITIAL
          AND ( ls_m-node = gc_n_cent OR ls_m-node = gc_n_comp OR ls_m-node = gc_n_sale ).
         lv_cell = gc_clear.
+      ELSEIF lv_unblk = abap_true AND lv_cell <> gc_clear
+         AND ( ls_m-node = gc_n_cent OR ls_m-node = gc_n_comp OR ls_m-node = gc_n_sale ).
+        " A filled block cell keeps that block, also on an unblocking row -
+        " so one block can be kept while the others go. But the download
+        " writes the customer's current blocks into these cells, and a
+        " downloaded file marked "for Unblocking" and uploaded as it was
+        " sent every block back unchanged, with no word in the log.
+        DATA(lv_bst) = SWITCH string( ls_m-node WHEN gc_n_cent THEN `KNA1`
+                                                WHEN gc_n_comp THEN `KNB1`
+                                                ELSE `KNVV` ).
+        mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                     iv_struc = lv_bst iv_fld = ls_m-fld
+                     iv_text = |Column { ls_m-col } ({ lv_bst }-{ ls_m-fld }) holds "{ lv_cell }" on an | &&
+                               |unblocking row, so that block is kept - empty the cell to remove it| ).
       ENDIF.
       IF lv_cell IS INITIAL.
         CONTINUE.
@@ -4071,6 +4108,17 @@ CLASS lcl_engine IMPLEMENTATION.
                                |in company code { lv_bukrs } (account groups such as ship-to have | &&
                                |no company code data)| ).
       ENDIF.
+    ENDIF.
+    " An unblocking row without a sales area cannot reach the sales area
+    " blocks, nor one without a company code the posting block there.
+    IF lv_unblk = abap_true AND lv_vkorg IS INITIAL.
+      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                   iv_text = |No sales area in this row (sales organization, distribution channel, | &&
+                             |division) - the sales area blocks are not removed| ).
+    ENDIF.
+    IF lv_unblk = abap_true AND lv_bukrs IS INITIAL.
+      mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
+                   iv_text = |No company code in this row - the company code posting block is not removed| ).
     ENDIF.
     IF lv_vkorg IS NOT INITIAL.
       IF ls_sale-task = gc_i AND mv_tmpl = gc_tmpl_blk.
