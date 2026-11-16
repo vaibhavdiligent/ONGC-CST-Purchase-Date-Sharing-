@@ -3717,7 +3717,8 @@ CLASS lcl_engine IMPLEMENTATION.
           lv_rvkorg TYPE vkorg,
           lv_rvtweg TYPE vtweg,
           lv_rspart TYPE spart,
-          lv_unblk  TYPE abap_bool.
+          lv_unblk  TYPE abap_bool,
+          lv_blklbl TYPE abap_bool.
     LOOP AT mt_map INTO DATA(ls_r) WHERE node = '-'.
       DATA(lv_rv) = lcl_util=>cell( is_row = is_row iv_col = ls_r-col ).
       IF lv_rv IS INITIAL.
@@ -3740,8 +3741,20 @@ CLASS lcl_engine IMPLEMENTATION.
           DATA(lv_lbl) = lcl_util=>squash( lv_rv ).
           lv_unblk = xsdbool( lv_lbl CS 'UNBL' OR lv_lbl CS 'UBBL'
                            OR lv_lbl CS 'UNLOCK' OR lv_lbl = 'U' ).
+          lv_blklbl = xsdbool( lv_unblk = abap_false
+                               AND ( lv_lbl CS 'BLOCK' OR lv_lbl = 'B' ) ).
       ENDCASE.
     ENDLOOP.
+
+    " The block template is the customer's block state, as the XD05
+    " recording it replaces was: a filled cell sets a block, an empty cell
+    " removes it. Cipla's own XD05 file has no "Blocking or unblocking"
+    " column at all (November 2026), and with empty meaning "leave alone"
+    " it could block but never unblock. Only a row that says "for
+    " Blocking" in that column keeps the old reading - an empty cell leaves
+    " the block as it is.
+    DATA(lv_state) = xsdbool( lv_unblk = abap_true
+                              OR ( mv_tmpl = gc_tmpl_blk AND lv_blklbl = abap_false ) ).
 
     " ---- 2. build the customer node ------------------------------------
     DATA ls_cust TYPE cmds_ei_extern.
@@ -3802,10 +3815,11 @@ CLASS lcl_engine IMPLEMENTATION.
       IF ls_m-node = gc_n_tax.
         lv_tnth = lv_tnth + 1.
       ENDIF.
-      " An unblocking row clears every block its cells leave empty. Without
-      " this an empty cell meant "leave alone", as it does everywhere else,
-      " so an unblocking row was posted and changed nothing.
-      IF lv_unblk = abap_true AND lv_cell IS INITIAL
+      " An unblocking row - and a block row that does not say "for
+      " Blocking" - clears every block its cells leave empty. Without this
+      " an empty cell meant "leave alone", as it does everywhere else, so an
+      " unblocking row was posted and changed nothing.
+      IF lv_state = abap_true AND lv_cell IS INITIAL
          AND ( ls_m-node = gc_n_cent OR ls_m-node = gc_n_comp OR ls_m-node = gc_n_sale ).
         lv_cell = gc_clear.
       ELSEIF lv_unblk = abap_true AND lv_cell <> gc_clear
@@ -4111,14 +4125,14 @@ CLASS lcl_engine IMPLEMENTATION.
     ENDIF.
     " An unblocking row without a sales area cannot reach the sales area
     " blocks, nor one without a company code the posting block there.
-    IF lv_unblk = abap_true AND lv_vkorg IS INITIAL.
+    IF lv_state = abap_true AND lv_vkorg IS INITIAL.
       mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
                    iv_text = |No sales area in this row (sales organization, distribution channel, | &&
-                             |division) - the sales area blocks are not removed| ).
+                             |division) - the sales area blocks are not changed| ).
     ENDIF.
-    IF lv_unblk = abap_true AND lv_bukrs IS INITIAL.
+    IF lv_state = abap_true AND lv_bukrs IS INITIAL.
       mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
-                   iv_text = |No company code in this row - the company code posting block is not removed| ).
+                   iv_text = |No company code in this row - the company code posting block is not changed| ).
     ENDIF.
     IF lv_vkorg IS NOT INITIAL.
       IF ls_sale-task = gc_i AND mv_tmpl = gc_tmpl_blk.
@@ -4130,12 +4144,12 @@ CLASS lcl_engine IMPLEMENTATION.
       ENDIF.
     ENDIF.
 
-    IF mv_tmpl = gc_tmpl_blk AND lv_unblk = abap_false
+    IF mv_tmpl = gc_tmpl_blk AND lv_state = abap_false
        AND ls_cust-central_data-central-datax IS INITIAL
        AND ls_cust-company_data-company IS INITIAL
        AND ls_cust-sales_data-sales IS INITIAL.
       mo_log->add( iv_row = is_row-row iv_kunnr = lv_kunnr iv_type = 'W'
-                   iv_text = 'Nothing to block in this row - to unblock, write "for Unblocking" in column 1 and leave the block cells empty' ).
+                   iv_text = 'Nothing to block in this row - it says "for Blocking" and every block cell is empty' ).
       RETURN.
     ENDIF.
 

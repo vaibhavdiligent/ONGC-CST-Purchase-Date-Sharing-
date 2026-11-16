@@ -61,7 +61,7 @@ guard = master.find('mo_log->has_error( is_row-row )')
 if post < 0 or guard < 0 or guard > post:
     fail.append('customer: a row with errors is still posted')
 # Unblocking changed nothing: an empty block cell meant "leave alone".
-if not re.search(r'lv_unblk = abap_true AND lv_cell IS INITIAL[\s\S]{0,200}lv_cell = gc_clear', master):
+if not re.search(r'lv_state = abap_true AND lv_cell IS INITIAL[\s\S]{0,200}lv_cell = gc_clear', master):
     fail.append('customer: an unblocking row does not clear the blocks')
 # Invagen's tax columns carry India's categories.
 if not re.search(r'tax_cat_ok\([^)]*\) = abap_false\.\s*\n\s*DATA\(lv_named\)[\s\S]{0,120}tax_cat_nth\(', master):
@@ -95,7 +95,13 @@ if 'code_padded(' not in setc:
 if not re.search(r"ELSEIF lv_unblk = abap_true AND lv_cell <> gc_clear[\s\S]{0,900}?"
                  r"mo_log->add\([^)]*iv_type = 'W'", master):
     fail.append('customer: a filled block cell on an unblocking row keeps the block without a warning')
-if not re.search(r"IF lv_unblk = abap_true AND lv_vkorg IS INITIAL\.\s*\n\s*mo_log->add\(", master):
+# Cipla's own XD05 file has no "Blocking or unblocking" column: its rows
+# are the block state, as the XD05 recording read them - empty removes.
+if not re.search(r"DATA\(lv_state\) = xsdbool\( lv_unblk = abap_true\s*\n\s*OR \( mv_tmpl = "
+                 r"gc_tmpl_blk AND lv_blklbl = abap_false \) \)", master):
+    fail.append('customer: a block file without the "Blocking or unblocking" column can block '
+                'but never unblock - its empty cells are left alone')
+if not re.search(r"IF lv_state = abap_true AND lv_vkorg IS INITIAL\.\s*\n\s*mo_log->add\(", master):
     fail.append('customer: an unblocking row without a sales area leaves the sales area blocks '
                 'without a warning')
 for f in ('BUKRS', 'VKORG', 'VTWEG', 'SPART'):
