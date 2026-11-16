@@ -2511,9 +2511,15 @@ CLASS lcl_cvis IMPLEMENTATION.
         IMPORTING return = ls_cret.
       reset_bp( ).
       IF ls_cret-type CA 'EAX'.
+        " "Updating could not be completed": the update task terminated
+        " while writing - the API had accepted the row, so a test run is
+        " clean. Why it terminated is recorded in SM13 only (and in ST22
+        " when it was a dump), so the log says where to look.
         mo_log->add( iv_row = iv_row iv_kunnr = iv_kunnr iv_type = 'E'
                      iv_text = |The update did not go through - nothing was saved | &&
-                               |for this row: { ls_cret-message }| ).
+                               |for this row: { ls_cret-message }. SAP records the reason in | &&
+                               |SM13 (user { sy-uname }, { sy-datum DATE = USER } | &&
+                               |{ sy-uzeit TIME = USER }) and, for a dump, in ST22| ).
         rv = abap_false.
         RETURN.
       ENDIF.
