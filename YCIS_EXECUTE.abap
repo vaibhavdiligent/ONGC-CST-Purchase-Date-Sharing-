@@ -56,6 +56,12 @@ TYPES: BEGIN OF ty_out,
          mcq_perc    TYPE p LENGTH 7 DECIMALS 2,
          elig_qty    TYPE p LENGTH 13 DECIMALS 3,
          rebate_val  TYPE p LENGTH 15 DECIMALS 2,
+*        Strategic Monthly Discount (scheme T) - GAIL QAR 13.11.2026
+         cis_date    TYPE d,                          " CIS entry date
+         raf_qty     TYPE p LENGTH 13 DECIMALS 3,     " Raffia grades qty
+         raf_rate    TYPE p LENGTH 9 DECIMALS 2,      " Raffia rate (Rs./MT)
+         oth_qty     TYPE p LENGTH 13 DECIMALS 3,     " other grades qty
+         oth_rate    TYPE p LENGTH 9 DECIMALS 2,      " other rate (Rs./MT)
          purch_no    TYPE ycis_apprvl-purch_no,
 *        L1 & L2 verification status captured for L3 onward processing
          l1_user     TYPE ycis_apprvl-l1_user,
@@ -265,16 +271,31 @@ FORM build_fieldcat.
   add_fc 'KVGR2'       'Cust Group'      ''.
   add_fc 'SALES_OFF'   'Sales Office'         ''.
 *  P/R/S Indicator column removed (GAIL UAT 29.10.2026)
-  add_fc 'SC_IND'      'Seasonal Indicator' ''.
-  add_fc 'WAIVER_1'    'Waiver Month 1'     ''.
-  add_fc 'WAIVER_2'    'Waiver Month 2'     ''.
-  add_fc 'WV_STAT'     'Waiver Status'   ''.
+* GAIL QAR 13.11.2026: Seasonal / Waiver columns not for the Strategic
+* Monthly Discount; it shows the CIS entry date instead (as L1)
+  IF p_smd IS INITIAL.
+    add_fc 'SC_IND'      'Seasonal Indicator' ''.
+    add_fc 'WAIVER_1'    'Waiver Month 1'     ''.
+    add_fc 'WAIVER_2'    'Waiver Month 2'     ''.
+    add_fc 'WV_STAT'     'Waiver Status'   ''.
+  ELSE.
+    add_fc 'CIS_DATE'    'CIS Entry Date'  ''.
+  ENDIF.
   add_fc 'MCQ_QTY'     'Committed Qty'        ''.
   add_fc 'LFT_QTY'     'Group Lifted Qty'     ''.
   add_fc 'IND_LFT_QTY' 'Individual Lifted Qty' ''.
   add_fc 'MCQ_PERC'    'MCQ %'                ''.
   add_fc 'ELIG_QTY'    'Eligible Qty'         ''.
-  add_fc 'REBATE_VAL'  'Rebate Value'    ''.
+  IF p_smd = 'X'.
+*   Strategic Monthly Discount - Raffia / Other bifurcation (as L1)
+    add_fc 'RAF_QTY'     'Raffia Grades Qty'     ''.
+    add_fc 'RAF_RATE'    'Raffia Rate (Rs./MT)'  ''.
+    add_fc 'OTH_QTY'     'Other Grades Qty'      ''.
+    add_fc 'OTH_RATE'    'Other Rate (Rs./MT)'   ''.
+    add_fc 'REBATE_VAL'  'Total Amount (Rs.)'    ''.
+  ELSE.
+    add_fc 'REBATE_VAL'  'Rebate Value'    ''.
+  ENDIF.
   add_fc 'PURCH_NO'    'Reference No'    ''.
   add_fc 'L1_USER'     'L1 Verified By'  ''.
   add_fc 'L1_DATE'     'L1 Verified On'  ''.
@@ -312,13 +333,14 @@ FORM num_format.
   DATA ls_fc TYPE slis_fieldcat_alv.
   LOOP AT gt_fcat INTO ls_fc.
     CASE ls_fc-fieldname.
-      WHEN 'MCQ_QTY' OR 'LFT_QTY' OR 'IND_LFT_QTY' OR 'ELIG_QTY'.
+      WHEN 'MCQ_QTY' OR 'LFT_QTY' OR 'IND_LFT_QTY' OR 'ELIG_QTY'
+        OR 'RAF_QTY' OR 'OTH_QTY'.
         ls_fc-inttype      = 'P'.
         ls_fc-datatype     = 'DEC'.
         ls_fc-decimals_out = '3'.
         ls_fc-outputlen    = 15.
         ls_fc-just         = 'R'.
-      WHEN 'MCQ_PERC'.
+      WHEN 'MCQ_PERC' OR 'RAF_RATE' OR 'OTH_RATE'.
         ls_fc-inttype      = 'P'.
         ls_fc-datatype     = 'DEC'.
         ls_fc-decimals_out = '2'.
@@ -635,6 +657,10 @@ FORM create_order USING p_appr TYPE ycis_apprvl
   x_header-cd_type1   = p_appr-cd_type.
   x_header-cd_value1  = p_appr-cd_value.
   x_header-purch_no   = p_appr-purch_no.
+* GAIL QAR 16.11.2026: credit-note mail showed rebate period 00.00.0000 -
+* pass the CIS period start with the order itself (VBKD-BSTDK); the period
+* end (VBKD-BSTDK_E) is still set in post_order_update.
+  x_header-purch_date = p_appr-period_from.
   IF p_appr-bill_block IS NOT INITIAL.
     x_header-bill_block = p_appr-bill_block.
   ENDIF.
@@ -991,6 +1017,28 @@ FORM fill_extra USING    ps_appr TYPE ycis_apprvl
     ps_out-sc_ind   = ls_first-p_sc_indicator.
     ps_out-waiver_1 = ls_first-waiver_1.
     ps_out-waiver_2 = ls_first-waiver_2.
+  ENDIF.
+* GAIL QAR 13.11.2026: Strategic Monthly Discount - same columns as L1:
+* CIS entry date (first CIS 2026-27 entry of the customer) and Raffia /
+* Other grades qty and rate (Rs. 4000 / 3000 per MT); the total amount is
+* the rebate value. The split follows exactly from the stored eligible qty
+* and value: value = 4000 x raffia + 3000 x other, qty = raffia + other.
+  IF ps_appr-scheme_type = 'T'.
+    LOOP AT gt_qais INTO ls_qais WHERE kunnr     = ps_appr-kunnr
+                                   AND mou_endda GE '20260601'.
+      IF ps_out-cis_date IS INITIAL OR ls_qais-mou_begda < ps_out-cis_date.
+        ps_out-cis_date = ls_qais-mou_begda.
+      ENDIF.
+    ENDLOOP.
+    ps_out-raf_rate = 4000.
+    ps_out-oth_rate = 3000.
+    ps_out-raf_qty  = ( ps_appr-rebate_val - 3000 * ps_appr-elig_qty ) / 1000.
+    IF ps_out-raf_qty < 0.
+      ps_out-raf_qty = 0.
+    ELSEIF ps_out-raf_qty > ps_appr-elig_qty.
+      ps_out-raf_qty = ps_appr-elig_qty.
+    ENDIF.
+    ps_out-oth_qty  = ps_appr-elig_qty - ps_out-raf_qty.
   ENDIF.
   PERFORM wf_text USING ps_appr CHANGING ps_out-wf_txt.
 ENDFORM.

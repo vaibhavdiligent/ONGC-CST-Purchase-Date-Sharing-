@@ -2752,22 +2752,54 @@ FORM additional_mj_discount.
   SORT lt_hl BY low.
   DELETE ADJACENT DUPLICATES FROM lt_hl COMPARING low.
 
-* eligible customers: entered CIS Jun/Jul 2026 and active >= 30.09.2026
-  SELECT * FROM yrva_qais_data INTO TABLE @lt_elig
-    WHERE mou_begda GE '20260601'
-      AND mou_begda LE '20260731'
-      AND mou_endda GE '20260930'
+* Eligible customers (circular iii; GAIL QAR 13.11.2026): customers who
+* ENTERED CIS 2026-27 in June / July 2026 and REMAIN ACTIVE at least up to
+* Q2, FY 26-27 (30.09.2026).
+* YRVA_QAIS_DATA keeps several versions of a customer's CIS record (GAIL
+* QAR 05.11.2026 - duplicate lines). Each record used to be checked on its
+* own, so an older version could qualify a customer whose CURRENT record is
+* terminated / inactive or ends before 30.09.2026. Now, per customer:
+*   - CIS entry date = earliest MoU begin of its CIS 2026-27 records
+*     (records ending on/after 01.06.2026) -> must be in June / July 2026;
+*   - current record = latest version (YYTIMESTAMP) -> must be active
+*     (not INACTIVE) and valid at least up to 30.09.2026.
+* Module (low value) records are not CIS (as in the normal monthly run).
+  TYPES: BEGIN OF ty_entry,
+           kunnr TYPE kunnr,
+           begda TYPE d,
+         END OF ty_entry.
+  DATA: lt_entry TYPE HASHED TABLE OF ty_entry WITH UNIQUE KEY kunnr,
+        ls_entry TYPE ty_entry.
+  FIELD-SYMBOLS <ls_entry> TYPE ty_entry.
+  SELECT * FROM yrva_qais_data INTO TABLE @DATA(lt_all)
+    WHERE mou_endda GE '20260601'
       AND kunnr IN @s_pkunag
       AND kvgr2 IN @s_kvgr2          " GAIL QAR 04.11.2026: group selection
       AND vkbur IN @s_vkbur.
-* GAIL QAR 05.11.2026: duplicate lines for the same customer (e.g. 24479,
-* 29961) - YRVA_QAIS_DATA keeps several versions of a customer's CIS record.
-* As in the normal monthly run, drop module / inactive records and keep the
-* LATEST record (YYTIMESTAMP) per customer, so each customer appears once.
-  DELETE lt_elig WHERE module_identity = 'X'.
-  DELETE lt_elig WHERE inactive = 'X'.
-  SORT lt_elig BY kunnr ASCENDING yytimestamp DESCENDING.
-  DELETE ADJACENT DUPLICATES FROM lt_elig COMPARING kunnr.
+  DELETE lt_all WHERE module_identity = 'X'.
+  LOOP AT lt_all INTO DATA(ls_all).
+    READ TABLE lt_entry ASSIGNING <ls_entry> WITH TABLE KEY kunnr = ls_all-kunnr.
+    IF sy-subrc <> 0.
+      ls_entry-kunnr = ls_all-kunnr.
+      ls_entry-begda = ls_all-mou_begda.
+      INSERT ls_entry INTO TABLE lt_entry.
+    ELSEIF ls_all-mou_begda < <ls_entry>-begda.
+      <ls_entry>-begda = ls_all-mou_begda.
+    ENDIF.
+  ENDLOOP.
+  SORT lt_all BY kunnr ASCENDING yytimestamp DESCENDING.
+  DELETE ADJACENT DUPLICATES FROM lt_all COMPARING kunnr.   " current record
+  REFRESH lt_elig.
+  LOOP AT lt_all INTO ls_all.
+    READ TABLE lt_entry INTO ls_entry WITH TABLE KEY kunnr = ls_all-kunnr.
+    CHECK sy-subrc = 0.
+    CHECK ls_entry-begda BETWEEN '20260601' AND '20260731'.  " entered Jun/Jul
+    CHECK ls_all-inactive  <> 'X'.                            " still active
+    CHECK ls_all-mou_endda GE '20260930'.                     " at least to Q2
+*   CIS Entry Month on the output = the customer's CIS entry
+    ls_all-mou_begda = ls_entry-begda.
+    APPEND ls_all TO lt_elig.
+  ENDLOOP.
   IF lt_elig IS INITIAL OR lt_hl IS INITIAL.
     RETURN.
   ENDIF.
