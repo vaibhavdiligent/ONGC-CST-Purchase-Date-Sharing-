@@ -46,6 +46,16 @@ TABLES: ycis_apprvl, ycis_wf_appr.
 
 CONSTANTS: gc_level TYPE ycis_wlevel VALUE '6'.   " this program = Level 6
 
+*   Credit note table lines (Strategic Monthly Discount: one line per rate).
+*   Same layout as DDIC structure YCIS_CN_LINE (Smart Form YRV_CREDIT_NOTE,
+*   table IT_CN_LINE) - GAIL 17.11.2026.
+TYPES: BEGIN OF ty_cn_line,
+         lft_qty  TYPE ycis_lftq,     " group / lifted qty (MT)
+         elig_qty TYPE ycis_elgq,     " eligible qty (MT) at this rate
+         rate     TYPE ycis_amt,      " discount rate (Rs./MT)
+       END OF ty_cn_line,
+       ty_t_cn_line TYPE STANDARD TABLE OF ty_cn_line WITH DEFAULT KEY.
+
 TYPES: BEGIN OF ty_out,
          sel         TYPE flag,
          qais_no     TYPE ycis_apprvl-qais_no,
@@ -971,6 +981,46 @@ FORM read_acc_doc USING    p_cndoc  TYPE vbeln_vf
 ENDFORM.
 
 *&---------------------------------------------------------------------*
+*&      Form  cn_rate_lines   (credit note table - one line per rate)
+*&---------------------------------------------------------------------*
+*   Strategic Monthly Discount (scheme T) only: Raffia grades (Rs. 4000/MT)
+*   and other grades (Rs. 3000/MT) as separate lines. Other schemes: no
+*   lines - the form prints its normal single line.
+*&---------------------------------------------------------------------*
+FORM cn_rate_lines USING    p_order TYPE vbeln_va
+                   CHANGING pt_line TYPE ty_t_cn_line.
+  DATA: ls_capr TYPE ycis_apprvl,
+        ls_line TYPE ty_cn_line,
+        lv_raf  TYPE ycis_elgq,
+        lv_oth  TYPE ycis_elgq.
+  REFRESH pt_line.
+  CHECK p_order IS NOT INITIAL.
+  SELECT * FROM ycis_apprvl INTO ls_capr UP TO 1 ROWS
+    WHERE order_no = p_order.
+  ENDSELECT.
+  CHECK sy-subrc = 0 AND ls_capr-scheme_type = 'T'.
+  lv_raf = ( ls_capr-rebate_val - 3000 * ls_capr-elig_qty ) / 1000.
+  IF lv_raf < 0.
+    lv_raf = 0.
+  ELSEIF lv_raf > ls_capr-elig_qty.
+    lv_raf = ls_capr-elig_qty.
+  ENDIF.
+  lv_oth = ls_capr-elig_qty - lv_raf.
+  IF lv_raf > 0.
+    ls_line-lft_qty  = ls_capr-lft_qty.
+    ls_line-elig_qty = lv_raf.
+    ls_line-rate     = 4000.
+    APPEND ls_line TO pt_line.
+  ENDIF.
+  IF lv_oth > 0.
+    ls_line-lft_qty  = ls_capr-lft_qty.
+    ls_line-elig_qty = lv_oth.
+    ls_line-rate     = 3000.
+    APPEND ls_line TO pt_line.
+  ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
 *&      Form  send_cn_mail   (CIS UAT 14.10.2026 pt.8)
 *&---------------------------------------------------------------------*
 *   E-mails the posted credit note to the customer, as done today with
@@ -991,6 +1041,8 @@ FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
         ls_jobopt       TYPE ssfcresop,
         lv_devtype      TYPE rspoptype,
         x_yrva_rebate   TYPE yrvs_rebate,
+        lt_cn_line      TYPE ty_t_cn_line,            " credit note lines (SMD)
+        lv_cnpar        TYPE fupararef-parameter,
         w_bill          LIKE vbrk-vbeln,
         w_aubel         TYPE vbeln_va,
         w_fkdat         TYPE fkdat,
@@ -1100,29 +1152,76 @@ FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
   ls_opt-tdprinter   = lv_devtype.
   ls_ctrl-no_dialog  = 'X'.
   ls_ctrl-getotf     = 'X'.
-  CALL FUNCTION lv_fm
-    EXPORTING
-      control_parameters   = ls_ctrl
-      output_options       = ls_opt
-      x_yrva_rebate        = x_yrva_rebate
-      w_vbeln              = w_bill
-      w_fkdat              = w_fkdat
-      x_adrc               = x_adrc
-      w_netwr              = w_netwr
-      w_fkimg              = w_fkimg
-      w_bezei              = w_bezei
-      w_text               = w_text
-      w_bstkd              = w_bstkd
-    IMPORTING
-      document_output_info = ls_docinfo
-      job_output_info      = ls_jobinfo
-      job_output_options   = ls_jobopt
-    EXCEPTIONS
-      formatting_error     = 1
-      internal_error       = 2
-      send_error           = 3
-      user_canceled        = 4
-      OTHERS               = 5.
+* GAIL 17.11.2026 (credit note sample, Strategic Monthly Discount): the
+* table printed ONE line - total eligible qty at the average rate (e.g.
+* 207 MT at Rs. 3,173.91). It now prints one line per discount rate:
+* Raffia grades at Rs. 4000/MT and other grades at Rs. 3000/MT (e.g. 36 MT
+* and 171 MT), with the group/lifted qty on each line. The split follows
+* from the approved eligible qty and value of the rebate order
+* (value = 4000 x Raffia + 3000 x Other). The lines go to the Smart Form in
+* the optional table IT_CN_LINE, which prints them instead of its single
+* line. They are passed only if the form already has that table, so the
+* credit note still prints with the unchanged form.
+  PERFORM cn_rate_lines USING w_aubel CHANGING lt_cn_line.
+  IF lt_cn_line IS NOT INITIAL.
+    SELECT SINGLE parameter FROM fupararef INTO lv_cnpar
+      WHERE funcname  = lv_fm
+        AND parameter = 'IT_CN_LINE'.
+    IF sy-subrc <> 0.
+      REFRESH lt_cn_line.
+    ENDIF.
+  ENDIF.
+  IF lt_cn_line IS NOT INITIAL.
+    CALL FUNCTION lv_fm
+      EXPORTING
+        control_parameters   = ls_ctrl
+        output_options       = ls_opt
+        x_yrva_rebate        = x_yrva_rebate
+        w_vbeln              = w_bill
+        w_fkdat              = w_fkdat
+        x_adrc               = x_adrc
+        w_netwr              = w_netwr
+        w_fkimg              = w_fkimg
+        w_bezei              = w_bezei
+        w_text               = w_text
+        w_bstkd              = w_bstkd
+      IMPORTING
+        document_output_info = ls_docinfo
+        job_output_info      = ls_jobinfo
+        job_output_options   = ls_jobopt
+      TABLES
+        it_cn_line           = lt_cn_line
+      EXCEPTIONS
+        formatting_error     = 1
+        internal_error       = 2
+        send_error           = 3
+        user_canceled        = 4
+        OTHERS               = 5.
+  ELSE.
+    CALL FUNCTION lv_fm
+      EXPORTING
+        control_parameters   = ls_ctrl
+        output_options       = ls_opt
+        x_yrva_rebate        = x_yrva_rebate
+        w_vbeln              = w_bill
+        w_fkdat              = w_fkdat
+        x_adrc               = x_adrc
+        w_netwr              = w_netwr
+        w_fkimg              = w_fkimg
+        w_bezei              = w_bezei
+        w_text               = w_text
+        w_bstkd              = w_bstkd
+      IMPORTING
+        document_output_info = ls_docinfo
+        job_output_info      = ls_jobinfo
+        job_output_options   = ls_jobopt
+      EXCEPTIONS
+        formatting_error     = 1
+        internal_error       = 2
+        send_error           = 3
+        user_canceled        = 4
+        OTHERS               = 5.
+  ENDIF.
   IF sy-subrc <> 0.
     MESSAGE |Credit Note { p_cndoc }: PDF could not be generated - e-mail not sent| TYPE 'I'.
     RETURN.

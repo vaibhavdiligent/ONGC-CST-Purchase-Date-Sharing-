@@ -198,3 +198,31 @@ The note now prints the discount total value in words under *Discount total valu
 | SMD-11 | L2–L6: Seasonal, Waiver Month 1/2, Waiver Status not needed; show CIS Entry Date, Raffia Grades Qty, Raffia Rate, Other Grades Qty, Other Rate, Total Amount (as L1) | With the option *Strategic Monthly Discount (May/June'26)*: Seasonal / Waiver columns hidden; new columns CIS Entry Date (first CIS 2026-27 entry), Raffia Grades Qty, Raffia Rate (4000), Other Grades Qty, Other Rate (3000); Rebate Value headed *Total Amount (Rs.)*. Raffia/Other qty derived from the stored qty and value (value = 4000 × Raffia + 3000 × Other). | YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |
 | SMD-12 | Credit-note e-mail: "REBATE PERIOD 00.00.0000 TO 00.00.0000" | E-mail takes the period from the approval record (then the rebate log) when the order's period dates are blank; L3 also passes the period start with the order (VBKD-BSTDK) | YCIS_DISBURSE, YCIS_EXECUTE |
 | SMD-13 | Applicable to customers who entered CIS in June / July 2026 and remain active at least up to Q2 (30.09.2026) | Per customer: CIS entry = earliest MoU begin of its CIS 2026-27 records, must be in June/July 2026; the customer's current (latest) record must be active and valid at least to 30.09.2026. An older version no longer qualifies a customer whose current record is terminated / inactive or ends before 30.09.2026. | YRVG004_QAIS_EXECUTE_N1 |
+
+## Credit note – one line per discount rate (Strategic Monthly Discount, 17.11.2026)
+
+GAIL sample (CN 5011058089, GARWARE, SMD May-2026): the table showed one line – Group/Lifted Qty 272.000, Eligible Qty 207.000, Discount Rate 3,173.91 (average). Required: one line per rate –
+
+| Group/Lifted Qty (MT) | Eligible Qty (MT) | Discount Rate (Rs.) |
+|---|---|---|
+| 272.000 | 36.000 | 4,000.00 |
+| 272.000 | 171.000 | 3,000.00 |
+
+**Program `YCIS_DISBURSE` (L6):** for a Strategic Monthly Discount credit note (scheme T) it builds these lines (Raffia = (value − 3000 × eligible qty) / 1000, Other = eligible qty − Raffia, from the approved order) and passes them to the Smart Form in the new optional table `IT_CN_LINE`. The table is passed only when the form has that parameter, so credit notes keep printing with the unchanged form; all other schemes/credit notes are not affected.
+
+**1. SE11 – new structure `YCIS_CN_LINE`** (in the abapGit zip, or create by hand): `LFT_QTY` YCIS_LFTQ, `ELIG_QTY` YCIS_ELGQ, `RATE` YCIS_AMT. Activate.
+
+**2. SMARTFORMS – form `YRV_CREDIT_NOTE` → Change**
+1. *Form interface → Tables*: add `IT_CN_LINE LIKE YCIS_CN_LINE`.
+2. *Global definitions → Global data*: `WA_CN_LINE TYPE YCIS_CN_LINE` and `GV_SPLIT TYPE C`.
+3. *Global definitions → Initialization*: input parameter `IT_CN_LINE`, output parameter `GV_SPLIT`; add the code
+   `CLEAR gv_split. IF it_cn_line[] IS NOT INITIAL. gv_split = 'X'. ENDIF.` (after any existing code).
+4. In the main window, select the node / line that prints the values row (Group/Lifted Qty – Eligible Qty – Discount Rate, **not** the heading). *Conditions* tab: `GV_SPLIT = ' '` (prints the existing single line only when there are no rate lines).
+5. Copy that node and paste it directly after it. On the copy:
+   * if it is a **Table** node: *Data* tab → Loop, internal table `IT_CN_LINE INTO WA_CN_LINE`;
+     if it is a **Template / text** node: create a **Loop** node (Flow logic → Loop) with `IT_CN_LINE INTO WA_CN_LINE` and move the copy inside it;
+   * *Conditions* tab: `GV_SPLIT = 'X'`;
+   * in the three cells replace the fields with `&WA_CN_LINE-LFT_QTY(.3)&`, `&WA_CN_LINE-ELIG_QTY(.3)&`, `&WA_CN_LINE-RATE(.2)&`.
+6. Check and activate the form.
+
+Order: SE11 structure → Smart Form → program (the program activates and runs even before the form is changed). Credit notes printed from other programs (e.g. YRVR167) still show the single line unless they also pass `IT_CN_LINE`.
