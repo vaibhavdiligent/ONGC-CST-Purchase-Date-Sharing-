@@ -30,7 +30,9 @@ PROGS = ['src/zmms_bp_mass_upload.prog.abap',
          'src/zfi_cimmra_bp.prog.abap',
          'src/zfi_cimmra_vendor_create.prog.abap',
          'src/zfi_cimmra_empvend.prog.abap',
-         'src/zfi_cimmra_empvend_upd.prog.abap']
+         'src/zfi_cimmra_empvend_upd.prog.abap',
+         'src/zfi_cimmra_vendor_ext.prog.abap',
+         'src/zfi_cimmra_vendor_blk.prog.abap']
 
 # Transactions S/4HANA no longer has. Driving one from code fails outright.
 GONE_TCODE = {'XD01', 'XD02', 'XD03', 'XD05', 'XD06', 'XD07', 'XD99',

@@ -4,7 +4,8 @@
 * Title       : CIMMRA vendor interface - post the vendor as a business
 *               partner (S/4HANA)
 * Used by     : ZFI_CIMMRA_VENDOR_CREATE, ZFI_CIMMRA_EMPVEND,
-*               ZFI_CIMMRA_EMPVEND_UPD
+*               ZFI_CIMMRA_EMPVEND_UPD, ZFI_CIMMRA_VENDOR_EXT,
+*               ZFI_CIMMRA_VENDOR_BLK
 * Description : In ECC the three reports called the RFCs
 *               ZMM_RFC_VENDOR_CREATE and ZMM_RFC_VENDOR_CHANGE, which
 *               maintained the vendor (LFA1/LFB1/LFM1) on its own. In
@@ -76,6 +77,43 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
+    "! Blocks of an existing vendor (was XK05 by batch input, and the payment
+    "! block through VMD_EI_API). As in XK05 the row is the block state: a
+    "! blank cell removes that block. The purchasing blocks are set only with a
+    "! purchasing organisation, the company code blocks only with a company
+    "! code - as the XK05 screen offered them.
+    CLASS-METHODS block
+      IMPORTING iv_lifnr    TYPE lifnr
+                iv_bukrs    TYPE bukrs OPTIONAL
+                iv_ekorg    TYPE ekorg OPTIONAL
+                iv_sperr    TYPE clike OPTIONAL   " posting block, all company codes
+                iv_sperr_cc TYPE clike OPTIONAL   " posting block, the company code
+                iv_sperm    TYPE clike OPTIONAL   " purchasing block, all purch. orgs
+                iv_sperm_po TYPE clike OPTIONAL   " purchasing block, the purch. org
+                iv_sperq    TYPE clike OPTIONAL   " block function
+                iv_zahls    TYPE clike OPTIONAL   " payment block, the company code
+      EXPORTING et_error    TYPE bapiret2_t
+                et_success  TYPE bapiret2_t.
+
+    "! An existing vendor extended to a company code and a purchasing
+    "! organisation, copied from a reference company code and purchasing
+    "! organisation of the same vendor (was XK01 with reference, then
+    "! VMD_EI_API). Blocks and deletion flags are not copied. Supplier roles
+    "! the partner lacks for its account group are added.
+    CLASS-METHODS extend
+      IMPORTING iv_lifnr     TYPE lifnr
+                iv_bukrs     TYPE bukrs OPTIONAL
+                iv_ekorg     TYPE ekorg OPTIONAL
+                iv_ref_bukrs TYPE bukrs OPTIONAL
+                iv_ref_ekorg TYPE ekorg OPTIONAL
+                iv_akont     TYPE clike OPTIONAL
+                iv_zterm     TYPE clike OPTIONAL
+                iv_zwels     TYPE clike OPTIONAL
+                iv_waers     TYPE clike OPTIONAL
+                iv_telf1     TYPE clike OPTIONAL
+      EXPORTING et_error     TYPE bapiret2_t
+                et_success   TYPE bapiret2_t.
+
     "! A date from the file - DD.MM.YYYY, DD-MM-YYYY, DD/MM/YYYY, DDMMYYYY
     "! or YYYYMMDD - as a date; initial when it is none of these.
     CLASS-METHODS to_date
@@ -139,6 +177,22 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
     "! BUP_MEMORY_CENTRAL_INIT: the partner keeps its memory of the LUW
     "! just closed, and the next vendor is refused without a fresh start.
     CLASS-METHODS reset_bp.
+
+    "! Validate, maintain, commit. False when anything stopped it; the
+    "! reasons are in CT_ERROR.
+    CLASS-METHODS save
+      IMPORTING is_data   TYPE cvis_ei_extern
+      CHANGING  ct_error  TYPE bapiret2_t
+      RETURNING VALUE(rv) TYPE abap_bool.
+
+    "! The headers of a change of an existing vendor: the partner by its
+    "! GUID (CVI_VEND_LINK), the supplier by its number.
+    CLASS-METHODS change_head
+      IMPORTING iv_lifnr  TYPE lifnr
+      EXPORTING ev_bp     TYPE bu_partner
+      CHANGING  cs_data   TYPE cvis_ei_extern
+                ct_error  TYPE bapiret2_t
+      RETURNING VALUE(rv) TYPE abap_bool.
 ENDCLASS.
 
 
@@ -288,6 +342,333 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
         RETURN.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD save.
+    rv = abap_false.
+    DATA lt_map TYPE mdg_bs_bp_msgmap_t.
+    TRY.
+        cl_md_bp_maintain=>validate_single(
+          EXPORTING i_data        = is_data
+          IMPORTING et_return_map = lt_map ).
+      CATCH cx_root INTO DATA(lx_val).
+        add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
+             CHANGING  ct      = ct_error ).
+        RETURN.
+    ENDTRY.
+    DATA(lv_bad) = abap_false.
+    LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
+      APPEND VALUE bapiret2( type = ls_map-type id = ls_map-id number = ls_map-number
+                             message = ls_map-message ) TO ct_error.
+      lv_bad = abap_true.
+    ENDLOOP.
+    IF lv_bad = abap_true.
+      RETURN.
+    ENDIF.
+
+    DATA: lt_in  TYPE cvis_ei_extern_t,
+          lt_ret TYPE bapiretm.
+    APPEND is_data TO lt_in.
+    TRY.
+        cl_md_bp_maintain=>maintain(
+          EXPORTING i_data   = lt_in
+          IMPORTING e_return = lt_ret ).
+      CATCH cx_root INTO DATA(lx_mnt).
+        ROLLBACK WORK.
+        reset_bp( ).
+        add( EXPORTING iv_text = |Maintain failed: { lx_mnt->get_text( ) }|
+             CHANGING  ct      = ct_error ).
+        RETURN.
+    ENDTRY.
+
+    " BAPIRETM lines carry a nested message table; read it generically so a
+    " release-dependent component name cannot break the program.
+    FIELD-SYMBOLS: <lt_sub> TYPE ANY TABLE.
+    LOOP AT lt_ret ASSIGNING FIELD-SYMBOL(<ls_ret>).
+      ASSIGN COMPONENT 'OBJECT_MSG' OF STRUCTURE <ls_ret> TO <lt_sub>.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      LOOP AT <lt_sub> ASSIGNING FIELD-SYMBOL(<ls_sub>).
+        DATA ls_r2 TYPE bapiret2.
+        CLEAR ls_r2.
+        MOVE-CORRESPONDING <ls_sub> TO ls_r2.
+        IF ls_r2-type CA 'EAX'.
+          APPEND ls_r2 TO ct_error.
+          lv_bad = abap_true.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+    IF lv_bad = abap_true.
+      ROLLBACK WORK.
+      reset_bp( ).
+      RETURN.
+    ENDIF.
+
+    " BAPI_TRANSACTION_COMMIT, not a bare COMMIT WORK: the business partner
+    " hangs its end-of-LUW processing off it, and WAIT makes RETURN say
+    " whether the update actually ran.
+    DATA ls_cret TYPE bapiret2.
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING wait   = abap_true
+      IMPORTING return = ls_cret.
+    reset_bp( ).
+    IF ls_cret-type CA 'EAX'.
+      add( EXPORTING iv_text = |The update did not go through - nothing was saved: { ls_cret-message } | &&
+                               |(SM13)|
+           CHANGING  ct      = ct_error ).
+      RETURN.
+    ENDIF.
+    rv = abap_true.
+  ENDMETHOD.
+
+  METHOD change_head.
+    rv = abap_false.
+    CLEAR ev_bp.
+    DATA lv_guid TYPE bu_partner_guid.
+    SELECT SINGLE partner_guid FROM cvi_vend_link
+      WHERE vendor = @iv_lifnr INTO @lv_guid.
+    IF lv_guid IS INITIAL.
+      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } has no business partner (CVI_VEND_LINK)|
+           CHANGING  ct      = ct_error ).
+      RETURN.
+    ENDIF.
+    SELECT SINGLE partner FROM but000
+      WHERE partner_guid = @lv_guid INTO @ev_bp.
+    cs_data-partner-header-object_task                  = c_update.
+    cs_data-partner-header-object_instance-bpartnerguid = lv_guid.
+    cs_data-vendor-header-object_task                   = c_update.
+    cs_data-vendor-header-object_instance-lifnr         = iv_lifnr.
+    rv = abap_true.
+  ENDMETHOD.
+
+  METHOD block.
+    CLEAR: et_error, et_success.
+    DATA: ls_data TYPE cvis_ei_extern,
+          lv_bp   TYPE bu_partner.
+    IF change_head( EXPORTING iv_lifnr = iv_lifnr
+                    IMPORTING ev_bp    = lv_bp
+                    CHANGING  cs_data  = ls_data
+                              ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+
+    " The block function is a two digit code; the file may carry 1 for 01.
+    DATA(lv_sperq) = condense( CONV string( iv_sperq ) ).
+    IF lv_sperq IS NOT INITIAL AND lv_sperq CO '0123456789'.
+      lv_sperq = |{ lv_sperq WIDTH = 2 ALIGN = RIGHT PAD = '0' }|.
+    ENDIF.
+
+    " Central blocks - a blank value is sent too: it removes the block.
+    set( EXPORTING iv_comp = 'SPERR' iv_value = to_upper( condense( CONV string( iv_sperr ) ) )
+         CHANGING  cs_data  = ls_data-vendor-central_data-central-data
+                   cs_datax = ls_data-vendor-central_data-central-datax ).
+    set( EXPORTING iv_comp = 'SPERQ' iv_value = lv_sperq
+         CHANGING  cs_data  = ls_data-vendor-central_data-central-data
+                   cs_datax = ls_data-vendor-central_data-central-datax ).
+    IF iv_ekorg IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'SPERM' iv_value = to_upper( condense( CONV string( iv_sperm ) ) )
+           CHANGING  cs_data  = ls_data-vendor-central_data-central-data
+                     cs_datax = ls_data-vendor-central_data-central-datax ).
+    ENDIF.
+
+    IF iv_bukrs IS NOT INITIAL.
+      DATA lv_chave TYPE abap_bool.
+      SELECT SINGLE @abap_true FROM lfb1
+        WHERE lifnr = @iv_lifnr AND bukrs = @iv_bukrs INTO @lv_chave.
+      IF lv_chave = abap_false.
+        add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } is not created in company code { iv_bukrs }|
+             CHANGING  ct      = et_error ).
+        RETURN.
+      ENDIF.
+      DATA ls_cc TYPE vmds_ei_company.
+      ls_cc-task           = c_update.
+      ls_cc-data_key-bukrs = iv_bukrs.
+      set( EXPORTING iv_comp = 'SPERR' iv_value = to_upper( condense( CONV string( iv_sperr_cc ) ) )
+           CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+      set( EXPORTING iv_comp = 'ZAHLS' iv_value = to_upper( condense( CONV string( iv_zahls ) ) )
+           CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+      APPEND ls_cc TO ls_data-vendor-company_data-company.
+    ENDIF.
+
+    IF iv_ekorg IS NOT INITIAL.
+      DATA lv_phave TYPE abap_bool.
+      SELECT SINGLE @abap_true FROM lfm1
+        WHERE lifnr = @iv_lifnr AND ekorg = @iv_ekorg INTO @lv_phave.
+      IF lv_phave = abap_false.
+        add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } is not created in purchasing | &&
+                                 |organisation { iv_ekorg }|
+             CHANGING  ct      = et_error ).
+        RETURN.
+      ENDIF.
+      DATA ls_po TYPE vmds_ei_purchasing.
+      ls_po-task           = c_update.
+      ls_po-data_key-ekorg = iv_ekorg.
+      set( EXPORTING iv_comp = 'SPERM' iv_value = to_upper( condense( CONV string( iv_sperm_po ) ) )
+           CHANGING  cs_data = ls_po-data cs_datax = ls_po-datax ).
+      APPEND ls_po TO ls_data-vendor-purchasing_data-purchasing.
+    ENDIF.
+
+    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+    APPEND VALUE bapiret2( type = 'S'
+                           message = |Blocks of vendor { iv_lifnr ALPHA = OUT } updated| &&
+                                     |{ COND string( WHEN iv_bukrs IS NOT INITIAL
+                                                     THEN | - company code { iv_bukrs }| ) }| &&
+                                     |{ COND string( WHEN iv_ekorg IS NOT INITIAL
+                                                     THEN | - purchasing org { iv_ekorg }| ) }| )
+           TO et_success.
+  ENDMETHOD.
+
+  METHOD extend.
+    CLEAR: et_error, et_success.
+    DATA: ls_data TYPE cvis_ei_extern,
+          lv_bp   TYPE bu_partner.
+    IF change_head( EXPORTING iv_lifnr = iv_lifnr
+                    IMPORTING ev_bp    = lv_bp
+                    CHANGING  cs_data  = ls_data
+                              ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+
+    " ---- the supplier roles of the account group the partner lacks ------
+    " A vendor that never had a purchasing organisation may lack the
+    " purchasing role, and the purchasing data is refused without it.
+    DATA lv_ktokk TYPE ktokk.
+    SELECT SINGLE ktokk FROM lfa1 WHERE lifnr = @iv_lifnr INTO @lv_ktokk.
+    SELECT account_group, role FROM cvic_vend_to_bp2
+      WHERE account_group = @lv_ktokk INTO TABLE @DATA(lt_role).
+    LOOP AT lt_role INTO DATA(ls_role_db).
+      DATA lv_rhave TYPE abap_bool.
+      CLEAR lv_rhave.
+      SELECT SINGLE @abap_true FROM but100
+        WHERE partner = @lv_bp AND rltyp = @ls_role_db-role INTO @lv_rhave.
+      IF lv_rhave = abap_false.
+        DATA ls_role TYPE bus_ei_bupa_roles.
+        CLEAR ls_role.
+        ls_role-task     = c_insert.
+        ls_role-data_key = ls_role_db-role.
+        APPEND ls_role TO ls_data-partner-central_data-role-roles.
+      ENDIF.
+    ENDLOOP.
+
+    DATA lv_done TYPE string.
+
+    " ---- company code ----------------------------------------------------
+    IF iv_bukrs IS NOT INITIAL.
+      DATA lv_chave TYPE abap_bool.
+      SELECT SINGLE @abap_true FROM lfb1
+        WHERE lifnr = @iv_lifnr AND bukrs = @iv_bukrs INTO @lv_chave.
+      IF lv_chave = abap_false.
+        DATA ls_cc TYPE vmds_ei_company.
+        ls_cc-task           = c_insert.
+        ls_cc-data_key-bukrs = iv_bukrs.
+        IF iv_ref_bukrs IS NOT INITIAL.
+          SELECT SINGLE * FROM lfb1
+            WHERE lifnr = @iv_lifnr AND bukrs = @iv_ref_bukrs INTO @DATA(ls_rlfb1).
+          IF sy-subrc <> 0.
+            add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } is not created in reference | &&
+                                     |company code { iv_ref_bukrs }|
+                 CHANGING  ct      = et_error ).
+            RETURN.
+          ENDIF.
+          " What XK01 with reference copied - but not the blocks, the deletion
+          " flags or who created the record.
+          copy( EXPORTING is_src  = ls_rlfb1
+                          iv_skip = `MANDT,LIFNR,BUKRS,ERDAT,ERNAM,LOEVM,SPERR,NODEL,ZAHLS,` &&
+                                    `CONFS,UPDAT,UPTIM,CVP_XBLCK_B`
+                CHANGING  cs_data  = ls_cc-data
+                          cs_datax = ls_cc-datax ).
+          " Withholding tax types and codes of the reference company code.
+          SELECT witht, wt_withcd, wt_subjct, qsrec FROM lfbw
+            WHERE lifnr = @iv_lifnr AND bukrs = @iv_ref_bukrs INTO TABLE @DATA(lt_rw).
+          LOOP AT lt_rw INTO DATA(ls_rw).
+            DATA ls_wtx TYPE vmds_ei_wtax_type.
+            CLEAR ls_wtx.
+            ls_wtx-task           = c_insert.
+            ls_wtx-data_key-witht = ls_rw-witht.
+            copy( EXPORTING is_src  = ls_rw
+                            iv_skip = `WITHT`
+                  CHANGING  cs_data  = ls_wtx-data
+                            cs_datax = ls_wtx-datax ).
+            APPEND ls_wtx TO ls_cc-wtax_type-wtax_type.
+          ENDLOOP.
+        ENDIF.
+        " The file's values over the reference's.
+        DATA(lv_akont) = condense( CONV string( iv_akont ) ).
+        IF lv_akont IS NOT INITIAL.
+          IF lv_akont CO '0123456789'.
+            lv_akont = |{ lv_akont ALPHA = IN WIDTH = 10 }|.
+          ENDIF.
+          set( EXPORTING iv_comp = 'AKONT' iv_value = lv_akont
+               CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+        ENDIF.
+        IF iv_zterm IS NOT INITIAL.
+          set( EXPORTING iv_comp = 'ZTERM' iv_value = iv_zterm
+               CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+        ENDIF.
+        IF iv_zwels IS NOT INITIAL.
+          set( EXPORTING iv_comp = 'ZWELS' iv_value = iv_zwels
+               CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+        ENDIF.
+        set( EXPORTING iv_comp = 'ALTKN' iv_value = iv_lifnr
+             CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+        set( EXPORTING iv_comp = 'REPRF' iv_value = abap_true
+             CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+        APPEND ls_cc TO ls_data-vendor-company_data-company.
+        lv_done = |company code { iv_bukrs }|.
+      ENDIF.
+    ENDIF.
+
+    " ---- purchasing organisation ----------------------------------------
+    IF iv_ekorg IS NOT INITIAL.
+      DATA lv_phave TYPE abap_bool.
+      SELECT SINGLE @abap_true FROM lfm1
+        WHERE lifnr = @iv_lifnr AND ekorg = @iv_ekorg INTO @lv_phave.
+      IF lv_phave = abap_false.
+        DATA ls_po TYPE vmds_ei_purchasing.
+        ls_po-task           = c_insert.
+        ls_po-data_key-ekorg = iv_ekorg.
+        IF iv_ref_ekorg IS NOT INITIAL.
+          SELECT SINGLE * FROM lfm1
+            WHERE lifnr = @iv_lifnr AND ekorg = @iv_ref_ekorg INTO @DATA(ls_rlfm1).
+          IF sy-subrc <> 0.
+            add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } is not created in reference | &&
+                                     |purchasing organisation { iv_ref_ekorg }|
+                 CHANGING  ct      = et_error ).
+            RETURN.
+          ENDIF.
+          copy( EXPORTING is_src  = ls_rlfm1
+                          iv_skip = `MANDT,LIFNR,EKORG,ERDAT,ERNAM,LOEVM,SPERM`
+                CHANGING  cs_data  = ls_po-data
+                          cs_datax = ls_po-datax ).
+        ENDIF.
+        IF iv_waers IS NOT INITIAL.
+          set( EXPORTING iv_comp = 'WAERS' iv_value = iv_waers
+               CHANGING  cs_data = ls_po-data cs_datax = ls_po-datax ).
+        ENDIF.
+        IF iv_telf1 IS NOT INITIAL.
+          set( EXPORTING iv_comp = 'TELF1' iv_value = iv_telf1
+               CHANGING  cs_data = ls_po-data cs_datax = ls_po-datax ).
+        ENDIF.
+        APPEND ls_po TO ls_data-vendor-purchasing_data-purchasing.
+        lv_done = COND #( WHEN lv_done IS INITIAL THEN |purchasing organisation { iv_ekorg }|
+                          ELSE |{ lv_done } and purchasing organisation { iv_ekorg }| ).
+      ENDIF.
+    ENDIF.
+
+    IF lv_done IS INITIAL.
+      APPEND VALUE bapiret2( type = 'I' message = 'Vendor already extended' ) TO et_success.
+      RETURN.
+    ENDIF.
+
+    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+    APPEND VALUE bapiret2( type = 'S'
+                           message = |Vendor { iv_lifnr ALPHA = OUT } extended to { lv_done }| )
+           TO et_success.
   ENDMETHOD.
 
   METHOD post.
@@ -703,74 +1084,7 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     ENDIF.
 
     " ---- validate, maintain, commit -------------------------------------
-    DATA lt_map TYPE mdg_bs_bp_msgmap_t.
-    TRY.
-        cl_md_bp_maintain=>validate_single(
-          EXPORTING i_data        = ls_data
-          IMPORTING et_return_map = lt_map ).
-      CATCH cx_root INTO DATA(lx_val).
-        add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
-             CHANGING  ct      = et_error ).
-        RETURN.
-    ENDTRY.
-    LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
-      APPEND VALUE bapiret2( type = ls_map-type id = ls_map-id number = ls_map-number
-                             message = ls_map-message ) TO et_error.
-    ENDLOOP.
-    IF et_error IS NOT INITIAL.
-      RETURN.
-    ENDIF.
-
-    DATA: lt_in  TYPE cvis_ei_extern_t,
-          lt_ret TYPE bapiretm.
-    APPEND ls_data TO lt_in.
-    TRY.
-        cl_md_bp_maintain=>maintain(
-          EXPORTING i_data   = lt_in
-          IMPORTING e_return = lt_ret ).
-      CATCH cx_root INTO DATA(lx_mnt).
-        ROLLBACK WORK.
-        reset_bp( ).
-        add( EXPORTING iv_text = |Maintain failed: { lx_mnt->get_text( ) }|
-             CHANGING  ct      = et_error ).
-        RETURN.
-    ENDTRY.
-
-    " BAPIRETM lines carry a nested message table; read it generically so a
-    " release-dependent component name cannot break the program.
-    FIELD-SYMBOLS: <lt_sub> TYPE ANY TABLE.
-    LOOP AT lt_ret ASSIGNING FIELD-SYMBOL(<ls_ret>).
-      ASSIGN COMPONENT 'OBJECT_MSG' OF STRUCTURE <ls_ret> TO <lt_sub>.
-      IF sy-subrc <> 0.
-        CONTINUE.
-      ENDIF.
-      LOOP AT <lt_sub> ASSIGNING FIELD-SYMBOL(<ls_sub>).
-        DATA ls_r2 TYPE bapiret2.
-        CLEAR ls_r2.
-        MOVE-CORRESPONDING <ls_sub> TO ls_r2.
-        IF ls_r2-type CA 'EAX'.
-          APPEND ls_r2 TO et_error.
-        ENDIF.
-      ENDLOOP.
-    ENDLOOP.
-    IF et_error IS NOT INITIAL.
-      ROLLBACK WORK.
-      reset_bp( ).
-      RETURN.
-    ENDIF.
-
-    " BAPI_TRANSACTION_COMMIT, not a bare COMMIT WORK: the business partner
-    " hangs its end-of-LUW processing off it, and WAIT makes RETURN say
-    " whether the update actually ran.
-    DATA ls_cret TYPE bapiret2.
-    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
-      EXPORTING wait   = abap_true
-      IMPORTING return = ls_cret.
-    reset_bp( ).
-    IF ls_cret-type CA 'EAX'.
-      add( EXPORTING iv_text = |The update did not go through - nothing was saved: { ls_cret-message } | &&
-                               |(SM13)|
-           CHANGING  ct      = et_error ).
+    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
       RETURN.
     ENDIF.
 
