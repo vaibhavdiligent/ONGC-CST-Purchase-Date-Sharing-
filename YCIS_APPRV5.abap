@@ -24,7 +24,8 @@ TABLES: ycis_apprvl, ycis_wf_appr.
 
 CONSTANTS: gc_level TYPE ycis_wlevel VALUE '5'.   " this program = Level 5
 * PDR go-live (GAIL 17.11.2026): Strategic Monthly Discount (May/June'26)
-* switched OFF - the option is shown greyed out and cannot be run.
+* switched OFF - the option is NOT displayed on the selection screen of
+* T-codes YRVG004 / YRVG004_A / _E / _V / _F / _P and cannot be run.
 * To activate it again set the value to 'X' (no other change needed).
 CONSTANTS  gc_smd_active TYPE c VALUE ' '.
 
@@ -141,8 +142,9 @@ INITIALIZATION.
 AT SELECTION-SCREEN OUTPUT.
   IF gc_smd_active IS INITIAL.
     LOOP AT SCREEN.
-      IF screen-name = 'P_SMD'.
-        screen-input = '0'.
+      IF screen-name = 'P_SMD' OR screen-name = 'C_SMD'.   " button + its text
+        screen-active    = '0'.
+        screen-invisible = '1'.
         MODIFY SCREEN.
       ENDIF.
     ENDLOOP.

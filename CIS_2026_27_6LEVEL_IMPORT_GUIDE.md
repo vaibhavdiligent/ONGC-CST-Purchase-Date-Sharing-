@@ -202,7 +202,7 @@ The note now prints the discount total value in words under *Discount total valu
 ## PDR go-live (17.11.2026)
 
 ### Strategic Monthly Discount switched off
-Constant `GC_SMD_ACTIVE` (value blank) in YRVG004_QAIS_EXECUTE_N1, YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE: the Strategic Monthly Discount radio button is shown greyed out and cannot be run (also not through a saved variant). To activate later set `GC_SMD_ACTIVE` to `'X'` in these six programs.
+Constant `GC_SMD_ACTIVE` (value blank) in YRVG004_QAIS_EXECUTE_N1, YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE: the Strategic Monthly Discount radio button (and its text) is not displayed on T-codes YRVG004, YRVG004_A, YRVG004_E, YRVG004_V, YRVG004_F, YRVG004_P and cannot be run (also not through a saved variant). To activate later set `GC_SMD_ACTIVE` to `'X'` in these six programs.
 
 ### Objects in the transport (check before release)
 * Programs: YRVG004_QAIS_EXECUTE_N1, YRVG004_QAIS_EXECUTE_N1_old, YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE, YCIS_REBATE_REPORT, YCIS_SHORTFALL_MC, YCIS_REMINDER, YCIS_MASTER_CHECK (if used) – each with its GUI status STANDARD (SE41: L6 function APPR text "Post"; YRVG052 button PRNT).
