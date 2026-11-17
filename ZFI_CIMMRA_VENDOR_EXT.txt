@@ -123,12 +123,18 @@ FORM get_file .
   CLEAR : gv_inc, gv_arc.
 
   "To get the AL11 file path.
-  SELECT SINGLE param_name FROM zparam_table INTO gv_inc
-    WHERE id_name = co_inc_file.
+*  SELECT SINGLE param_name FROM zparam_table INTO gv_inc
+*    WHERE id_name = co_inc_file.
+
+ SELECT  param_name FROM zparam_table INTO gv_inc UP TO 1 ROWS
+    WHERE id_name = co_inc_file ORDER BY PRIMARY KEY. ENDSELECT.
 
   "to get the AL11 archive path.
-  SELECT SINGLE param_name FROM zparam_table INTO gv_arc
-    WHERE id_name = co_arc_file.
+*  SELECT SINGLE param_name FROM zparam_table INTO gv_arc
+*    WHERE id_name = co_arc_file.
+
+ SELECT  param_name FROM zparam_table INTO gv_arc UP TO 1 ROWS
+    WHERE id_name = co_arc_file ORDER BY PRIMARY KEY. ENDSELECT.
 
   IF sy-subrc = 0 AND gv_inc IS NOT INITIAL AND gv_arc IS NOT INITIAL.
 
@@ -159,7 +165,7 @@ FORM get_file .
     ENDIF.
 
   ELSE.
-    MESSAGE text-001 TYPE 'E'.
+    MESSAGE TEXT-001 TYPE 'E'.
     LEAVE LIST-PROCESSING.
   ENDIF.
 
@@ -185,8 +191,12 @@ FORM fetchdata_al11 .
 
       CLEAR : gv_inc_file, gv_arc_file.
 
-      CONCATENATE gv_inc wa_file-name INTO gv_inc_file SEPARATED BY '\'.
-      CONCATENATE gv_arc wa_file-name INTO gv_arc_file SEPARATED BY '\'.
+      " Code Remediation S4 AL11 file path change **BEGIN OF CHANGE BY ABAP7 25.10.2026
+*     CONCATENATE gv_inc wa_file-name INTO gv_inc_file SEPARATED BY '\'.
+*     CONCATENATE gv_arc wa_file-name INTO gv_arc_file SEPARATED BY '\'.
+      CONCATENATE gv_inc wa_file-name INTO gv_inc_file SEPARATED BY '/'.
+      CONCATENATE gv_arc wa_file-name INTO gv_arc_file SEPARATED BY '/'.
+      " Code Remediation S4 AL11 file path change **END OF CHANGE BY ABAP7 25.10.2026
 
       OPEN DATASET gv_inc_file FOR INPUT IN TEXT MODE ENCODING DEFAULT.
 
@@ -236,7 +246,7 @@ FORM fetchdata_al11 .
           CLEAR : wa_tab.
         ENDDO.
       ELSE.
-        MESSAGE text-003 TYPE 'E'.
+        MESSAGE TEXT-003 TYPE 'E'.
       ENDIF.
 
       DELETE DATASET gv_inc_file.
@@ -246,7 +256,7 @@ FORM fetchdata_al11 .
     ENDLOOP.
     CLEAR : gv_inc_file, gv_arc_file, gv_string.
   ELSE.
-    MESSAGE text-002 TYPE 'E'.
+    MESSAGE TEXT-002 TYPE 'E'.
     LEAVE LIST-PROCESSING.
   ENDIF.
   CLEAR wa_al11.
@@ -307,7 +317,10 @@ FORM calling_bdc .
   SELECT lifnr,
          j_1ipanno,
          j_1issist
-    FROM j_1imovend
+"Soc atc correction abap7-22.09.2026
+***    FROM j_1imovend
+    FROM lfa1
+"Eoc atc correction abap7-22.09.2026
     INTO TABLE @DATA(lt_j_1imovend)
     FOR ALL ENTRIES IN @ta_al11
     WHERE lifnr = @ta_al11-lifnr.
@@ -410,239 +423,415 @@ FORM calling_bdc .
 *--------------------------------------------------------------------*
 * SCREEN 0100
 *--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '0100'.
-
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'USE_ZAV'.
-
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '/00'.
-
-    PERFORM bdc_field USING 'RF02K-LIFNR'
-                            wa_al11-lifnr.
-
-    PERFORM bdc_field USING 'RF02K-BUKRS'
-                            wa_al11-company_code.
-
-    PERFORM bdc_field USING 'RF02K-EKORG'
-                            wa_al11-purchasing_organization_code.
-
-    PERFORM bdc_field USING 'RF02K-KTOKK'
-                            wa_lfa1-ktokk.
-
-    PERFORM bdc_field USING 'RF02K-REF_LIFNR'
-                            wa_al11-lifnr.
-
-    PERFORM bdc_field USING 'RF02K-REF_BUKRS'
-                            wa_al11-sr_company_code.
-
-    PERFORM bdc_field USING 'RF02K-REF_EKORG'
-                            wa_al11-sr_purchase_org.
-
-    PERFORM bdc_field USING 'USE_ZAV'
-                            'X'.
-
-*--------------------------------------------------------------------*
-* SCREEN 0210
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '0210'.
-
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'LFB1-ALTKN'.
-
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=VW'.
-
-    PERFORM bdc_field USING 'LFB1-AKONT'
-                            wa_al11-reco_account_code.
-
-    PERFORM bdc_field USING 'LFB1-ALTKN'
-                            wa_al11-lifnr.
-
-*--------------------------------------------------------------------*
-* SCREEN 0215
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '0215'.
-
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'LFB1-ZTERM'.
-
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=VW'.
-
-    PERFORM bdc_field USING 'LFB1-ZTERM'
-                            wa_al11-payment_term_code.
-
-    PERFORM bdc_field USING 'LFB1-REPRF'
-                            'X'.
-
-    PERFORM bdc_field USING 'LFB1-ZWELS'
-                            wa_al11-payment_mode.
-
-*--------------------------------------------------------------------*
-* SCREEN 0220
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '0220'.
-
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'LFB5-MAHNA'.
-
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=VW'.
-
-*--------------------------------------------------------------------*
-* SCREEN 0610 - WHT
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '0610'.
-
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=VW'.
-
-    PERFORM bdc_field USING 'BDC_SUBSCR'
-                            'SAPMFWTV                                0610WT_WITS'.
-
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'LFBW-WITHT(02)'.
-
-    PERFORM bdc_field USING 'LFB1-QLAND'
-                            wa_lfb1-qland.
-
-*    PERFORM bdc_field USING 'LFBW-WITHT(01)'
-*                            wa_lfbw-witht.
+    " Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 09.09.2026 FOR ATC
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '0100'.
 *
-*    PERFORM bdc_field USING 'LFBW-WT_WITHCD(01)'
-*                            wa_lfbw-wt_withcd.
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'USE_ZAV'.
 *
-*    PERFORM bdc_field USING 'LFBW-WT_SUBJCT(01)'
-*                            wa_lfbw-wt_subjct.
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '/00'.
 *
-*    PERFORM bdc_field USING 'LFBW-QSREC(01)'
-*                            wa_lfbw-qsrec.
+*    PERFORM bdc_field USING 'RF02K-LIFNR'
+*                            wa_al11-lifnr.
 *
-*    PERFORM bdc_field USING 'LFBW-WT_EXNR(01)'
-*                            wa_lfbw-wt_exnr.
+*    PERFORM bdc_field USING 'RF02K-BUKRS'
+*                            wa_al11-company_code.
 *
-**    PERFORM bdc_field USING 'LFBW-WT_EXRT(01)'
-**                            wa_lfbw-wt_exrt.
+*    PERFORM bdc_field USING 'RF02K-EKORG'
+*                            wa_al11-purchasing_organization_code.
 *
-*    PERFORM bdc_field USING 'LFBW-WT_WTEXRS(01)'
-*                            wa_lfbw-wt_wtexrs.
+*    PERFORM bdc_field USING 'RF02K-KTOKK'
+*                            wa_lfa1-ktokk.
 *
-*    PERFORM bdc_field USING 'LFBW-WT_EXDF(01)'
-*                            wa_lfbw-wt_exdf.
+*    PERFORM bdc_field USING 'RF02K-REF_LIFNR'
+*                            wa_al11-lifnr.
 *
-*    PERFORM bdc_field USING 'LFBW-WT_EXDT(01)'
-*                            wa_lfbw-wt_exdt.
-
-*--------------------------------------------------------------------*
-* SCREEN 0310
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '0310'.
-
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'LFM1-TELF1'.
-
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=AO03'.
-
-    PERFORM bdc_field USING 'LFM1-WAERS'
-                            wa_al11-currency_code.
-
-*    PERFORM bdc_field USING 'LFM1-KALSK'
-*                            wa_al11-industry_key.
-
-    PERFORM bdc_field USING 'LFM1-TELF1'
-                            wa_al11-contact_number.
-
-*    PERFORM bdc_field USING 'LFM1-WEBRE'
+*    PERFORM bdc_field USING 'RF02K-REF_BUKRS'
+*                            wa_al11-sr_company_code.
+*
+*    PERFORM bdc_field USING 'RF02K-REF_EKORG'
+*                            wa_al11-sr_purchase_org.
+*
+*    PERFORM bdc_field USING 'USE_ZAV'
 *                            'X'.
 *
-*    PERFORM bdc_field USING 'LFM1-KZAUT'
+**--------------------------------------------------------------------*
+** SCREEN 0210
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '0210'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'LFB1-ALTKN'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=VW'.
+*
+*    PERFORM bdc_field USING 'LFB1-AKONT'
+*                            wa_al11-reco_account_code.
+*
+*    PERFORM bdc_field USING 'LFB1-ALTKN'
+*                            wa_al11-lifnr.
+*
+**--------------------------------------------------------------------*
+** SCREEN 0215
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '0215'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'LFB1-ZTERM'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=VW'.
+*
+*    PERFORM bdc_field USING 'LFB1-ZTERM'
+*                            wa_al11-payment_term_code.
+*
+*    PERFORM bdc_field USING 'LFB1-REPRF'
 *                            'X'.
-
+*
+*    PERFORM bdc_field USING 'LFB1-ZWELS'
+*                            wa_al11-payment_mode.
+*
+**--------------------------------------------------------------------*
+** SCREEN 0220
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '0220'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'LFB5-MAHNA'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=VW'.
+*
+**--------------------------------------------------------------------*
+** SCREEN 0610 - WHT
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '0610'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=VW'.
+*
+*    PERFORM bdc_field USING 'BDC_SUBSCR'
+*                            'SAPMFWTV                                0610WT_WITS'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'LFBW-WITHT(02)'.
+*
+*    PERFORM bdc_field USING 'LFB1-QLAND'
+*                            wa_lfb1-qland.
+*
+**    PERFORM bdc_field USING 'LFBW-WITHT(01)'
+**                            wa_lfbw-witht.
+**
+**    PERFORM bdc_field USING 'LFBW-WT_WITHCD(01)'
+**                            wa_lfbw-wt_withcd.
+**
+**    PERFORM bdc_field USING 'LFBW-WT_SUBJCT(01)'
+**                            wa_lfbw-wt_subjct.
+**
+**    PERFORM bdc_field USING 'LFBW-QSREC(01)'
+**                            wa_lfbw-qsrec.
+**
+**    PERFORM bdc_field USING 'LFBW-WT_EXNR(01)'
+**                            wa_lfbw-wt_exnr.
+**
+***    PERFORM bdc_field USING 'LFBW-WT_EXRT(01)'
+***                            wa_lfbw-wt_exrt.
+**
+**    PERFORM bdc_field USING 'LFBW-WT_WTEXRS(01)'
+**                            wa_lfbw-wt_wtexrs.
+**
+**    PERFORM bdc_field USING 'LFBW-WT_EXDF(01)'
+**                            wa_lfbw-wt_exdf.
+**
+**    PERFORM bdc_field USING 'LFBW-WT_EXDT(01)'
+**                            wa_lfbw-wt_exdt.
+*
+**--------------------------------------------------------------------*
+** SCREEN 0310
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '0310'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'LFM1-TELF1'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=AO03'.
+*
+*    PERFORM bdc_field USING 'LFM1-WAERS'
+*                            wa_al11-currency_code.
+*
+**    PERFORM bdc_field USING 'LFM1-KALSK'
+**                            wa_al11-industry_key.
+*
+*    PERFORM bdc_field USING 'LFM1-TELF1'
+*                            wa_al11-contact_number.
+*
+**    PERFORM bdc_field USING 'LFM1-WEBRE'
+**                            'X'.
+**
+**    PERFORM bdc_field USING 'LFM1-KZAUT'
+**                            'X'.
+*
+**--------------------------------------------------------------------*
+** SCREEN 4000
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '4000'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=OPFI'.
+*
+*    PERFORM bdc_field USING 'BDC_SUBSCR'
+*                            'SAPMF02K                                7001SUBSCREEN_HEADER'.
+*
+*    PERFORM bdc_field USING 'BDC_SUBSCR'
+*                            'SAPLZFI_TAB_TAX                         9999SUBSCREEN_BODY'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'ZFI_TAX_TAB-URGYN'.
+*
+*    PERFORM bdc_field USING 'ZFI_TAX_TAB-TXRYN'
+*                            wa_zfi_tax_tab-txryn.
+*
+*    PERFORM bdc_field USING 'ZFI_TAX_TAB-ADPNYN'
+*                            wa_zfi_tax_tab-adpnyn.
+*
+*    PERFORM bdc_field USING 'ZFI_TAX_TAB-URGYN'
+*                            wa_zfi_tax_tab-urgyn.
+*
+**--------------------------------------------------------------------*
+** CIN SCREEN
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPLJ1I_MASTER' '0100'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=CIN_VENDOR_FC3'.
+*
+*    PERFORM bdc_field USING 'BDC_SUBSCR'
+*                            'SAPLJ1I_MASTER                          0101CIN_VENDOR_SCA'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'GS_LFA1-J_1ISSIST'.
+*
+*    PERFORM bdc_field USING 'GS_LFA1-J_1ISSIST'
+*                             wa_j_1imovend-j_1issist.
+*
+**--------------------------------------------------------------------*
+** PAN SCREEN
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPLJ1I_MASTER' '0100'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=CIN_VENDOR_FC4'.
+*
+*    PERFORM bdc_field USING 'BDC_SUBSCR'
+*                            'SAPLJ1I_MASTER                          0103CIN_VENDOR_SCA'.
+*
+*    PERFORM bdc_field USING 'BDC_CURSOR'
+*                            'J_1IMOVEND-J_1IPANNO'.
+*
+*    PERFORM bdc_field USING 'J_1IMOVEND-J_1IPANNO'
+*                            wa_j_1imovend-j_1ipanno.
+*
+**--------------------------------------------------------------------*
+** BACK
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPLJ1I_MASTER' '0100'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=BACK'.
+*
+**--------------------------------------------------------------------*
+** SAVE
+**--------------------------------------------------------------------*
+*    PERFORM bdc_dynpro USING 'SAPMF02K' '4000'.
+*
+*    PERFORM bdc_field USING 'BDC_OKCODE'
+*                            '=UPDA'.
+*
+**--------------------------------------------------------------------*
+** CALL TRANSACTION
+**--------------------------------------------------------------------*
+*    wa_opt-dismode = 'N'.
+*    wa_opt-updmode = 'S'.
+*
+*    CALL TRANSACTION 'XK01' USING lt_bdcdata "#EC CI_USAGE_OK[2226131]
+*          OPTIONS FROM wa_opt MESSAGES INTO lt_msg. "#EC CI_USAGE_OK[2265093]
 *--------------------------------------------------------------------*
-* SCREEN 4000
+* VMD_EI_API REPLACEMENT FOR BDC (Direct SQL Mapping - No GET_DATA)
 *--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '4000'.
+    DATA: lt_vendor_api TYPE vmds_ei_extern_t,
+          ls_vendor_api TYPE vmds_ei_extern,
+          ls_vendor     TYPE vmds_ei_main,
+          lt_return_api TYPE bapiret2_t,
+          ls_return_api TYPE cvis_message.
 
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=OPFI'.
+    DATA: ls_company_api   TYPE vmds_ei_company,
+          ls_purch_api     TYPE vmds_ei_purchasing,
+          ls_wht_api       TYPE vmds_ei_wtax_type,
+          lt_wht_api       TYPE vmds_ei_wtax_type_t,
+          ls_extension_api TYPE bapiparex,
+          ls_custom_tax    TYPE zfi_tax_tab.
 
-    PERFORM bdc_field USING 'BDC_SUBSCR'
-                            'SAPMF02K                                7001SUBSCREEN_HEADER'.
+    " 1. Header Information
+    ls_vendor_api-header-object_instance-lifnr = wa_al11-lifnr.
+*    ls_vendor_api-header-object_instance-ekorg     = wa_al11-purchasing_organization_code.
+    ls_vendor_api-header-object_task               = 'I'. " Insert / Create
 
-    PERFORM bdc_field USING 'BDC_SUBSCR'
-                            'SAPLZFI_TAB_TAX                         9999SUBSCREEN_BODY'.
+    " 2. General Data (Read LFA1 Reference defaults & map Account Group)
+    SELECT SINGLE * FROM lfa1
+      INTO CORRESPONDING FIELDS OF ls_vendor_api-central_data-central-data
+      WHERE lifnr = wa_al11-lifnr.
 
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'ZFI_TAX_TAB-URGYN'.
+    " Dynamically set 'X' in DATAX for all non-initial fields fetched from LFA1
+    FIELD-SYMBOLS: <lv_lfa1_val>  TYPE any,
+                   <lv_lfa1_flag> TYPE any.
 
-    PERFORM bdc_field USING 'ZFI_TAX_TAB-TXRYN'
-                            wa_zfi_tax_tab-txryn.
+    DATA(lo_lfa1_struct) = CAST cl_abap_structdescr(
+      cl_abap_typedescr=>describe_by_data( ls_vendor_api-central_data-central-data ) ).
 
-    PERFORM bdc_field USING 'ZFI_TAX_TAB-ADPNYN'
-                            wa_zfi_tax_tab-adpnyn.
+    LOOP AT lo_lfa1_struct->components ASSIGNING FIELD-SYMBOL(<ls_lfa1_comp>).
+      ASSIGN COMPONENT <ls_lfa1_comp>-name OF STRUCTURE ls_vendor_api-central_data-central-data TO <lv_lfa1_val>.
+      IF <lv_lfa1_val> IS ASSIGNED AND <lv_lfa1_val> IS NOT INITIAL.
+        ASSIGN COMPONENT <ls_lfa1_comp>-name OF STRUCTURE ls_vendor_api-central_data-central-datax TO <lv_lfa1_flag>.
+        IF <lv_lfa1_flag> IS ASSIGNED.
+          <lv_lfa1_flag> = 'X'.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
 
-    PERFORM bdc_field USING 'ZFI_TAX_TAB-URGYN'
-                            wa_zfi_tax_tab-urgyn.
+    ls_vendor_api-central_data-central-data-ktokk = wa_lfa1-ktokk.
+    ls_vendor_api-central_data-central-data-j_1issist = wa_j_1imovend-j_1issist.
+    ls_vendor_api-central_data-central-datax-j_1issist = 'X'.
+    ls_vendor_api-central_data-central-data-j_1ipanno = wa_j_1imovend-j_1ipanno.
+    ls_vendor_api-central_data-central-datax-j_1ipanno = 'X'.
 
-*--------------------------------------------------------------------*
-* CIN SCREEN
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPLJ1I_MASTER' '0100'.
+    " 3. Company Code Data (Read LFB1 Reference defaults & Override with Input)
+    ls_company_api-data_key-bukrs = wa_al11-company_code.
 
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=CIN_VENDOR_FC3'.
+*    SELECT SINGLE * FROM lfb1
+*      INTO CORRESPONDING FIELDS OF ls_company_api-data
+*      WHERE lifnr = wa_al11-lifnr
+*      AND bukrs = wa_al11-sr_company_code.
+ SELECT  * FROM lfb1
+      INTO CORRESPONDING FIELDS OF ls_company_api-data UP TO 1 ROWS
+      WHERE lifnr = wa_al11-lifnr
+      AND bukrs = wa_al11-sr_company_code ORDER BY PRIMARY KEY. ENDSELECT.
+    "To give value to datax strucutre
+    FIELD-SYMBOLS: <lv_val>  TYPE any,
+                   <lv_flag> TYPE any.
 
-    PERFORM bdc_field USING 'BDC_SUBSCR'
-                            'SAPLJ1I_MASTER                          0101CIN_VENDOR_SCA'.
+    " Dynamically loop through fields in DATA and set 'X' in DATAX if populated
+    DATA(lo_struct) = CAST cl_abap_structdescr(
+      cl_abap_typedescr=>describe_by_data( ls_company_api-data ) ).
 
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'GS_LFA1-J_1ISSIST'.
+    LOOP AT lo_struct->components ASSIGNING FIELD-SYMBOL(<ls_comp>).
+      ASSIGN COMPONENT <ls_comp>-name OF STRUCTURE ls_company_api-data TO <lv_val>.    "#EC CI_FLDEXT_OK[2610650]
+      IF <lv_val> IS ASSIGNED AND <lv_val> IS NOT INITIAL.
+        ASSIGN COMPONENT <ls_comp>-name OF STRUCTURE ls_company_api-datax TO <lv_flag>.
+        IF <lv_flag> IS ASSIGNED.
+          <lv_flag> = 'X'.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    ls_company_api-task = 'I'.
+    " Override default values with explicit inputs from wa_al11
+    IF wa_al11-reco_account_code IS NOT INITIAL.
+      ls_company_api-data-akont = wa_al11-reco_account_code.
+      ls_company_api-datax-akont = 'X'.
+    ENDIF.
 
-    PERFORM bdc_field USING 'GS_LFA1-J_1ISSIST'
-                             wa_j_1imovend-j_1issist.
+    IF wa_al11-payment_term_code IS NOT INITIAL.
+      ls_company_api-data-zterm = wa_al11-payment_term_code.
+      ls_company_api-datax-zterm = 'X'.
+    ENDIF.
 
-*--------------------------------------------------------------------*
-* PAN SCREEN
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPLJ1I_MASTER' '0100'.
+    IF wa_al11-payment_mode IS NOT INITIAL.
+      ls_company_api-data-zwels = wa_al11-payment_mode.
+      ls_company_api-datax-zwels = 'X'.
+    ENDIF.
 
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=CIN_VENDOR_FC4'.
+    ls_company_api-data-altkn = wa_al11-lifnr.
+    ls_company_api-datax-altkn = 'X'.
 
-    PERFORM bdc_field USING 'BDC_SUBSCR'
-                            'SAPLJ1I_MASTER                          0103CIN_VENDOR_SCA'.
+    ls_company_api-data-reprf = 'X'.
+    ls_company_api-datax-reprf = 'X'.
+    " 4. Withholding Tax Data (Screen 0610)
+    ls_wht_api-task = 'I'.
+    ls_wht_api-data_key-witht = wa_lfbw-witht.
+    APPEND ls_wht_api TO ls_company_api-wtax_type-wtax_type.
+    APPEND ls_company_api TO ls_vendor_api-company_data-company.
 
-    PERFORM bdc_field USING 'BDC_CURSOR'
-                            'J_1IMOVEND-J_1IPANNO'.
 
-    PERFORM bdc_field USING 'J_1IMOVEND-J_1IPANNO'
-                            wa_j_1imovend-j_1ipanno.
+    " 5. Purchasing Data (Read LFM1 Reference defaults & Override with Input)
+    ls_purch_api-data_key-ekorg = wa_al11-purchasing_organization_code.
+    ls_purch_api-task = 'I'.
+    SELECT SINGLE * FROM lfm1
+      INTO CORRESPONDING FIELDS OF ls_purch_api-data
+      WHERE lifnr = wa_al11-lifnr
+        AND ekorg = wa_al11-sr_purchase_org.
+    " Dynamically set 'X' in DATAX for all non-initial fields fetched from LFM1
+    FIELD-SYMBOLS: <lv_lfm1_val>  TYPE any,
+                   <lv_lfm1_flag> TYPE any.
 
-*--------------------------------------------------------------------*
-* BACK
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPLJ1I_MASTER' '0100'.
+    DATA(lo_lfm1_struct) = CAST cl_abap_structdescr(
+      cl_abap_typedescr=>describe_by_data( ls_purch_api-data ) ).
 
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=BACK'.
+    LOOP AT lo_lfm1_struct->components ASSIGNING FIELD-SYMBOL(<ls_lfm1_comp>).
+      ASSIGN COMPONENT <ls_lfm1_comp>-name OF STRUCTURE ls_purch_api-data TO <lv_lfm1_val>.
+      IF <lv_lfm1_val> IS ASSIGNED AND <lv_lfm1_val> IS NOT INITIAL.
+        ASSIGN COMPONENT <ls_lfm1_comp>-name OF STRUCTURE ls_purch_api-datax TO <lv_lfm1_flag>.
+        IF <lv_lfm1_flag> IS ASSIGNED.
+          <lv_lfm1_flag> = 'X'.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
 
-*--------------------------------------------------------------------*
-* SAVE
-*--------------------------------------------------------------------*
-    PERFORM bdc_dynpro USING 'SAPMF02K' '4000'.
+    " Override default values with explicit inputs from wa_al11
+    IF wa_al11-currency_code IS NOT INITIAL.
+      ls_purch_api-data-waers = wa_al11-currency_code.
+    ENDIF.
 
-    PERFORM bdc_field USING 'BDC_OKCODE'
-                            '=UPDA'.
+    IF wa_al11-contact_number IS NOT INITIAL.
+      ls_purch_api-data-telf1 = wa_al11-contact_number.
+    ENDIF.
 
-*--------------------------------------------------------------------*
-* CALL TRANSACTION
-*--------------------------------------------------------------------*
-    wa_opt-dismode = 'N'.
-    wa_opt-updmode = 'S'.
+    ls_purch_api-datax-waers = 'X'.
+    ls_purch_api-datax-telf1 = 'X'.
+    APPEND ls_purch_api TO ls_vendor_api-purchasing_data-purchasing.
 
-    CALL TRANSACTION 'XK01' USING lt_bdcdata OPTIONS FROM wa_opt MESSAGES INTO lt_msg.
+
+    " 7. Execute API Creation Call
+    APPEND ls_vendor_api TO lt_vendor_api.
+    ls_vendor-vendors = lt_vendor_api.
+    CALL METHOD vmd_ei_api=>maintain_bapi
+      EXPORTING
+        iv_test_run          = space
+        iv_collect_messages  = space
+        is_master_data       = ls_vendor
+      IMPORTING
+        es_message_defective = ls_return_api.
+
+    " 8. Post-Processing & Commit Logic
+    READ TABLE ls_return_api-messages WITH KEY type = 'E' TRANSPORTING NO FIELDS.
+    IF sy-subrc = 0.
+      CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    ELSE.
+      CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+        EXPORTING
+          wait = 'X'.
+      " 6. Custom Tax Tab (Screen 4000) & CIN PAN/SSI (SAPLJ1I_MASTER) Extension
+      ls_custom_tax-lifnr = wa_al11-lifnr.
+      ls_custom_tax-txryn = wa_zfi_tax_tab-txryn.
+      ls_custom_tax-adpnyn = wa_zfi_tax_tab-adpnyn.
+      ls_custom_tax-urgyn = wa_zfi_tax_tab-urgyn.
+      MODIFY zfi_tax_tab FROM ls_custom_tax.
+      IF sy-subrc IS INITIAL.
+        COMMIT WORK.
+      ENDIF.
+    ENDIF.
+    " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 09.09.2026 FOR ATC
 *--------------------------------------------------------------------*
 * PROCESS MESSAGES
 *--------------------------------------------------------------------*
@@ -696,11 +885,17 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM send_data .
 
-  SELECT SINGLE *
+*  SELECT SINGLE *
+*    FROM zparam_table
+*    INTO @DATA(wa_zparam)
+*    WHERE id_name = 'CIM_VNRSP'
+*    AND param_name NE ''.
+
+ SELECT  *
     FROM zparam_table
-    INTO @DATA(wa_zparam)
+    INTO @DATA(wa_zparam) UP TO 1 ROWS
     WHERE id_name = 'CIM_VNRSP'
-    AND param_name NE ''.
+    AND param_name NE '' ORDER BY PRIMARY KEY. ENDSELECT.
 
   IF sy-subrc IS NOT INITIAL.
     MESSAGE 'Path for AL11 not maintained' TYPE 'I'.
@@ -725,6 +920,9 @@ FORM send_data .
     APPEND wa_sftp1 TO ta_sftp1.
     CLEAR wa_sftp1.
 
+    "Soc atc correction abap7-22.09.2026
+    SORT : ta_partner BY lifnr ekorg parvw parza.
+    "Eoc atc correction abap7-22.09.2026
     LOOP AT ta_sft INTO wa_sft.
       wa_sftp1-id    =  wa_sft-id.
       wa_sftp1-vendor = wa_sft-vendor.
@@ -765,11 +963,18 @@ FORM send_data .
 
     CONCATENATE lv_date+6(2) lv_date+4(2) lv_date+0(4) INTO lv_ddmmyyyy.
 
+    " Code Remediation S4 AL11 file path change **BEGIN OF CHANGE BY ABAP7 25.10.2026
+*   IF lv_variant IS INITIAL.
+*     gv_al11_path = |{ wa_zparam-param_name }{ '\' }{ co_filename }{ lv_ddmmyyyy }{ sy-uzeit }{ '.csv' }|.
+*   ELSE.
+*     gv_al11_path = |{ wa_zparam-param_name }{ '\' }{ co_filename }{ lv_ddmmyyyy }{ sy-uzeit }{ '.csv' }|.
+*   ENDIF.
     IF lv_variant IS INITIAL.
-      gv_al11_path = |{ wa_zparam-param_name }{ '\' }{ co_filename }{ lv_ddmmyyyy }{ sy-uzeit }{ '.csv' }|.
+      gv_al11_path = |{ wa_zparam-param_name }{ '/' }{ co_filename }{ lv_ddmmyyyy }{ sy-uzeit }{ '.csv' }|.
     ELSE.
-      gv_al11_path = |{ wa_zparam-param_name }{ '\' }{ co_filename }{ lv_ddmmyyyy }{ sy-uzeit }{ '.csv' }|.
+      gv_al11_path = |{ wa_zparam-param_name }{ '/' }{ co_filename }{ lv_ddmmyyyy }{ sy-uzeit }{ '.csv' }|.
     ENDIF.
+    " Code Remediation S4 AL11 file path change **END OF CHANGE BY ABAP7 25.10.2026
 
     OPEN DATASET gv_al11_path IN TEXT MODE FOR OUTPUT ENCODING UTF-8.
 
@@ -793,10 +998,10 @@ FORM send_data .
       ENDLOOP.
     ENDIF.
     CLOSE DATASET gv_al11_path.
-    MESSAGE text-004 TYPE 'S'.
+    MESSAGE TEXT-004 TYPE 'S'.
 
   ELSE.
-    MESSAGE text-005 TYPE 'I'.
+    MESSAGE TEXT-005 TYPE 'I'.
   ENDIF.
 
 
