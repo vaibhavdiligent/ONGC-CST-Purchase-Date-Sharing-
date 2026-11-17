@@ -534,10 +534,15 @@ PARAMETERS: r_month  RADIOBUTTON GROUP rd1 USER-COMMAND r1 DEFAULT 'X',   "Added
             r_annual RADIOBUTTON GROUP rd1,
             r_consis RADIOBUTTON GROUP rd1. "Added by Adarsh/Archana against charm: 4000006427, TR: DVRK9A12BV
 *   CIS 2026-27 - Additional Discount for May / June 2026 (dedicated option)
-SELECTION-SCREEN BEGIN OF LINE.
-PARAMETERS: r_addmj RADIOBUTTON GROUP rd1.
-SELECTION-SCREEN COMMENT 3(55) c_addmj.
-SELECTION-SCREEN END OF LINE.
+*   PDR go-live (GAIL 18.11.2026): Strategic Monthly Discount NOT on the
+*   selection screen - SMD is not part of the go-live. To bring the option
+*   back: remove the NO-DISPLAY line, un-comment the 4 lines below it and
+*   the C_ADDMJ text in INITIALIZATION, and set GC_SMD_ACTIVE = 'X'.
+PARAMETERS: r_addmj NO-DISPLAY.
+*SELECTION-SCREEN BEGIN OF LINE.
+*PARAMETERS: r_addmj RADIOBUTTON GROUP rd1.
+*SELECTION-SCREEN COMMENT 3(55) c_addmj.
+*SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN SKIP.
 PARAMETERS: r_month1 NO-DISPLAY. "RADIOBUTTON GROUP rd1." SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000007907 Date: 12/03/2024
 SELECTION-SCREEN BEGIN OF LINE.
@@ -673,7 +678,7 @@ AT SELECTION-SCREEN OUTPUT.
 
 INITIALIZATION.
 * GAIL 02.11.2026: name as per the discount scheme
-  c_addmj = 'Strategic Monthly Discount for May''26 and June''26'.
+*  c_addmj = 'Strategic Monthly Discount for May''26 and June''26'.  " SMD off (PDR go-live)
 
 ** SOC by Chilukuri Tripura Reddy/Archna/Vishal Charm: 2000001050
   SELECT * FROM yrva_prs_grades INTO TABLE @DATA(lt_yrva_prs_grades).
