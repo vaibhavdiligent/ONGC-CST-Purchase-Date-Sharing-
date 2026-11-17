@@ -25,7 +25,12 @@ DD = json.load(open(os.path.join(ROOT, 'tools/ddic.json')))
 PROGS = ['src/zmms_bp_mass_upload.prog.abap',
          'src/zsds_cust_tmpl_download.prog.abap',
          'src/#ccbji#rusdmdr_cust_bp_maint.prog.abap',
-         'src/#ccbji#rummmdr_vend_bp_maint.prog.abap']
+         'src/#ccbji#rummmdr_vend_bp_maint.prog.abap',
+         # Cipla's CIMMRA vendor interface, converted November 2026
+         'src/zfi_cimmra_bp.prog.abap',
+         'src/zfi_cimmra_vendor_create.prog.abap',
+         'src/zfi_cimmra_empvend.prog.abap',
+         'src/zfi_cimmra_empvend_upd.prog.abap']
 
 # Transactions S/4HANA no longer has. Driving one from code fails outright.
 GONE_TCODE = {'XD01', 'XD02', 'XD03', 'XD05', 'XD06', 'XD07', 'XD99',
@@ -47,6 +52,8 @@ KNOWN = {
     'TSTL', 'TVV3', 'TVKO', 'TVKOV', 'TSPA', 'SKB1', 'DD02L',
     # business partner, and the link to the customer and the supplier
     'BUT000', 'BUT100', 'BUT0ID', 'CVI_CUST_LINK', 'CVI_VEND_LINK',
+    # sets (GS01) and region texts, read by the CIMMRA vendor interface
+    'SETLEAF', 'T005U',
     # the partner's industry sectors (PARTNER, ISTYPE, IND_SECTOR, ISDEF) and
     # the sectors of each industry system (ISTYPE, IND_SECTOR) - vendor column 40
     'BUT0IS', 'TB038A',
@@ -60,7 +67,7 @@ KNOWN = {
     # dictionary metadata and text IDs read by the CCEJ dynamic programs
     'DD05S', 'DD07L', 'TTXID', 'TTXIT',
     # Cipla's own
-    'ZPARAM_TABLE', 'ZFI_VEND_MSME', 'ZFI_TAX_TAB', 'ZSD_LICENSE_CHK',
+    'ZPARAM_TABLE', 'ZFI_VEND_MSME', 'ZFI_TAX_TAB', 'ZSD_LICENSE_CHK', 'ZFI_VEN_GRP',
 }
 
 OBSOLETE = [(r'\bOCCURS\s+\d', 'OCCURS'),
