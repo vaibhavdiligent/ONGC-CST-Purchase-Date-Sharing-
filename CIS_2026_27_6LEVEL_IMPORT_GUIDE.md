@@ -198,3 +198,30 @@ The note now prints the discount total value in words under *Discount total valu
 | SMD-11 | L2–L6: Seasonal, Waiver Month 1/2, Waiver Status not needed; show CIS Entry Date, Raffia Grades Qty, Raffia Rate, Other Grades Qty, Other Rate, Total Amount (as L1) | With the option *Strategic Monthly Discount (May/June'26)*: Seasonal / Waiver columns hidden; new columns CIS Entry Date (first CIS 2026-27 entry), Raffia Grades Qty, Raffia Rate (4000), Other Grades Qty, Other Rate (3000); Rebate Value headed *Total Amount (Rs.)*. Raffia/Other qty derived from the stored qty and value (value = 4000 × Raffia + 3000 × Other). | YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE |
 | SMD-12 | Credit-note e-mail: "REBATE PERIOD 00.00.0000 TO 00.00.0000" | E-mail takes the period from the approval record (then the rebate log) when the order's period dates are blank; L3 also passes the period start with the order (VBKD-BSTDK) | YCIS_DISBURSE, YCIS_EXECUTE |
 | SMD-13 | Applicable to customers who entered CIS in June / July 2026 and remain active at least up to Q2 (30.09.2026) | Per customer: CIS entry = earliest MoU begin of its CIS 2026-27 records, must be in June/July 2026; the customer's current (latest) record must be active and valid at least to 30.09.2026. An older version no longer qualifies a customer whose current record is terminated / inactive or ends before 30.09.2026. | YRVG004_QAIS_EXECUTE_N1 |
+
+## PDR go-live (17.11.2026)
+
+### Strategic Monthly Discount switched off
+Constant `GC_SMD_ACTIVE` (value blank) in YRVG004_QAIS_EXECUTE_N1, YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE: the Strategic Monthly Discount radio button is shown greyed out and cannot be run (also not through a saved variant). To activate later set `GC_SMD_ACTIVE` to `'X'` in these six programs.
+
+### Objects in the transport (check before release)
+* Programs: YRVG004_QAIS_EXECUTE_N1, YRVG004_QAIS_EXECUTE_N1_old, YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_APPRV5, YCIS_DISBURSE, YCIS_REBATE_REPORT, YCIS_SHORTFALL_MC, YCIS_REMINDER, YCIS_MASTER_CHECK (if used) – each with its GUI status STANDARD (SE41: L6 function APPR text "Post"; YRVG052 button PRNT).
+* DDIC: domains / data elements YCIS_*, tables YCIS_APPRVL, YCIS_APPRVL_GRD, YCIS_WF_APPR, YCIS_SHORTFALL, YCIS_WAIVER_RULE, YCIS_NODISC_GRD, YCIS_DISC_REL (+ table maintenance generators / function groups), structures ZCIS_APPR_NOTE_S (with AMT_WORDS), ZCIS_APPR_NOTE_ROW and its table type.
+* Adobe form ZCIS_PSD_APPR_NOTE and interface ZCIS_PSD_APPR_NOTE.
+* Transactions (SE93): L1–L6, YRVG052, YGCIS_SHORTFALL (SM30), YCIS_SHORTFALL (checker), YCIS_DISC_REL (SM30).
+* Customizing (separate customizing request): OB32 – BSEG-SGTXT changeable after posting (G/L line text at L6).
+
+### Data to maintain in PDR (client-specific – not in the workbench transport)
+| Table / item | How | What |
+|---|---|---|
+| YCIS_WF_APPR | SM30 | Approvers: L1 and L2 per zonal sales office; L3, L4, L5, L6 under sales office 0001 – user ID and e-mail of each |
+| YCIS_WAIVER_RULE | SM30 | Waiver rules valid for FY 2026-27 (minimum lifting in a waiver month AU 0.25 / AUT-Trader 0.50, number of waivers by CIS signing month) – same as tested in QAR |
+| YCIS_NODISC_GRD | SM30 | Non-discount grades (PS / GS / Powder / Polyfines MPGs) – same as QAR |
+| YCIS_SHORTFALL | YGCIS_SHORTFALL (maker) + YCIS_SHORTFALL (checker) | Shortfall-waiver grades per period – entered by PMG and approved by CPC L3 when needed |
+| YCIS_DISC_REL | SM30 | One row per PMG discount release (scheme, period, release date) – drives the L1/L2 reminder |
+| Existing CIS masters | check only | YRVA_QAIS_DATA (CIS 2026-27 customers, MCQ, waivers), grade tables YRVA_HDPE_GRADES / YRVA_LLDPE_GRADE / YRVA_OTHER_GRADE / YRVA_OTHER_GRAD1 / YRVA_GRADE_CISD, customer e-mail IDs (credit-note mail) |
+| Job YCIS_REMINDER | SM36 | Daily (e.g. 08:45), variant: working days 2, GAIL factory calendar |
+| Roles | PFCG | T-codes of each level to the respective users; YV_VKBUR sales-office authorisation for L1/L2 |
+| Mail | SCOT / SOST (Basis) | SAPconnect sending active in PDR (workflow and credit-note e-mails) |
+
+Do not move QAR test data (YCIS_APPRVL / YCIS_APPRVL_GRD rows) to PDR.

@@ -416,6 +416,10 @@ DATA: it_ycis_shortfall TYPE STANDARD TABLE OF ycis_shortfall.
 *   status 'P' (Pending) instead of creating the sales order. The CHECKER
 *   program YCIS_APPROVE approves the pending rows and creates the orders.
 TABLES: ycis_apprvl, ycis_wf_appr.
+* PDR go-live (GAIL 17.11.2026): Strategic Monthly Discount (May/June'26)
+* switched OFF - the option is shown greyed out and cannot be run.
+* To activate it again set the value to 'X' (no other change needed).
+CONSTANTS gc_smd_active TYPE c VALUE ' '.
 DATA: gv_maker_mode TYPE char1 VALUE 'X'.   " X = save for approval (maker)
 DATA: gt_stg_office TYPE STANDARD TABLE OF vkbur.  " offices staged (for L2 mail)
 DATA: gv_stg_dup TYPE i.   " rows found ALREADY with L2/L3 on Execute (GAIL 06.08.2026)
@@ -587,6 +591,15 @@ PARAMETERS: c_chk TYPE flag NO-DISPLAY DEFAULT ' '.  "CHARM #4000000388
 SELECTION-SCREEN : END OF BLOCK b1.
 
 AT SELECTION-SCREEN OUTPUT.
+* Strategic Monthly Discount option inactive (see GC_SMD_ACTIVE)
+  IF gc_smd_active IS INITIAL.
+    LOOP AT SCREEN.
+      IF screen-name = 'R_ADDMJ'.
+        screen-input = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
 
 ** SOC Commeneted by Chilukuri Tripura Reddy/Archna/Vishal Charm : 4000008188
   LOOP AT SCREEN.
@@ -15608,6 +15621,9 @@ AT SELECTION-SCREEN.
 * GAIL QAR 05.11.2026: the Strategic Monthly Discount applies ONLY to
 * May'26 and June'26 (01.05.2026 - 30.06.2026), one month per run - it was
 * also being calculated for August / September 2026.
+  IF r_addmj = 'X' AND gc_smd_active IS INITIAL.
+    MESSAGE 'Strategic Monthly Discount (May''26 / June''26) is not active' TYPE 'E'.
+  ENDIF.
   IF r_addmj = 'X' AND sy-ucomm = 'ONLI'.
     DATA lv_smd_to TYPE d.
     lv_smd_to = s_sptag-high.

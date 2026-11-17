@@ -22,6 +22,10 @@ TYPE-POOLS: slis.
 TABLES: ycis_apprvl, ycis_wf_appr.
 
 CONSTANTS: gc_level TYPE ycis_wlevel VALUE '3'.
+* PDR go-live (GAIL 17.11.2026): Strategic Monthly Discount (May/June'26)
+* switched OFF - the option is shown greyed out and cannot be run.
+* To activate it again set the value to 'X' (no other change needed).
+CONSTANTS  gc_smd_active TYPE c VALUE ' '.
 *   Confirmation statement (verified & confirmed at L1 and L2), shown as the
 *   L3 report header for onward processing.
 CONSTANTS:
@@ -146,6 +150,23 @@ INITIALIZATION.
   %_s_vkbur_%_app_%-text = 'Sales Office'.
   %_s_kunnr_%_app_%-text = 'Customer'.
   %_s_kvgr2_%_app_%-text = 'Customer Group'.
+
+*--------------------------------------------------------------------*
+* Strategic Monthly Discount option inactive (see GC_SMD_ACTIVE)
+AT SELECTION-SCREEN OUTPUT.
+  IF gc_smd_active IS INITIAL.
+    LOOP AT SCREEN.
+      IF screen-name = 'P_SMD'.
+        screen-input = '0'.
+        MODIFY SCREEN.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+AT SELECTION-SCREEN.
+  IF p_smd = 'X' AND gc_smd_active IS INITIAL.
+    MESSAGE 'Strategic Monthly Discount (May''26 / June''26) is not active' TYPE 'E'.
+  ENDIF.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
