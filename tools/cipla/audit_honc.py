@@ -79,6 +79,12 @@ if 'lcl_cimmra_bp=>change(' not in change:
 if not re.search(r'iv_bank_replace\s*=\s*abap_true', change):
     fail.append('CHANGE_VENDOR adds the file\'s bank account next to the old one - FK02 replaced '
                 'the first account')
+if not re.search(r'iv_comm_replace\s*=\s*abap_true', change):
+    fail.append('CHANGE_VENDOR adds the file\'s mobile and e-mail next to the old ones - FK02 '
+                'overwrote the standard ones')
+if re.search(r'vendor-central_data-bankdetail', INC, re.I):
+    fail.append('ZFI_CIMMRA_BP sends bank details on the supplier - in S/4HANA CVI takes them from '
+                'the business partner (CVI_EI004)')
 if not re.search(r'iv_keep_blank\s*=\s*`VEN_CLASS`', change):
     fail.append('CHANGE_VENDOR does not send a blank GST classification - a vendor that registers '
                 'for GST would stay "not registered"')
@@ -111,6 +117,12 @@ for what, pat in (
          r'FROM t016 WHERE brsch = @lv_brsch.*FROM tb038a WHERE ind_sector = @lv_sec'),
         ('sends the fields asked for even when blank', r'ASSIGN COMPONENT lv_kf OF STRUCTURE is_cin'),
         ('replaces the first bank account on request', r'ls_bkdel-task\s*= c_delete\.'),
+        ('sends bank details on the business partner, where CVI takes them from',
+         r'APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails\.'),
+        ('overwrites the standard telephone / fax / e-mail by its CONSNUMBER on request',
+         r'ls_tel-contact-data-consnumber = ls_o2-consnumber\..*ls_fax-contact-data-consnumber = '
+         r'ls_o3-consnumber\..*ls_smt-contact-data-consnumber = ls_o6-consnumber\.'),
+        ('leaves the name of a person partner alone', r"IF lv_bptype = '1'\."),
         ('passes the telephone extension', r'ls_tel-contact-data-extension = lv_ext\.')):
     if not re.search(pat, INC, re.I | re.S):
         fail.append(f'ZFI_CIMMRA_BP no longer {what} (ZFI_VEND_HONC needs it)')

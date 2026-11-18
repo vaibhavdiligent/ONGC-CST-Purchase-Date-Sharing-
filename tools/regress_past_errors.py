@@ -250,8 +250,17 @@ CASES = [
        "    CALL TRANSACTION 'FK01' USING bdcdata MODE 'N'.\n    lcl_cimmra_bp=>create(\n")]),
     ('HONC change adds a second bank account instead of replacing the first, as FK02 did',
      'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_honc.py',
-     [('src/zfi_cimmra_bp.prog.abap', "          ls_bkdel-task           = c_delete.\n",
-       "          ls_bkdel-task           = c_insert.\n")]),
+     [('src/zfi_cimmra_bp.prog.abap', "        ls_bkdel-task     = c_delete.\n",
+       "        ls_bkdel-task     = c_insert.\n")]),
+    ('Bank details sent on the supplier, which CVI ignores in S/4HANA (CVI_EI004)',
+     'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_cimmra_bp.prog.abap',
+       "          APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.\n",
+       "          APPEND ls_bk TO ls_data-vendor-central_data-bankdetail-bankdetails.\n")]),
+    ('HONC change adds the new mobile / e-mail beside the old standard one',
+     'src/zfi_vend_honc_fd.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc_fd.prog.abap', "                  iv_comm_replace = abap_true",
+       "                  iv_comm_replace = abap_false")]),
 ]
 
 

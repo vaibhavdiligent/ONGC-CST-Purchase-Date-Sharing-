@@ -1025,9 +1025,10 @@ FORM change_vendor .
 * S/4HANA: FK02 is gone - the vendor is changed through its business
 * partner (LCL_CIMMRA_BP=>CHANGE, include ZFI_CIMMRA_BP). It changes what
 * the FK02 batch input did: name, search term, address, telephone,
-* mobile, fax, e-mail, GSTIN, corporate group NONFIELD, industry key, the
-* bank account (the file's replaces the first one, as typing over line 1
-* in FK02 did) and the GST vendor classification.
+* mobile, fax, e-mail (a new one overwrites the standard one, as FK02
+* did), GSTIN, corporate group NONFIELD, industry key, the bank account
+* (the file's replaces the first one, as typing over line 1 in FK02 did)
+* and the GST vendor classification.
   DATA : lv_stat TYPE char255,
          lv_vend TYPE lfa1-lifnr.
   DATA : ls_central TYPE vmds_ei_vmd_central,
@@ -1063,6 +1064,7 @@ FORM change_vendor .
                   iv_industry     = wa_data-ind_key
                   iv_keep_blank   = `VEN_CLASS`      " blank = registered for GST
                   iv_bank_replace = abap_true
+                  iv_comm_replace = abap_true        " FK02 typed over the numbers
         IMPORTING et_error        = lt_error
                   et_success      = lt_success ).
 
