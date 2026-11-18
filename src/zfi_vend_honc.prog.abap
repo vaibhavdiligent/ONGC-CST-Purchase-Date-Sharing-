@@ -1,0 +1,257 @@
+*&---------------------------------------------------------------------*
+*& Report  ZFI_VEND_HONC
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* Program Title     : ZFI_VEND_HONC
+* Author            : Shivaji Ingole
+* Program Type      : Excutable Program
+* Creation Date     : 12-11-2020
+* Transaction       : ZFI_VEND_HONC
+* Functional design : FS_FI_344_V1.0
+* Technical design  : TS_FI_344_V1.0
+* Change request    : 8000006708
+* Transport Request : CRDK974526
+* Description       : Program For Bank Key And Vendor Master Creation
+*-----------------------------------------------------------------------*
+******Modification log
+* Author            : Fatima zia
+* Program Type      : Excutable Program
+* Change Date       : 27.05.2022
+* Transaction       : ZFI_VEND_HONC
+* Change request    : 8000007904
+* Transport Request : CRDK983367
+* Description       :Vendor code generation
+*-----------------------------------------------------------------------*
+******Modification log
+* Author            : Anuj Nandapurkar
+* Program Type      : Excutable Program
+* Change Date       : 27.05.2022
+* Functional design : Pankaj Sawant
+* Transaction       : ZFI_VEND_HONC
+* Change request    : 8000009272
+* Transport Request : CRDK988488
+* Description       :Vendor code generation
+*-----------------------------------------------------------------------*
+******Modification log
+* Author            : Gajanan Patil
+* Program Type      : Excutable Program
+* Change Date       : 15.03.2024
+* Functional design : Veera
+* Transaction       : ZFI_VEND_HONC
+* Change request    : 8000003530
+* Transport Request : CRDK990044
+* Description       : 3 fields added in incoming file
+*-----------------------------------------------------------------------*
+******Modification log
+* Author            : Gauri Tandel
+* Change Date       : 12.06.2024, 21.08.2024
+* Functional design : Veera
+* Transaction       : ZFI_VEND_HONC
+* Change request    : 8000003666, 8000003829
+* Transport Request : CRDK991347, CRDK991369,CRDK992195
+* Description       : validation added for bank key and Pan no
+*                     fields added in BDC and logic for creation of vendor
+*-----------------------------------------------------------------------*
+
+REPORT zfi_vend_honc.
+
+INCLUDE zfi_vend_honc_dd.
+INCLUDE zfi_vend_honc_ss.
+INCLUDE zfi_vend_honc_fd.
+
+START-OF-SELECTION.
+
+  IF rb_mail IS NOT INITIAL.
+    PERFORM goto_tmg.
+    LEAVE TO CURRENT TRANSACTION.
+
+*SOC BY FATIMA FOR 8000007904 Vendor code generation.
+  ELSE.
+*  ELSEIF rb_vend IS NOT INITIAL.
+    PERFORM get_files.
+
+    LOOP AT ta_files INTO wa_files.
+      gv_file = wa_files-name.
+      CONCATENATE gv_dir gv_file INTO gv_file.
+
+      PERFORM get_file_data.
+      PERFORM fetch_data.
+      PERFORM validate_data.
+      IF rb_vend IS NOT INITIAL.
+*      IF ta_noifsc IS INITIAL.
+        IF ta_chvend IS NOT INITIAL.
+          PERFORM change_vendor.
+        ENDIF.
+
+        IF ta_crvend IS NOT INITIAL .
+          PERFORM create_vendor.
+        ENDIF.
+
+*        IF ta_noifsc IS NOT INITIAL OR ta_nullifsc IS NOT INITIAL.             "added by fatima for 800007904
+*          PERFORM missing_ifsc_mail.
+*        ENDIF.
+        PERFORM update_log.                                                     "added by Gauri Tandel - 8000003666 -17.06.2024
+        PERFORM send_det_mail.
+        gv_source_file = gv_file.
+        gv_target_path = gv_file.
+        REPLACE 'INCOMING' WITH 'ARCHIVE' INTO gv_target_path.
+        CALL FUNCTION 'ARCHIVFILE_SERVER_TO_SERVER'
+          EXPORTING
+            sourcepath       = gv_source_file
+            targetpath       = gv_target_path
+          EXCEPTIONS
+            error_file       = 1
+            no_authorization = 2
+            OTHERS           = 3.
+        IF sy-subrc EQ 0.
+* delete source file
+          DELETE DATASET gv_file.
+        ENDIF.
+        PERFORM refresh.
+      ELSEIF rb_ifsc IS NOT INITIAL.
+*        IF ta_noifsc IS NOT INITIAL OR ta_nullifsc IS NOT INITIAL."Commented by Anuj Nandapurkar
+        IF ta_noifsc IS NOT INITIAL OR ta_data1 IS NOT INITIAL OR ta_nullifsc IS NOT INITIAL."Added by Anuj Nandapurkar as part of CR8000009272
+          PERFORM missing_ifsc_mail.
+        ENDIF.
+*        ENDIF.
+        CLEAR : wa_files, gv_file.
+        REFRESH: ta_noifsc,ta_nullifsc.
+*        ENDIF.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
+
+*EOC BY FATIMA FOR 8000007904 Vendor code generation.
+  IF ta_log IS NOT INITIAL.
+    PERFORM display_output.
+  ENDIF.
+*&---------------------------------------------------------------------*
+*&      Form  VALIDATE_DATA_OLD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM validate_data_old .
+*
+**Start of changes by Anuj Nandapurkar as part of CR8000009272 dated 16-10-2023
+*  LOOP AT ta_data INTO wa_data.
+*    IF wa_data-flag = 'A'. "Added by Gajanan - 15.03.2024 - CR#8000003035
+*      IF line_exists( ta_movend[ j_1ipanno = wa_data-pan ] ).
+*        APPEND wa_data TO ta_movend1.
+*      ENDIF.
+*      IF ta_movend1 IS NOT INITIAL.
+*        READ TABLE ta_movend1 INTO wa_movend1 WITH KEY pan = wa_data-pan.
+*        IF sy-subrc = 0.
+*          wa_data1-name1 = wa_movend1-name1.
+*          wa_data1-pan = wa_movend1-pan.
+*          wa_data1-bankn = wa_movend1-bankn.
+*          wa_data1-bankl = wa_movend1-bankl.
+*          wa_data1-remarks = 'Vendor already exists' .
+*          APPEND wa_data1 TO ta_data1.
+*        ENDIF.
+**      APPEND wa_data1 TO ta_data1.
+*
+*      ENDIF.
+*
+*      IF line_exists( ta_lfbk[ bankl = wa_data-bankl bankn = wa_data-bankn ] ).
+*        APPEND wa_data TO ta_lfbk1 .
+*      ENDIF.
+*      IF ta_lfbk1 IS NOT INITIAL.
+*        READ TABLE ta_lfbk1 INTO wa_lfbk1 WITH KEY bankl = wa_data-bankl.
+*        IF sy-subrc = 0.
+*          wa_data1-name1 = wa_lfbk1-name1.
+*          wa_data1-pan = wa_lfbk1-pan.
+*          wa_data1-bankn = wa_lfbk1-bankn.
+*          wa_data1-bankl = wa_lfbk1-bankl.
+*          wa_data1-remarks = 'Vendor has the same bank account maintained' .
+*          APPEND wa_data1 TO ta_data1.
+*        ENDIF.
+*      ENDIF.
+*
+*    ENDIF.
+*
+*    IF strlen( wa_data-pan ) NE 10.
+*      APPEND wa_data TO ta_pan.
+*    ENDIF.
+*    IF ta_pan IS NOT INITIAL.
+*      READ TABLE ta_pan INTO wa_pan WITH KEY pan = wa_data-pan.
+*      IF sy-subrc = 0.
+*        wa_data1-name1 = wa_pan-name1.
+*        wa_data1-pan = wa_pan-pan.
+*        wa_data1-bankn = wa_pan-bankn.
+*        wa_data1-bankl = wa_pan-bankl.
+*        wa_data1-remarks = 'Incorrect PAN details' .
+*        APPEND wa_data1 TO ta_data1.
+*      ENDIF.
+*    ENDIF.
+**End of changes by Anuj Nandapurkar as part of CR8000009272 dated 16-10-2023
+*
+**  LOOP AT ta_data INTO wa_data.
+*    IF line_exists( ta_bnka[ bankl = wa_data-bankl ] ).
+*      IF line_exists( ta_movend[ j_1ipanno = wa_data-pan ] ).
+*        APPEND wa_data TO ta_chvend.
+*        IF ta_chvend IS NOT INITIAL.
+*          DELETE ta_chvend WHERE name1 = wa_data1-name1.
+*        ENDIF.
+*      ELSE.
+*        APPEND wa_data TO ta_crvend.
+*        IF ta_crvend IS NOT INITIAL.
+*          DELETE ta_crvend WHERE name1 = wa_data1-name1.
+*        ENDIF.
+*      ENDIF.
+*    ELSE.
+**SOC BY FATIMA FOR 8000007904 Vendor code generation.
+*      IF wa_data-bankl = ' '.
+*        APPEND wa_data TO ta_nullifsc.
+*      ELSE.
+*        APPEND wa_data TO ta_noifsc.
+*      ENDIF.
+**EOC BY FATIMA FOR 8000007904 Vendor code generation.
+*    ENDIF.
+*
+*    """ Begin of commented section done by Sushil as on 10.03.2021
+****    IF line_exists( ta_lfbk[ bankl = wa_data-bankl ] ).
+****      IF line_exists( ta_movend[ j_1ipanno = wa_data-pan ] ).
+****        APPEND wa_data TO ta_chvend.
+****      ELSE.
+****        APPEND wa_data TO ta_crvend.
+****      ENDIF.
+****    ELSE.
+****      APPEND wa_data TO ta_noifsc.
+****    ENDIF.
+*    """ End of commented section done by Sushil as on 10.03.2021
+**    CLEAR wa_data.
+*    CLEAR: wa_data1, wa_data, wa_pan, wa_lfbk1, wa_movend1. "Added by Anuj Nandapurkar as part of CR8000009272
+*    DELETE ADJACENT DUPLICATES FROM ta_data1 COMPARING ALL FIELDS."Added by Anuj as part of CR8000009272
+*    REFRESH: ta_movend1,ta_lfbk1,ta_pan. "Added by Gajanan - 15.03.2024 - CR#8000003035
+*  ENDLOOP.
+*
+*ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  UPDATE_LOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM update_log .
+  LOOP AT ta_data1 INTO DATA(wa_tmp).
+    wa_log-file = gv_file.
+    READ TABLE ta_data_tmp INTO wa_data WITH KEY pan = wa_tmp-pan BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_log-name1 = wa_data-name1.
+      wa_log-bankl = wa_data-bankl.
+      wa_log-pan = wa_data-pan.
+      wa_log-msg = wa_tmp-remarks.
+      APPEND wa_log TO ta_log.
+      CLEAR : wa_log.
+    ENDIF.
+  ENDLOOP.
+ENDFORM.

@@ -1,0 +1,33 @@
+*&---------------------------------------------------------------------*
+*&  Include           ZFI_VEND_HONC_SS
+*&---------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* Program Title     : ZFI_VEND_HONC_DD
+* Author            : Shivaji Ingole
+* Program Type      : Include Program
+* Creation Date     : 12-11-2020
+* Transaction       : ZFI_VEND_HONC
+* Functional design : FS_FI_344_V1.0
+* Technical design  : TS_FI_344_V1.0
+* Change request    : 8000006708
+* Transport Request : CRDK974526
+* Description       : Include For Bank Key And Vendor Master Creation
+*                     trasnsaction.
+*-----------------------------------------------------------------------*
+******Modification log
+* Author            : Fatima zia
+* Program Type      : Excutable Program
+* Change Date       : 27.05.2022
+* Transaction       : ZFI_VEND_HONC
+* Change request    : 8000007904
+* Transport Request : CRDK983367
+* Description       :Vendor code generation
+*-----------------------------------------------------------------------*
+
+SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE text-001.
+PARAMETERS : rb_mail RADIOBUTTON GROUP rb1.
+*SOC BY FATIMA FOR 8000007904 Vendor code generation.
+PARAMETERS : rb_ifsc RADIOBUTTON GROUP rb1.
+*EOC BY FATIMA FOR 8000007904 Vendor code generation.
+PARAMETERS : rb_vend RADIOBUTTON GROUP rb1.
+SELECTION-SCREEN : END OF BLOCK b1.
