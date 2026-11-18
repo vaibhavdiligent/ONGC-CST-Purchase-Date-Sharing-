@@ -511,7 +511,11 @@ FORM validate_data .
   CLEAR: wa_data1.
   LOOP AT ta_data INTO wa_data.
     IF wa_data-flag = 'A'.
-      READ TABLE ta_data1 INTO wa_data1 WITH KEY pan = wa_data-pan BINARY SEARCH.
+      " S/4HANA conversion: no BINARY SEARCH - TA_DATA1 is sorted by bank key
+      " once a change record is checked, so a binary search by PAN missed
+      " rejected records, and a rejected new vendor (one whose PAN already has
+      " a vendor) went on to be created.
+      READ TABLE ta_data1 INTO wa_data1 WITH KEY pan = wa_data-pan.
       IF sy-subrc = 0.
         DELETE ta_data WHERE pan = wa_data1-pan.
       ENDIF.
@@ -734,7 +738,7 @@ FORM missing_ifsc_mail .
       CLEAR : wa_email, lwa_receiver.
     ENDLOOP.
 
-    MOVE 'Blank IFSC code found' TO lv_subject.   "added by fatima for 8000007904
+    lv_subject = 'Blank IFSC code found'.   "added by fatima for 8000007904
 
     CLEAR lwa_doc_data.
     lwa_doc_data-obj_langu  = sy-langu.
@@ -1018,324 +1022,58 @@ ENDFORM.
 *  <--  p2        text
 *----------------------------------------------------------------------*
 FORM change_vendor .
-  DATA : lv_msg  TYPE char255,
-         lv_stat TYPE char255,
+* S/4HANA: FK02 is gone - the vendor is changed through its business
+* partner (LCL_CIMMRA_BP=>CHANGE, include ZFI_CIMMRA_BP). It changes what
+* the FK02 batch input did: name, search term, address, telephone,
+* mobile, fax, e-mail, GSTIN, corporate group NONFIELD, industry key, the
+* bank account (the file's replaces the first one, as typing over line 1
+* in FK02 did) and the GST vendor classification.
+  DATA : lv_stat TYPE char255,
          lv_vend TYPE lfa1-lifnr.
-  CONSTANTS : lc_fk02 TYPE syst_tcode VALUE 'FK02'. "#EC CI_USAGE_OK[2226131]
+  DATA : ls_central TYPE vmds_ei_vmd_central,
+         ls_postal  TYPE cvis_ei_1vl,
+         ls_cin     TYPE ty_bp_cin,
+         ls_comp    TYPE ty_bp_comp,
+         ls_none    TYPE ty_bp_none,
+         lt_tel     TYPE ty_bp_tel_t,
+         lt_fax     TYPE ty_bp_fax_t,
+         lt_mail    TYPE ty_bp_mail_t,
+         lt_bank    TYPE ty_bp_bank_t,
+         lt_wtax    TYPE ty_bp_wtax_t,
+         lt_error   TYPE bapiret2_t,
+         lt_success TYPE bapiret2_t.
+
   LOOP AT ta_chvend INTO wa_data.
     IF wa_data-flag = 'U'.              "added by Gauri Tandel - 8000003666 -17.06.2024
-      TRY.
-          wa_movend = ta_movend[ j_1ipanno = wa_data-pan ].
-          ##NO_HANDLER
-        CATCH cx_sy_itab_line_not_found.
-      ENDTRY.
-      TRY.
-*        DATA(lwa_t005u) = ta_t005u[ bezei = wa_data-region ]. "Commented by Gajanan - 21.03.2024 - CR#8000003530
-          DATA(lwa_t005u) = ta_t005u[ bland = wa_data-region ]. "Added by Gajanan - 21.03.2024 - CR#8000003530
-          ##NO_HANDLER
-        CATCH cx_sy_itab_line_not_found.
-      ENDTRY.
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
-      TRY.
-          wa_bnka = ta_bnka[ banks = wa_data-banks bankl = wa_data-bankl ].
-          ##NO_HANDLER
-        CATCH cx_sy_itab_line_not_found.
-      ENDTRY.
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
+      PERFORM bp_data USING    wa_data abap_true
+                      CHANGING ls_central ls_postal ls_cin ls_comp
+                               lt_tel lt_fax lt_mail lt_bank lt_wtax.
 
-***Start of comment by Gajanan - 15.03.2024 - CR#8000003035
-*    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0106'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'USE_ZAV'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '/00'.
-*    PERFORM bdc_field1       USING 'RF02K-LIFNR'
-*                                  wa_movend-lifnr.
-*    PERFORM bdc_field1       USING 'RF02K-BUKRS'
-*                                  '1000'.
-*    PERFORM bdc_field1       USING 'RF02K-D0110'
-*                                  'X'.
-*    PERFORM bdc_field1       USING 'RF02K-D0130'
-*                                  'X'.
-*    PERFORM bdc_field1       USING 'RF02K-D0210'
-*                                  'X'.
-*    PERFORM bdc_field1       USING 'RF02K-D0215'
-*                                  'X'.
-*    PERFORM bdc_field1       USING 'USE_ZAV'
-*                                  'X'.
-*    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0111'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '/00'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'ADDR1_DATA-STREET'.
-*    PERFORM bdc_field1       USING 'SZA1_D0100-TITLE_MEDI'
-*                                   wa_data-title.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-NAME1'
-*                                   wa_data-name1.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-SORT1'
-*                                   wa_data-sort1.
-*    PERFORM bdc_field1      USING 'ADDR1_DATA-STR_SUPPL1'
-*                                   wa_data-street.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-STREET'
-*                                   wa_data-str_suppl1.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-POST_CODE1'
-*                                   wa_data-post_code1.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-CITY1'
-*                                   wa_data-city1.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-COUNTRY'
-*                                   wa_data-country.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-REGION'
-*                                   lwa_t005u-bland.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-TIME_ZONE'
-*                                   'INDIA'.
-*    PERFORM bdc_field1       USING 'ADDR1_DATA-LANGU'
-*                                   'EN'.
-*    PERFORM bdc_field1       USING 'SZA1_D0100-MOB_NUMBER'
-*                                   wa_data-mob_number1.
-*    PERFORM bdc_field1       USING 'SZA1_D0100-SMTP_ADDR'
-*                                   wa_data-smtp_addr.
-*    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'LFBK-KOINH(01)'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '=UPDA'.
-*    PERFORM bdc_field1       USING 'LFBK-BANKS(01)'
-*                                   wa_data-banks.
-*    PERFORM bdc_field1       USING 'LFBK-BANKL(01)'
-*                                   wa_data-bankl.
-*    PERFORM bdc_field1       USING 'LFBK-BANKN(01)'
-*                                   wa_data-bankn.
-*    PERFORM bdc_field1       USING 'LFBK-KOINH(01)'
-*                                   wa_data-koinh.
-***End of comment by Gajanan - 15.03.2024 - CR#8000003035
+      lcl_cimmra_bp=>change(
+        EXPORTING iv_lifnr        = wa_data-vendor
+                  is_central      = ls_central
+                  is_postal       = ls_postal
+                  is_company      = ls_none          " FK02 changed general data only
+                  is_cin          = ls_cin
+                  is_purch        = ls_none
+                  it_mobile       = lt_tel
+                  it_fax          = lt_fax
+                  it_smtp         = lt_mail
+                  it_bank         = lt_bank
+                  iv_industry     = wa_data-ind_key
+                  iv_keep_blank   = `VEN_CLASS`      " blank = registered for GST
+                  iv_bank_replace = abap_true
+        IMPORTING et_error        = lt_error
+                  et_success      = lt_success ).
 
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
-*      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0106'.
-*      PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                    'RF02K-D0130'.
-*      PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                    '/00'.
-*      PERFORM bdc_field1       USING 'RF02K-LIFNR'
-*                                    wa_movend-lifnr.
-*      PERFORM bdc_field1       USING 'RF02K-BUKRS'
-*                                    '1000'.
-*      PERFORM bdc_field1       USING 'RF02K-D0110'
-*                                    'X'.
-*      PERFORM bdc_field1       USING 'RF02K-D0120'
-*                                    'X'.
-*      PERFORM bdc_field1       USING 'RF02K-D0130'
-*                                    'X'.
-*      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0110'.
-*      PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                    'LFA1-REGIO'.
-*      PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                    '/00'.
-*
-**      "BOC by Gauri Tandel - 8000003666 -11.06.2024
-*
-*      PERFORM bdc_field1 USING 'LFA1-ANRED'
-*                                 wa_data-title.    "MR
-*      PERFORM bdc_field1 USING 'LFA1-NAME1'
-*                                 wa_data-name1.    "vendor name
-*      PERFORM bdc_field1 USING 'LFA1-SORTL'
-*                                 wa_data-sort1.    "search name
-*      PERFORM bdc_field1 USING 'LFA1-TELF1'
-*                                 wa_data-tel_number1.    "telephone1
-*      PERFORM bdc_field1 USING 'LFA1-TELF2'
-*                                 wa_data-tel_number2.    "telephone2
-*      PERFORM bdc_field1 USING 'LFA1-TELFX'
-*                                 wa_data-fax_number.    "fax
-**
-**      "EOC by Gauri Tandel - 8000003666 -11.06.2024
-*
-*      PERFORM bdc_field1       USING 'LFA1-STRAS'
-*                                    wa_data-street+0(23)."'123'.
-*      PERFORM bdc_field1       USING 'LFA1-ORT01'
-*                                    wa_data-city1."'Hyd'.
-*      PERFORM bdc_field1       USING 'LFA1-PSTLZ'
-*                                    wa_data-post_code1.     "'500042'.
-*      PERFORM bdc_field1       USING 'LFA1-LAND1'
-*                                    wa_data-country. "'IN'.
-*      PERFORM bdc_field1       USING 'LFA1-REGIO'
-*                                    lwa_t005u-bland."'13'
-*      PERFORM bdc_field1       USING 'LFA1-SPRAS'
-*                                    'EN'.
-*
-*      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0120'.
-*      PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                    'LFA1-STCD3'.
-*      PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                    '/00'.
-*      PERFORM bdc_field1       USING 'LFA1-STCD3'
-*                                    wa_data-gst."'Cf345ftyu'.
-*      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-*      PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                    'LFBK-KOINH(01)'.
-*      PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                    '=ENTR'.
-*      PERFORM bdc_field1       USING 'LFBK-BANKS(01)'
-*                                    wa_data-banks. "'US'.
-*      PERFORM bdc_field1       USING 'LFBK-BANKL(01)'
-*                                    wa_data-bankl."'UTIB000027'.
-*      PERFORM bdc_field1       USING 'LFBK-BANKN(01)'
-*                                    wa_data-bankn."'97000230678'.
-*      PERFORM bdc_field1       USING 'LFBK-KOINH(01)'
-*                                    wa_data-koinh."'AP Prabhakar'.
-*
-**    PERFORM bdc_dynpro1      USING 'SAPLBANK' '0100'.
-**    PERFORM bdc_field1       USING 'BDC_CURSOR'
-**                                  'BNKA-STRAS'.
-**    PERFORM bdc_field1       USING 'BDC_OKCODE'
-**                                  'ENTR'.
-**    PERFORM bdc_field1       USING 'BNKA-BANKA'
-**                                  'HDFC'.
-**    PERFORM bdc_field1       USING 'BNKA-PROVZ'
-**                                  'CA'.
-*      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-*      PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                    'LFBK-KOINH(01)'.
-**    PERFORM bdc_field1       USING 'BDC_OKCODE'
-**                                  '=UPDA'.
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
+      PERFORM bp_result USING    wa_data lt_error lt_success
+                        CHANGING lv_stat lv_vend.
+      IF lv_vend IS NOT INITIAL.
+        lv_vend = wa_data-vendor.       " Vendor Number - as for F2 056 in ECC
+      ENDIF.
 
-***********************************BOC by Gauri Tandel - 8000003602 -19.06.2024***************************************
-
-      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0106'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR' 'USE_ZAV'.
-      PERFORM bdc_field1      USING 'BDC_OKCODE' '/00'.
-      PERFORM bdc_field1     USING 'RF02K-LIFNR'  wa_data-vendor.  "added by AC:CR-8000003939:09.10.2024                                  "wa_movend-lifnr. - Commented by AC:CR-8000003939:-09.10.2024
-*      SOA by lalitha CR8000004166 22.12.2025
-      PERFORM bdc_field1       USING 'RF02K-BUKRS'
-                                 '1000'.
-*       EOA by lalitha CR8000004166 22.12.2025
-      PERFORM bdc_field1       USING 'RF02K-D0110' 'X'.
-      PERFORM bdc_field1       USING 'RF02K-D0120' 'X'.
-      PERFORM bdc_field1       USING 'RF02K-D0130' 'X'.
-      PERFORM bdc_field1       USING 'USE_ZAV' 'X'.
-
-      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0111'.
-      PERFORM bdc_field1       USING 'BDC_OKCODE' '/00'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPLSZA1 0300ADDRESS'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPLSZA1 0301COUNTRY_SCREEN'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR' 'SZA1_D0100-SMTP_ADDR'.
-      PERFORM bdc_field1       USING 'SZA1_D0100-TITLE_MEDI' 'Dr.'.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-NAME1' wa_data-name1.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-SORT1' wa_data-sort1.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-STR_SUPPL1' wa_data-str_suppl1.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-STR_SUPPL2' wa_data-str_suppl2.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-STREET' wa_data-street+0(23).
-      PERFORM bdc_field1       USING 'ADDR1_DATA-POST_CODE1' wa_data-post_code1.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-CITY1' wa_data-city1.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-COUNTRY' wa_data-country.
-      PERFORM bdc_field1       USING 'ADDR1_DATA-REGION' wa_data-region.
-*      PERFORM bdc_field       USING 'ADDR1_DATA-TIME_ZONE' wa_data-time_zone.
-*      PERFORM bdc_field       USING 'ADDR1_DATA-LANGU' wa_data-langu.
-      PERFORM bdc_field1       USING 'SZA1_D0100-TEL_NUMBER' wa_data-tel_number1.
-      PERFORM bdc_field1      USING 'SZA1_D0100-TEL_EXTENS' wa_data-tel_extens1.
-      PERFORM bdc_field1       USING 'SZA1_D0100-MOB_NUMBER' wa_data-mob_number1.
-      PERFORM bdc_field1       USING 'SZA1_D0100-FAX_NUMBER' wa_data-fax_number.
-      PERFORM bdc_field1       USING 'SZA1_D0100-SMTP_ADDR' wa_data-smtp_addr.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPLSZA1 1300APPL_SUB_T'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPLSEXM 0200APPL_SUB'.
-
-      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0120'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR' 'LFA1-STCD3'.
-      PERFORM bdc_field1       USING 'BDC_OKCODE' '/00'.
-      PERFORM bdc_field1       USING 'LFA1-KONZS' 'NONFIELD'.
-*      PERFORM bdc_field1       USING 'LFA1-STKZN' 'X'." commented by Mary Roopini  - 8000004012 - 26.11.2024
-      PERFORM bdc_field1       USING 'LFA1-STCD3' wa_data-gst.
-      PERFORM bdc_field1       USING 'LFA1-BRSCH' wa_data-ind_key ."Added by Lalitha - 8000004166 -21.02.2025
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-ST'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-01'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-02'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-03'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-04'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-05'.
-      PERFORM bdc_field1       USING 'BDC_SUBSCR' 'SAPMF02K 1099ARI-06'.
-
-      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR' 'LFBK-KOINH(01)'.
-*      PERFORM bdc_field1      USING 'BDC_OKCODE' '=ENTR'."Commented by lalitha  - 8000004166 -22.02.2025
-      PERFORM bdc_field1      USING 'BDC_OKCODE' '=OPFI'."Added by lalitha  - 8000004166 -22.02.2025
-      PERFORM bdc_field1       USING 'LFBK-BANKS(01)' wa_data-banks.
-      PERFORM bdc_field1       USING 'LFBK-BANKL(01)' wa_data-bankl.
-      PERFORM bdc_field1      USING 'LFBK-BANKN(01)' wa_data-bankn.
-      PERFORM bdc_field1       USING 'LFBK-KOINH(01)' wa_data-koinh.
-*SOA by Lalitha 8000004166 16.12.2025
-      PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-      PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                    '=CIN_VENDOR_FC5'.
-      PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-      PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                    '/00'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                    'J_1IMOVEND-VEN_CLASS'.
-      PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-                                    wa_data-gstvenclass.
-
-      PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-      PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                     '=BACK'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                     'J_1IMOVEND-VEN_CLASS'.
-      PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-                                   wa_data-gstvenclass.
-*EOA by Lalitha 8000004166 16.12.2025
-      PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-      PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                    'LFBK-KOINH(01)'.
-      PERFORM bdc_field1      USING 'BDC_OKCODE'
-*                                        '=ENTR'"COmmented by lalitha 8000004166 22.12.2025
-                                       '=UPDA'."Added by lalitha 8000004166 22.12.2025
-
-***********************************EOC by Gauri Tandel - 8000003602 -19.06.2024***************************************
-
-
-      CALL TRANSACTION lc_fk02 USING bdcdata "#EC CI_USAGE_OK[2226131] "bdcdata
-                                              "#EC CI_USAGE_OK[2265093]
-                               MODE   ctumode "N
-                               UPDATE cupdate "A
-                               MESSAGES INTO ta_bdcmsgcoll.
-
-      LOOP AT ta_bdcmsgcoll INTO wa_msg.
-        CALL FUNCTION 'MESSAGE_TEXT_BUILD'
-          EXPORTING
-            msgid               = wa_msg-msgid
-            msgnr               = wa_msg-msgnr
-            msgv1               = wa_msg-msgv1
-            msgv2               = wa_msg-msgv2
-            msgv3               = wa_msg-msgv3
-            msgv4               = wa_msg-msgv4
-          IMPORTING
-            message_text_output = lv_msg.
-
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
-        IF lv_stat IS INITIAL.
-          lv_stat = lv_msg.
-        ELSE.
-          CONCATENATE lv_stat lv_msg INTO lv_stat SEPARATED BY '/'.
-        ENDIF.
-*
-        IF wa_msg-msgtyp = 'S' AND wa_msg-msgid = 'F2' AND wa_msg-msgnr = '056'.
-          CLEAR:lv_vend.
-*          lv_vend = wa_movend-lifnr. "Vendor Number        Commented by AC:CR-8000003939:09.10.2024
-          lv_vend = wa_data-vendor. "Vendor Number         added by AC:CR-8000003939:09.10.2024
-        ENDIF.
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
-
-        wa_log-file = gv_file.
-        wa_log-name1 = wa_data-name1.
-        wa_log-bankl = wa_data-bankl.
-        wa_log-pan = wa_data-pan.
-        wa_log-msg = lv_msg.
-        APPEND wa_log TO ta_log.
-        CLEAR : wa_log, lv_msg, wa_msg.
-      ENDLOOP.
-
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
       "Update table ZFI_HONC_VEND
       CLEAR: wa_honc.
-
       wa_honc-mandt = sy-mandt.
       wa_honc-unique_id = wa_data-unique_id.
       wa_honc-pan_no = wa_data-pan.
@@ -1346,273 +1084,74 @@ FORM change_vendor .
         wa_honc-vendor_code = wa_data-vendor."added by Mary Roopini - 8000004012 - 22.11.2024
         wa_honc-status = 'FAILURE'.
       ENDIF.
-
       wa_honc-message = lv_stat.
       wa_honc-update_date = sy-datum.
       wa_honc-update_time = sy-uzeit.
       wa_honc-update_id = sy-uname.
       APPEND wa_honc TO ta_honc.
       APPEND wa_honc TO ta_honc_tmp.          "added by Gauri Tandel - 8000003666 -17.06.2024
-
-
       MODIFY zfi_honc_vend FROM TABLE ta_honc.
-
       CLEAR: wa_honc.
       REFRESH: ta_honc.
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
-
-      CLEAR : wa_data, ta_bdcmsgcoll, lwa_t005u, wa_movend,lv_stat,lv_vend.
-      REFRESH : bdcdata.
+      CLEAR : wa_data, lv_stat, lv_vend, lt_error, lt_success.
     ENDIF.
-
   ENDLOOP.
   WAIT UP TO 2 SECONDS.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  CREATE_VENDOR
 *&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
+* S/4HANA: FK01 is gone - the vendor is created as a business partner
+* (LCL_CIMMRA_BP=>CREATE, include ZFI_CIMMRA_BP) with what the FK01 batch
+* input entered: account group Z001 (BP grouping and supplier roles from
+* CVIC_VEND_TO_BP1 / 2), title, name, search term, address, language EN,
+* mobile, e-mail, GSTIN, industry key, bank account, company code 1000
+* (reconciliation account ZFI_VEND_G, payment terms EAS_PT_HN, payment
+* method CNT, double-invoice check, WHT country IN), withholding tax type
+* EAS_TDS1_H with code EAS_TDS_HN, PAN and GST vendor classification.
 *----------------------------------------------------------------------*
 FORM create_vendor .
-  DATA : lv_msg  TYPE char255,
-         lv_stat TYPE char255,
+  DATA : lv_stat TYPE char255,
          lv_vend TYPE lfa1-lifnr.
-  CONSTANTS : lc_fk01 TYPE syst_tcode VALUE 'FK01'. "#EC CI_USAGE_OK[2226131]
-
+  DATA : ls_central TYPE vmds_ei_vmd_central,
+         ls_postal  TYPE cvis_ei_1vl,
+         ls_cin     TYPE ty_bp_cin,
+         ls_comp    TYPE ty_bp_comp,
+         ls_none    TYPE ty_bp_none,
+         lt_tel     TYPE ty_bp_tel_t,
+         lt_fax     TYPE ty_bp_fax_t,
+         lt_mail    TYPE ty_bp_mail_t,
+         lt_bank    TYPE ty_bp_bank_t,
+         lt_wtax    TYPE ty_bp_wtax_t,
+         lt_error   TYPE bapiret2_t,
+         lt_success TYPE bapiret2_t.
   "BOC by Gauri Tandel - 8000003666 -11.06.2024
   DELETE ta_crvend WHERE delete = abap_true.
   "EOC by Gauri Tandel - 8000003666 -11.06.2024
-
   LOOP AT ta_crvend INTO wa_data.
+    PERFORM bp_data USING    wa_data abap_false
+                    CHANGING ls_central ls_postal ls_cin ls_comp
+                             lt_tel lt_fax lt_mail lt_bank lt_wtax.
 
-    TRY .
-*        DATA(lwa_t005u) = ta_t005u[ bezei = wa_data-region ]. "Commented by Gajanan - 21.03.2024 - CR#8000003530
-        DATA(lwa_t005u) = ta_t005u[ bland = wa_data-region ]. "Added by Gajanan - 21.03.2024 - CR#8000003530
-        ##NO_HANDLER
-      CATCH cx_sy_itab_line_not_found.
-    ENDTRY.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0105'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'USE_ZAV'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_field1       USING 'RF02K-BUKRS'
-                                  '1000'.
-    PERFORM bdc_field1       USING 'RF02K-KTOKK'
-                                  'Z001'.
-    PERFORM bdc_field1       USING 'USE_ZAV'
-                                  'X'.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0111'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'SZA1_D0100-SMTP_ADDR'.
-    PERFORM bdc_field1       USING 'SZA1_D0100-TITLE_MEDI'
-                                   wa_data-title.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-NAME1'
-                                   wa_data-name1.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-SORT1'
-                                   wa_data-sort1.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-STR_SUPPL1'
-                                   wa_data-str_suppl1.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-STREET'
-                                   wa_data-street+0(23).   "wa_data-street+0(23)  "added by Gauri Tandel - 8000003829 - 13.08.2024
-    PERFORM bdc_field1       USING 'ADDR1_DATA-POST_CODE1'
-                                   wa_data-post_code1.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-CITY1'
-                                   wa_data-city1.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-COUNTRY'
-                                   wa_data-country.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-REGION'
-                                   lwa_t005u-bland.
-    PERFORM bdc_field1       USING 'ADDR1_DATA-LANGU'
-                                  'EN'.
-    PERFORM bdc_field1       USING 'SZA1_D0100-MOB_NUMBER'
-                                   wa_data-mob_number1.
-    PERFORM bdc_field1       USING 'SZA1_D0100-SMTP_ADDR'
-                                   wa_data-smtp_addr.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0120'.
-    PERFORM bdc_field1      USING 'BDC_CURSOR'
-                                  'LFA1-KUNNR'.
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                   '/00'.
-    PERFORM bdc_field1       USING 'LFA1-STCD3'
-                                   wa_data-gst."'Cf345ftyu'.
-    PERFORM bdc_field1       USING 'LFA1-BRSCH'
-                                   wa_data-ind_key."Added by lalitha CR#8000004166 21.02.2025
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFBK-KOINH(01)'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=ENTR'.
-    PERFORM bdc_field1       USING 'LFBK-BANKS(01)'
-                                   wa_data-banks.
-    PERFORM bdc_field1       USING 'LFBK-BANKL(01)'
-                                   wa_data-bankl.
-    PERFORM bdc_field1       USING 'LFBK-BANKN(01)'
-                                   wa_data-bankn.
-    PERFORM bdc_field1       USING 'LFBK-KOINH(01)'
-                                   wa_data-koinh.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0130'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFBK-KOINH(01)'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=ENTR'.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0210'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFB1-ZUAWA'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_field1       USING 'LFB1-AKONT'
-                                   gv_akont.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0215'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFB1-ZWELS'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_field1       USING 'LFB1-ZTERM'
-                                   gv_payment_term.
-    PERFORM bdc_field1       USING 'LFB1-REPRF'
-                                  'X'.
-    PERFORM bdc_field1      USING 'LFB1-ZWELS'
-                                  'CNT'.
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0220'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFB5-MAHNA'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-*  Start By Shivaji 8000006708 CRDK976287
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0610'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=ENTR'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFBW-WT_SUBJCT(01)'.
-    PERFORM bdc_field1       USING 'LFB1-QLAND'
-                                  'in'.
-    PERFORM bdc_field1       USING 'LFBW-WITHT(01)'
-                                   gv_witht.
-    PERFORM bdc_field1       USING 'LFBW-WT_WITHCD(01)'
-                                   gv_withcd.
-    PERFORM bdc_field1       USING 'LFBW-WT_SUBJCT(01)'
-                                  'X'.
-*   End By Shivaji 8000006708 CRDK976287
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0610'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=OPFI'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFB1-QLAND'.
-    PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=CIN_VENDOR_FC3'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'J_1IMOVEND-J_1IEXCD'.
-    PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=CIN_VENDOR_FC5'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'J_1IMOVEND-J_1IPANREF'.
-    PERFORM bdc_field1       USING 'J_1IMOVEND-J_1IPANNO'
-                                  wa_data-pan.
-    PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'J_1IMOVEND-VEN_CLASS'.
-*    PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-*                                  '0'."Commented by Lalitha 8000004166 16.12.2025
-    PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-                                  wa_data-gstvenclass."Added by Lalitha 8000004166 16.12.2025
-    PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=BACK'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'J_1IMOVEND-VEN_CLASS'.
-*    PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-*                                  '0'."Commented by Lalitha 8000004166 16.12.2025
-    PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-                                   wa_data-gstvenclass."Added by Lalitha 8000004166 16.12.2025
-    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0610'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'LFB5-MAHNA'.
-    PERFORM bdc_field1       USING 'BDC_OKCODE'
-                                  '=UPDA'.
-    PERFORM bdc_field1       USING 'BDC_CURSOR'
-                                  'LFB1-QLAND'.
-*    PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '/00'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'J_1IMOVEND-J_1IPANNO'.
-*    PERFORM bdc_field1       USING 'J_1IMOVEND-J_1IPANNO'
-*                                   wa_data-pan.
-*    PERFORM bdc_dynpro1      USING 'SAPLJ1I_MASTER' '0100'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '=BACK'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'J_1IMOVEND-J_1IPANNO'.
-*    PERFORM bdc_field1       USING 'J_1IMOVEND-J_1IPANNO'
-*                                    wa_data-pan.
-*    PERFORM bdc_dynpro1     USING 'SAPLJ1I_MASTER' '0100'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '=BACK'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'J_1IMOVEND-VEN_CLASS'.
-*    PERFORM bdc_field1       USING 'J_1IMOVEND-VEN_CLASS'
-*                                  '0'.
-*    PERFORM bdc_dynpro1      USING 'SAPMF02K' '0610'.
-*    PERFORM bdc_field1       USING 'BDC_OKCODE'
-*                                  '=UPDA'.
-*    PERFORM bdc_field1       USING 'BDC_CURSOR'
-*                                  'LFB1-QLAND'.
+    lcl_cimmra_bp=>create(
+      EXPORTING is_central  = ls_central
+                is_postal   = ls_postal
+                is_company  = ls_comp
+                is_cin      = ls_cin
+                is_purch    = ls_none            " FK01 had no purchasing org
+                it_mobile   = lt_tel
+                it_fax      = lt_fax
+                it_smtp     = lt_mail
+                it_bank     = lt_bank
+                it_wtax     = lt_wtax
+                iv_industry = wa_data-ind_key
+      IMPORTING et_error    = lt_error
+                et_success  = lt_success ).
 
-    CALL TRANSACTION lc_fk01 USING bdcdata "#EC CI_USAGE_OK[2226131]"bdcdata
-                                              "#EC CI_USAGE_OK[2265093]
-                             MODE   ctumode "N
-                             UPDATE cupdate "A
-                             MESSAGES INTO ta_bdcmsgcoll.
+    " The new vendor number - F2 271 in ECC.
+    PERFORM bp_result USING    wa_data lt_error lt_success
+                      CHANGING lv_stat lv_vend.
 
-    LOOP AT ta_bdcmsgcoll INTO wa_msg.
-      CALL FUNCTION 'MESSAGE_TEXT_BUILD'
-        EXPORTING
-          msgid               = wa_msg-msgid
-          msgnr               = wa_msg-msgnr
-          msgv1               = wa_msg-msgv1
-          msgv2               = wa_msg-msgv2
-          msgv3               = wa_msg-msgv3
-          msgv4               = wa_msg-msgv4
-        IMPORTING
-          message_text_output = lv_msg.
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
-      IF lv_stat IS INITIAL.
-        lv_stat = lv_msg.
-      ELSE.
-        CONCATENATE lv_stat lv_msg INTO lv_stat SEPARATED BY '/'.
-      ENDIF.
-
-
-      IF wa_msg-msgtyp = 'S' AND wa_msg-msgid = 'F2' AND wa_msg-msgnr = '271'.
-        CLEAR:lv_vend, wa_honc.
-        lv_vend = wa_msg-msgv1. "Vendor Number
-      ENDIF.
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
-      wa_log-file = gv_file.
-      wa_log-name1 = wa_data-name1.
-      wa_log-bankl = wa_data-bankl.
-      wa_log-pan = wa_data-pan.
-      wa_log-msg = lv_msg.
-      APPEND wa_log TO ta_log.
-      CLEAR : wa_log, lv_msg, wa_msg.
-
-    ENDLOOP.
-
-***SOA by Gajanan - 15.03.2024 - CR#8000003035
     "Update table ZFI_HONC_VEND
     CLEAR: wa_honc.
     wa_honc-mandt = sy-mandt.
@@ -1625,22 +1164,162 @@ FORM create_vendor .
       wa_honc-vendor_code = wa_data-vendor."added by Mary Roopini - 8000004012 - 22.11.2024
       wa_honc-status = 'FAILURE'.
     ENDIF.
-
     wa_honc-message = lv_stat.
     wa_honc-create_date = sy-datum.
     wa_honc-create_time = sy-uzeit.
     wa_honc-create_id = sy-uname.
     APPEND wa_honc TO ta_honc.
-*    APPEND wa_honc TO ta_honc_tmp.          "added by Gauri Tandel - 8000003666 -17.06.2024
     MODIFY zfi_honc_vend FROM TABLE ta_honc.
     CLEAR: wa_honc.
     REFRESH: ta_honc.
-***EOA by Gajanan - 15.03.2024 - CR#8000003035
-
-    CLEAR : bdcdata, ta_bdcmsgcoll, wa_data, lwa_t005u,lv_stat,lv_vend.
-    REFRESH bdcdata.
+    CLEAR : wa_data, lv_stat, lv_vend, lt_error, lt_success.
   ENDLOOP.
 
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BP_DATA
+*&---------------------------------------------------------------------*
+* S/4HANA: one record of the file as LCL_CIMMRA_BP takes it - what the
+* FK01 (IV_CHANGE = false) and FK02 (true) batch input entered.
+*----------------------------------------------------------------------*
+FORM bp_data USING    is_data    TYPE ty_vendor
+                      iv_change  TYPE abap_bool
+             CHANGING cs_central TYPE vmds_ei_vmd_central
+                      cs_postal  TYPE cvis_ei_1vl
+                      cs_cin     TYPE ty_bp_cin
+                      cs_comp    TYPE ty_bp_comp
+                      ct_tel     TYPE ty_bp_tel_t
+                      ct_fax     TYPE ty_bp_fax_t
+                      ct_mail    TYPE ty_bp_mail_t
+                      ct_bank    TYPE ty_bp_bank_t
+                      ct_wtax    TYPE ty_bp_wtax_t.
+  CLEAR: cs_central, cs_postal, cs_cin, cs_comp, ct_tel, ct_fax, ct_mail,
+         ct_bank, ct_wtax.
+
+  " ---- general data: name and address (FK01 / FK02 screen 0111) --------
+  cs_postal-data-title      = is_data-title.
+  IF iv_change = abap_true AND cs_postal-data-title IS INITIAL.
+    cs_postal-data-title    = 'Dr.'.            " FK02 always entered Dr.
+  ENDIF.
+  cs_postal-data-name       = is_data-name1.
+  cs_postal-data-sort1      = is_data-sort1.
+  cs_postal-data-street     = is_data-street+0(23). "added by Gauri Tandel - 8000003829 - 13.08.2024
+  cs_postal-data-str_suppl1 = is_data-str_suppl1.
+  cs_postal-data-str_suppl2 = is_data-str_suppl2.
+  cs_postal-data-postl_cod1 = is_data-post_code1.
+  cs_postal-data-city       = is_data-city1.
+  cs_postal-data-country    = is_data-country.
+  IF iv_change = abap_true.
+    cs_postal-data-region   = is_data-region.
+  ELSE.
+    " FK01 took the region from T005U - blank when India has no such region.
+    TRY.
+        cs_postal-data-region = ta_t005u[ bland = is_data-region ]-bland. "Added by Gajanan - 21.03.2024 - CR#8000003530
+        ##NO_HANDLER
+      CATCH cx_sy_itab_line_not_found.
+    ENDTRY.
+    cs_postal-data-langu    = 'E'.              " FK01: ADDR1_DATA-LANGU EN
+  ENDIF.
+
+  IF is_data-tel_number1 IS NOT INITIAL.
+    APPEND VALUE #( telephone = is_data-tel_number1
+                    extension = is_data-tel_extens1 ) TO ct_tel.
+  ENDIF.
+  IF is_data-mob_number1 IS NOT INITIAL.
+    " R_3_USER 3: the mobile number, as SZA1_D0100-MOB_NUMBER stored it.
+    APPEND VALUE #( telephone = is_data-mob_number1 r_3_user = '3' ) TO ct_tel.
+  ENDIF.
+  IF is_data-fax_number IS NOT INITIAL.
+    APPEND VALUE #( fax = is_data-fax_number ) TO ct_fax.
+  ENDIF.
+  IF is_data-smtp_addr IS NOT INITIAL.
+    APPEND VALUE #( e_mail = is_data-smtp_addr ) TO ct_mail.
+  ENDIF.
+
+  " ---- control data (screen 0120) ---------------------------------------
+  " GSTIN: LCL_CIMMRA_BP files it as the partner's tax number IN3.
+  cs_central-data-stcd3 = is_data-gst.
+  IF iv_change = abap_true.
+    cs_central-data-konzs = 'NONFIELD'.
+  ELSE.
+    cs_central-data-ktokk = 'Z001'.
+  ENDIF.
+
+  " ---- bank (screen 0130) -----------------------------------------------
+  IF is_data-bankl IS NOT INITIAL AND is_data-bankn IS NOT INITIAL.
+    APPEND VALUE #( banks = is_data-banks
+                    bankl = is_data-bankl
+                    bankn = is_data-bankn
+                    koinh = is_data-koinh ) TO ct_bank.
+  ENDIF.
+
+  " ---- CIN details: PAN on create, GST vendor classification ----------
+  IF iv_change = abap_false.
+    cs_cin-j_1ipanno = is_data-pan.
+  ENDIF.
+  cs_cin-ven_class = is_data-gstvenclass.
+
+  " ---- company code 1000 and withholding tax (FK01 only) ---------------
+  IF iv_change = abap_false.
+    cs_comp-data_key-bukrs = '1000'.
+    cs_comp-data-akont     = gv_akont.
+    cs_comp-data-zterm     = gv_payment_term.
+    cs_comp-data-reprf     = abap_true.
+    cs_comp-data-zwels     = 'CNT'.
+    cs_comp-data-qland     = 'IN'.
+    IF gv_witht IS NOT INITIAL.
+      APPEND VALUE #( witht     = gv_witht
+                      wt_withcd = gv_withcd
+                      wt_subjct = abap_true ) TO ct_wtax.
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BP_RESULT
+*&---------------------------------------------------------------------*
+* S/4HANA: the messages of LCL_CIMMRA_BP into the log and into the text
+* for ZFI_HONC_VEND, as the batch input's messages were. CV_VEND is the
+* vendor saved - LCL_CIMMRA_BP's success line is
+* "<vendor>;<address number> <text>".
+*----------------------------------------------------------------------*
+FORM bp_result USING    is_data    TYPE ty_vendor
+                        it_error   TYPE bapiret2_t
+                        it_success TYPE bapiret2_t
+               CHANGING cv_stat    TYPE char255
+                        cv_vend    TYPE lifnr.
+  DATA : lt_all TYPE bapiret2_t,
+         lv_msg TYPE char255.
+  CLEAR : cv_stat, cv_vend.
+  APPEND LINES OF it_error TO lt_all.
+  APPEND LINES OF it_success TO lt_all.
+  LOOP AT lt_all INTO DATA(ls_ret).
+    CLEAR lv_msg.
+    IF ls_ret-type = 'S' AND ls_ret-message CA ';'.
+      SPLIT ls_ret-message AT ';' INTO DATA(lv_lifnr) DATA(lv_rest).
+      cv_vend = lv_lifnr.
+      SPLIT lv_rest AT ' ' INTO DATA(lv_adrnr) DATA(lv_text).
+      lv_msg = lv_text.
+    ELSE.
+      lv_msg = ls_ret-message.
+    ENDIF.
+    IF lv_msg IS INITIAL AND ls_ret-id IS NOT INITIAL.
+      MESSAGE ID ls_ret-id TYPE 'S' NUMBER ls_ret-number
+              WITH ls_ret-message_v1 ls_ret-message_v2
+                   ls_ret-message_v3 ls_ret-message_v4 INTO lv_msg.
+    ENDIF.
+    IF cv_stat IS INITIAL.
+      cv_stat = lv_msg.
+    ELSE.
+      CONCATENATE cv_stat lv_msg INTO cv_stat SEPARATED BY '/'.
+    ENDIF.
+    wa_log-file = gv_file.
+    wa_log-name1 = is_data-name1.
+    wa_log-bankl = is_data-bankl.
+    wa_log-pan = is_data-pan.
+    wa_log-msg = lv_msg.
+    APPEND wa_log TO ta_log.
+    CLEAR : wa_log, lv_msg, lv_adrnr.
+  ENDLOOP.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  SEND_DET_MAIL
@@ -2155,23 +1834,6 @@ FORM send_det_mail .
     ENDIF.
   ENDIF.
   REFRESH lta_vend.
-ENDFORM.
-##PERF_NO_TYPE
-FORM bdc_dynpro1 USING program dynpro.
-  CLEAR bdcdata.
-  bdcdata-program = program.
-  bdcdata-dynpro = dynpro.
-  bdcdata-dynbegin = abap_true.
-  APPEND bdcdata.
-ENDFORM.
-##PERF_NO_TYPE
-FORM bdc_field1 USING fnam fval.
-  IF fval <> space.
-    CLEAR bdcdata.
-    bdcdata-fnam = fnam.
-    bdcdata-fval = fval.
-    APPEND bdcdata.
-  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  GET_FILE_DATA

@@ -5,7 +5,7 @@
 *               partner (S/4HANA)
 * Used by     : ZFI_CIMMRA_VENDOR_CREATE, ZFI_CIMMRA_EMPVEND,
 *               ZFI_CIMMRA_EMPVEND_UPD, ZFI_CIMMRA_VENDOR_EXT,
-*               ZFI_CIMMRA_VENDOR_BLK
+*               ZFI_CIMMRA_VENDOR_BLK, ZFI_VEND_HONC (HONC doctors)
 * Description : In ECC the three reports called the RFCs
 *               ZMM_RFC_VENDOR_CREATE and ZMM_RFC_VENDOR_CHANGE, which
 *               maintained the vendor (LFA1/LFB1/LFM1) on its own. In
@@ -43,6 +43,17 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
   PUBLIC SECTION.
     "! A new vendor. IV_LIFNR only for an account group with external
     "! numbering; the business partner then gets the same number.
+    "! Options of CREATE and CHANGE (ZFI_VEND_HONC uses them):
+    "! IV_INDUSTRY     - the industry key of the file (ECC LFA1-BRSCH). It
+    "!                   goes to the supplier as BRSCH when T016 has it and to
+    "!                   the business partner as its industry sector (BP >
+    "!                   Industries) when one industry system (TB038A) holds
+    "!                   it - both when both do.
+    "! IV_KEEP_BLANK    - supplier / CIN fields, comma separated, that are sent
+    "!                   even when blank, so that a blank in the file clears
+    "!                   them (e.g. VEN_CLASS: blank = registered for GST).
+    "! IV_BANK_REPLACE  - CHANGE: the file's account replaces the vendor's
+    "!                   first bank account, as typing over line 1 in FK02 did.
     CLASS-METHODS create
       IMPORTING iv_lifnr   TYPE lifnr OPTIONAL
                 is_central TYPE vmds_ei_vmd_central
@@ -56,6 +67,9 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
                 it_bank    TYPE ANY TABLE OPTIONAL
                 it_wtax    TYPE ANY TABLE OPTIONAL
                 it_tan     TYPE ANY TABLE OPTIONAL
+                iv_industry     TYPE clike OPTIONAL
+                iv_keep_blank   TYPE string OPTIONAL
+                iv_bank_replace TYPE abap_bool DEFAULT abap_false
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
@@ -74,6 +88,9 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
                 it_bank    TYPE ANY TABLE OPTIONAL
                 it_wtax    TYPE ANY TABLE OPTIONAL
                 it_tan     TYPE ANY TABLE OPTIONAL
+                iv_industry     TYPE clike OPTIONAL
+                iv_keep_blank   TYPE string OPTIONAL
+                iv_bank_replace TYPE abap_bool DEFAULT abap_false
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
@@ -122,7 +139,8 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
 
   PRIVATE SECTION.
     CONSTANTS: c_insert TYPE c LENGTH 1 VALUE 'I',
-               c_update TYPE c LENGTH 1 VALUE 'U'.
+               c_update TYPE c LENGTH 1 VALUE 'U',
+               c_delete TYPE c LENGTH 1 VALUE 'D'.
 
     CLASS-METHODS post
       IMPORTING iv_change  TYPE abap_bool
@@ -138,6 +156,9 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
                 it_bank    TYPE ANY TABLE OPTIONAL
                 it_wtax    TYPE ANY TABLE OPTIONAL
                 it_tan     TYPE ANY TABLE OPTIONAL
+                iv_industry     TYPE clike OPTIONAL
+                iv_keep_blank   TYPE string OPTIONAL
+                iv_bank_replace TYPE abap_bool DEFAULT abap_false
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
@@ -212,6 +233,9 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
                     it_bank    = it_bank
                     it_wtax    = it_wtax
                     it_tan     = it_tan
+                    iv_industry     = iv_industry
+                    iv_keep_blank   = iv_keep_blank
+                    iv_bank_replace = iv_bank_replace
           IMPORTING et_error   = et_error
                     et_success = et_success ).
   ENDMETHOD.
@@ -230,6 +254,9 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
                     it_bank    = it_bank
                     it_wtax    = it_wtax
                     it_tan     = it_tan
+                    iv_industry     = iv_industry
+                    iv_keep_blank   = iv_keep_blank
+                    iv_bank_replace = iv_bank_replace
           IMPORTING et_error   = et_error
                     et_success = et_success ).
   ENDMETHOD.
@@ -831,6 +858,10 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
         CLEAR ls_tel.
         ls_tel-contact-task           = c_insert.
         ls_tel-contact-data-telephone = lv_tel.
+        DATA(lv_ext) = comp( is_any = <ls_mob> iv_comp = 'EXTENSION' ).
+        IF lv_ext IS NOT INITIAL.
+          ls_tel-contact-data-extension = lv_ext.
+        ENDIF.
         " R_3_USER is a code, not a flag: space or 1 a landline, 2 or 3 a
         " mobile - anything else stops the save with MESSAGE_TYPE_X.
         DATA(lv_r3) = comp( is_any = <ls_mob> iv_comp = 'R_3_USER' ).
@@ -955,6 +986,84 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
                     iv_only = `J_1IPANNO,VEN_CLASS,J_1ISSIST`
           CHANGING  cs_data  = ls_vc-data
                     cs_datax = ls_vc-datax ).
+    " Fields the caller wants sent even when blank: a blank clears them.
+    IF iv_keep_blank IS NOT INITIAL.
+      DATA lv_keep TYPE string.
+      lv_keep = to_upper( iv_keep_blank ).
+      SPLIT lv_keep AT ',' INTO TABLE DATA(lt_keep).
+      FIELD-SYMBOLS <lv_kv> TYPE any.
+      LOOP AT lt_keep INTO DATA(lv_kf).
+        CONDENSE lv_kf.
+        IF lv_kf IS INITIAL OR lv_kf = 'STCD3' OR lv_kf = 'STCD5' OR lv_kf = 'KTOKK'.
+          CONTINUE.
+        ENDIF.
+        UNASSIGN <lv_kv>.
+        ASSIGN COMPONENT lv_kf OF STRUCTURE is_cin TO <lv_kv>.
+        IF sy-subrc <> 0.
+          ASSIGN COMPONENT lv_kf OF STRUCTURE is_central-data TO <lv_kv>.
+        ENDIF.
+        IF <lv_kv> IS ASSIGNED AND <lv_kv> IS INITIAL.
+          set( EXPORTING iv_comp = lv_kf iv_value = <lv_kv>
+               CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+        ENDIF.
+      ENDLOOP.
+    ENDIF.
+
+    " ---- industry key ----------------------------------------------------
+    " ECC kept it in LFA1-BRSCH. In S/4HANA the business partner has its own
+    " industry sectors (BUT0IS), each filed under an industry system
+    " (TB038A); Cipla's vendor template of November 2026 maintains those.
+    " The key goes wherever it is defined: the supplier's BRSCH when T016
+    " has it, the partner's industry sector when exactly one industry system
+    " holds it.
+    DATA(lv_ind) = to_upper( condense( CONV string( iv_industry ) ) ).
+    IF lv_ind IS NOT INITIAL.
+      DATA lv_brsch TYPE brsch.
+      lv_brsch = lv_ind.
+      DATA lv_t016 TYPE abap_bool.
+      CLEAR lv_t016.
+      SELECT SINGLE @abap_true FROM t016 WHERE brsch = @lv_brsch INTO @lv_t016.
+      IF lv_t016 = abap_true.
+        set( EXPORTING iv_comp = 'BRSCH' iv_value = lv_brsch
+             CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+      ENDIF.
+      DATA lv_sec TYPE bu_indsect.
+      lv_sec = lv_ind.
+      SELECT istype FROM tb038a WHERE ind_sector = @lv_sec
+        ORDER BY istype INTO TABLE @DATA(lt_istype).
+      IF lines( lt_istype ) = 1.
+        DATA(lv_istype) = lt_istype[ 1 ]-istype.
+        DATA lv_ihave TYPE abap_bool.
+        CLEAR lv_ihave.
+        IF lv_bp IS NOT INITIAL.
+          SELECT SINGLE @abap_true FROM but0is
+            WHERE partner = @lv_bp AND istype = @lv_istype AND ind_sector = @lv_sec
+            INTO @lv_ihave.
+        ENDIF.
+        IF lv_ihave = abap_false.
+          DATA ls_is TYPE bus_ei_bupa_industrysector.
+          CLEAR ls_is.
+          ls_is-task                = c_insert.
+          ls_is-data_key-keysystem  = lv_istype.
+          ls_is-data_key-ind_sector = lv_sec.
+          IF iv_change = abap_false.
+            ls_is-data-ind_default  = abap_true.
+            ls_is-datax-ind_default = abap_true.
+          ENDIF.
+          APPEND ls_is TO ls_data-partner-central_data-industry-industries.
+        ENDIF.
+      ELSEIF lv_t016 = abap_false.
+        add( EXPORTING iv_text = COND string(
+                         WHEN lt_istype IS INITIAL
+                         THEN |Industry key { lv_ind } is neither an industry (T016) nor an | &&
+                              |industry sector of an industry system (TB038A)|
+                         ELSE |Industry key { lv_ind } is an industry sector of { lines( lt_istype ) } | &&
+                              |industry systems (TB038A) and no industry (T016) - it cannot be placed| )
+             CHANGING  ct      = et_error ).
+        RETURN.
+      ENDIF.
+    ENDIF.
+
     " The trading partner has an ALPHA domain (RCOMP, 6).
     DATA(lv_vbund) = comp( is_any = ls_vc-data iv_comp = 'VBUND' ).
     IF lv_vbund IS NOT INITIAL AND lv_vbund CO '0123456789'.
@@ -964,6 +1073,41 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     ls_data-vendor-central_data-central = ls_vc.
 
     " ---- supplier: bank details -----------------------------------------
+    " FK02 took the file's account into line 1 of the bank details: the
+    " vendor's first account (in key order) was replaced, the others stayed.
+    IF iv_change = abap_true AND iv_bank_replace = abap_true AND it_bank IS SUPPLIED.
+      DATA: lv_nbanks TYPE banks,
+            lv_nbankl TYPE bankk,
+            lv_nbankn TYPE bankn.
+      LOOP AT it_bank ASSIGNING FIELD-SYMBOL(<ls_nb>).
+        lv_nbankn = comp( is_any = <ls_nb> iv_comp = 'BANKN' ).
+        lv_nbankl = to_upper( comp( is_any = <ls_nb> iv_comp = 'BANKL' ) ).
+        lv_nbanks = to_upper( comp( is_any = <ls_nb> iv_comp = 'BANKS' ) ).
+        IF lv_nbanks IS INITIAL.
+          lv_nbanks = lv_land.
+        ENDIF.
+        IF lv_nbankn IS NOT INITIAL AND lv_nbankl IS NOT INITIAL.
+          EXIT.
+        ENDIF.
+        CLEAR: lv_nbanks, lv_nbankl, lv_nbankn.
+      ENDLOOP.
+      IF lv_nbankn IS NOT INITIAL.
+        SELECT banks, bankl, bankn FROM lfbk WHERE lifnr = @lv_lifnr
+          ORDER BY banks, bankl, bankn INTO TABLE @DATA(lt_oldbk).
+        READ TABLE lt_oldbk INTO DATA(ls_oldbk) INDEX 1.
+        IF sy-subrc = 0
+        AND NOT ( ls_oldbk-banks = lv_nbanks AND ls_oldbk-bankl = lv_nbankl
+                  AND ls_oldbk-bankn = lv_nbankn ).
+          DATA ls_bkdel TYPE cvis_ei_cvi_bankdetail.
+          CLEAR ls_bkdel.
+          ls_bkdel-task           = c_delete.
+          ls_bkdel-data_key-banks = ls_oldbk-banks.
+          ls_bkdel-data_key-bankl = ls_oldbk-bankl.
+          ls_bkdel-data_key-bankn = ls_oldbk-bankn.
+          APPEND ls_bkdel TO ls_data-vendor-central_data-bankdetail-bankdetails.
+        ENDIF.
+      ENDIF.
+    ENDIF.
     IF it_bank IS SUPPLIED.
       LOOP AT it_bank ASSIGNING FIELD-SYMBOL(<ls_bank>).
         DATA(lv_bankn) = comp( is_any = <ls_bank> iv_comp = 'BANKN' ).

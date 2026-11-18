@@ -56,11 +56,29 @@
 * Description       : validation added for bank key and Pan no
 *                     fields added in BDC and logic for creation of vendor
 *-----------------------------------------------------------------------*
+******Modification log
+* Change Date       : 18.11.2026
+* Transaction       : ZFI_VEND_HONC
+* Description       : S/4HANA conversion - the vendor is a business
+*                     partner. FK01 / FK02 are gone in S/4HANA, so the
+*                     batch input that created and changed the vendor is
+*                     replaced by include ZFI_CIMMRA_BP (LCL_CIMMRA_BP,
+*                     CL_MD_BP_MAINTAIN): BP grouping and supplier roles
+*                     from account group Z001, name / address / mobile /
+*                     e-mail on the partner, GSTIN as the partner's tax
+*                     number IN3, bank, company code 1000, withholding
+*                     tax, PAN and GST classification on the supplier.
+*                     The file from AL11, the checks, ZFI_HONC_VEND, the
+*                     mails and the archive are unchanged.
+*-----------------------------------------------------------------------*
 
 REPORT zfi_vend_honc.
 
 INCLUDE zfi_vend_honc_dd.
 INCLUDE zfi_vend_honc_ss.
+* S/4HANA: posts the vendor as a business partner (LCL_CIMMRA_BP). It has
+* to come before the forms that call it.
+INCLUDE zfi_cimmra_bp.
 INCLUDE zfi_vend_honc_fd.
 
 START-OF-SELECTION.

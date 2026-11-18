@@ -240,6 +240,18 @@ CASES = [
     ('A selection text SAP cuts short - "Vendor / BP creation - all com"', VX,
      'audit_screen_and_texts.py',
      [(VX, '.Vendor / BP creation - all CC<', '.Vendor / BP creation - all company codes<')]),
+    ('HONC: rejected new vendor found by BINARY SEARCH on unsorted TA_DATA1 - created anyway',
+     'src/zfi_vend_honc_fd.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc_fd.prog.abap', "      READ TABLE ta_data1 INTO wa_data1 WITH KEY pan = wa_data-pan.\n",
+       "      READ TABLE ta_data1 INTO wa_data1 WITH KEY pan = wa_data-pan BINARY SEARCH.\n")]),
+    ('HONC: FK01 batch input left in - the transaction is gone in S/4HANA',
+     'src/zfi_vend_honc_fd.prog.abap', 'audit_s4_ready.py',
+     [('src/zfi_vend_honc_fd.prog.abap', "    lcl_cimmra_bp=>create(\n",
+       "    CALL TRANSACTION 'FK01' USING bdcdata MODE 'N'.\n    lcl_cimmra_bp=>create(\n")]),
+    ('HONC change adds a second bank account instead of replacing the first, as FK02 did',
+     'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_cimmra_bp.prog.abap', "          ls_bkdel-task           = c_delete.\n",
+       "          ls_bkdel-task           = c_insert.\n")]),
 ]
 
 

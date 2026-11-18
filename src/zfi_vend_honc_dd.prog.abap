@@ -45,6 +45,21 @@
 * Transport Request : CRDK9A00F9
 * Description       : changing uniqueid
 *-----------------------------------------------------------------------*
+******Modification log
+* Change Date       : 18.11.2026
+* Transaction       : ZFI_VEND_HONC
+* Description       : S/4HANA conversion - the vendor is a business
+*                     partner. FK01 / FK02 are gone in S/4HANA, so the
+*                     batch input that created and changed the vendor is
+*                     replaced by include ZFI_CIMMRA_BP (LCL_CIMMRA_BP,
+*                     CL_MD_BP_MAINTAIN): BP grouping and supplier roles
+*                     from account group Z001, name / address / mobile /
+*                     e-mail on the partner, GSTIN as the partner's tax
+*                     number IN3, bank, company code 1000, withholding
+*                     tax, PAN and GST classification on the supplier.
+*                     The file from AL11, the checks, ZFI_HONC_VEND, the
+*                     mails and the archive are unchanged.
+*-----------------------------------------------------------------------*
 
 *-----------------------------------------------------------------------*
 ****************************Type Declaration*****************************
@@ -162,10 +177,56 @@ DATA : ta_bnka TYPE TABLE OF ty_bnka, " LOC added by Sushil as on 10.03.2021
        wa_bnka TYPE ty_bnka.
 DATA : gv_file TYPE eps2filnam,
        wa_data TYPE ty_vendor.
-DATA : bdcdata TYPE bdcdata OCCURS 1 WITH HEADER LINE.
-
-DATA : ta_bdcmsgcoll TYPE TABLE OF bdcmsgcoll.
-DATA : wa_msg TYPE bdcmsgcoll.
+* S/4HANA: no batch input any more (BDCDATA, BDCMSGCOLL) - the vendor is
+* posted through LCL_CIMMRA_BP, which takes these:
+TYPES: BEGIN OF ty_bp_cin,                 " supplier: PAN, GST class
+         j_1ipanno TYPE lfa1-j_1ipanno,
+         ven_class TYPE lfa1-ven_class,
+       END OF ty_bp_cin,
+       BEGIN OF ty_bp_ckey,
+         bukrs TYPE bukrs,
+       END OF ty_bp_ckey,
+       BEGIN OF ty_bp_cdata,                " supplier: company code
+         akont TYPE lfb1-akont,
+         zterm TYPE lfb1-zterm,
+         reprf TYPE lfb1-reprf,
+         zwels TYPE lfb1-zwels,
+         qland TYPE lfb1-qland,
+       END OF ty_bp_cdata,
+       BEGIN OF ty_bp_comp,
+         data_key TYPE ty_bp_ckey,
+         data     TYPE ty_bp_cdata,
+       END OF ty_bp_comp,
+       BEGIN OF ty_bp_none,                 " no purchasing organisation
+         none TYPE c LENGTH 1,
+       END OF ty_bp_none,
+       BEGIN OF ty_bp_tel,
+         telephone TYPE ad_tlnmbr1,
+         extension TYPE ad_tlxtns1,
+         r_3_user  TYPE c LENGTH 1,         " space landline, 3 mobile
+       END OF ty_bp_tel,
+       ty_bp_tel_t TYPE STANDARD TABLE OF ty_bp_tel WITH EMPTY KEY,
+       BEGIN OF ty_bp_fax,
+         fax TYPE ad_fxnmbr1,
+       END OF ty_bp_fax,
+       ty_bp_fax_t TYPE STANDARD TABLE OF ty_bp_fax WITH EMPTY KEY,
+       BEGIN OF ty_bp_mail,
+         e_mail TYPE ad_smtpadr,
+       END OF ty_bp_mail,
+       ty_bp_mail_t TYPE STANDARD TABLE OF ty_bp_mail WITH EMPTY KEY,
+       BEGIN OF ty_bp_bank,
+         banks TYPE banks,
+         bankl TYPE bankk,
+         bankn TYPE bankn,
+         koinh TYPE koinh_fi,
+       END OF ty_bp_bank,
+       ty_bp_bank_t TYPE STANDARD TABLE OF ty_bp_bank WITH EMPTY KEY,
+       BEGIN OF ty_bp_wtax,
+         witht     TYPE lfbw-witht,
+         wt_withcd TYPE lfbw-wt_withcd,
+         wt_subjct TYPE lfbw-wt_subjct,
+       END OF ty_bp_wtax,
+       ty_bp_wtax_t TYPE STANDARD TABLE OF ty_bp_wtax WITH EMPTY KEY.
 DATA : ta_noifsc   TYPE TABLE OF ty_vendor,
        ta_nullifsc TYPE TABLE OF ty_vendor, "BY FATIMA FOR 8000007904
        ta_crvend   TYPE TABLE OF ty_vendor,
@@ -227,8 +288,6 @@ DATA : ta_lfa1   TYPE TABLE OF ty_lfa1,
 CONSTANTS : co_s      TYPE c VALUE 'S',
             co_e      TYPE c VALUE 'E',
             co_remark TYPE string VALUE 'Bank Key does not Exists in SAP'.   "added by Gauri Tandel - 8000003829 -13.08.2024
-DATA: ctumode LIKE ctu_params-dismode VALUE 'N', "'E', "'N',
-      cupdate LIKE ctu_params-updmode VALUE 'A'.
 
 DATA : lv_index  TYPE sy-index,
        lv_index1 TYPE sy-index.

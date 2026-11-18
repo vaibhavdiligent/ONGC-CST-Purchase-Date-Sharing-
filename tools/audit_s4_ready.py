@@ -32,7 +32,11 @@ PROGS = ['src/zmms_bp_mass_upload.prog.abap',
          'src/zfi_cimmra_empvend.prog.abap',
          'src/zfi_cimmra_empvend_upd.prog.abap',
          'src/zfi_cimmra_vendor_ext.prog.abap',
-         'src/zfi_cimmra_vendor_blk.prog.abap']
+         'src/zfi_cimmra_vendor_blk.prog.abap',
+         # Cipla's HONC vendor interface, converted November 2026
+         'src/zfi_vend_honc.prog.abap',
+         'src/zfi_vend_honc_dd.prog.abap',
+         'src/zfi_vend_honc_fd.prog.abap']
 
 # Transactions S/4HANA no longer has. Driving one from code fails outright.
 GONE_TCODE = {'XD01', 'XD02', 'XD03', 'XD05', 'XD06', 'XD07', 'XD99',
@@ -59,6 +63,8 @@ KNOWN = {
     # the partner's industry sectors (PARTNER, ISTYPE, IND_SECTOR, ISDEF) and
     # the sectors of each industry system (ISTYPE, IND_SECTOR) - vendor column 40
     'BUT0IS', 'TB038A',
+    # industries (BRSCH) - the HONC file's industry key
+    'T016',
     # the partner's tax numbers and their categories
     'DFKKBPTAXNUM', 'TFKTAXNUMTYPE',
     'CVIC_CUST_TO_BP1', 'CVIC_CUST_TO_BP2', 'CVIC_VEND_TO_BP1', 'CVIC_VEND_TO_BP2',
@@ -70,6 +76,7 @@ KNOWN = {
     'DD05S', 'DD07L', 'TTXID', 'TTXIT',
     # Cipla's own
     'ZPARAM_TABLE', 'ZFI_VEND_MSME', 'ZFI_TAX_TAB', 'ZSD_LICENSE_CHK', 'ZFI_VEN_GRP',
+    'ZFI_VEND_EMAIL', 'ZFI_HONC_VEND',
 }
 
 OBSOLETE = [(r'\bOCCURS\s+\d', 'OCCURS'),
