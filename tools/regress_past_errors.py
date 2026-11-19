@@ -270,6 +270,9 @@ CASES = [
     ('Employee upload: bank details sent on the supplier', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "      APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.\n    ENDIF.\n\n    \" ---- supplier: control",
        "      APPEND ls_bk TO ls_data-vendor-central_data-bankdetail-bankdetails.\n    ENDIF.\n\n    \" ---- supplier: control")]),
+    ('HONC change: address sent without its GUID - R11 130 "An address with GUID ... does not exist" (CRS, 19.11.2026)',
+     'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_cimmra_bp.prog.abap', "      ls_adr-data_key-guid = lv_aguid.\n", "")]),
 ]
 
 

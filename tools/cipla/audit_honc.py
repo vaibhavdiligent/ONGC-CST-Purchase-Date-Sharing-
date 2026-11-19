@@ -123,6 +123,9 @@ for what, pat in (
          r'ls_tel-contact-data-consnumber = ls_o2-consnumber\..*ls_fax-contact-data-consnumber = '
          r'ls_o3-consnumber\..*ls_smt-contact-data-consnumber = ls_o6-consnumber\.'),
         ('leaves the name of a person partner alone', r"IF lv_bptype = '1'\."),
+        ('keys an address change by the address GUID (BUT020) - without it BP refuses the change '
+         'with R11 130 "An address with GUID ... does not exist"',
+         r'SELECT SINGLE address_guid FROM but020.*ls_adr-data_key-guid = lv_aguid\.'),
         ('passes the telephone extension', r'ls_tel-contact-data-extension = lv_ext\.')):
     if not re.search(pat, INC, re.I | re.S):
         fail.append(f'ZFI_CIMMRA_BP no longer {what} (ZFI_VEND_HONC needs it)')

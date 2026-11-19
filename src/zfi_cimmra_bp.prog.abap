@@ -830,8 +830,27 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     DATA ls_adr TYPE bus_ei_bupa_address.
     CLEAR ls_adr.
     ls_adr-task = lv_task.
+    " A change of an existing address is keyed by the address GUID. With the
+    " usage XXDFLT alone BP looks for an address under a GUID of its own and
+    " refuses the change: "An address with GUID ... does not exist for
+    " business partner ...". The GUID is that of the partner's standard
+    " address - the vendor's (LFA1-ADRNR), else the one with usage XXDEFAULT.
+    DATA lv_aguid TYPE bu_address_guid.
     IF iv_change = abap_true.
       ls_adr-data_key-operation = 'XXDFLT'.      " the standard address
+      IF lv_bp IS NOT INITIAL AND lv_adrnr IS NOT INITIAL.
+        SELECT SINGLE address_guid FROM but020
+          WHERE partner = @lv_bp AND addrnumber = @lv_adrnr INTO @lv_aguid.
+      ENDIF.
+      IF lv_aguid IS INITIAL AND lv_bp IS NOT INITIAL.
+        SELECT SINGLE addrnumber FROM but021_fs
+          WHERE partner = @lv_bp AND adr_kind = 'XXDEFAULT' INTO @DATA(lv_stdadr).
+        IF lv_stdadr IS NOT INITIAL.
+          SELECT SINGLE address_guid FROM but020
+            WHERE partner = @lv_bp AND addrnumber = @lv_stdadr INTO @lv_aguid.
+        ENDIF.
+      ENDIF.
+      ls_adr-data_key-guid = lv_aguid.
     ENDIF.
     copy( EXPORTING is_src  = is_postal-data
                     iv_only = `CITY,DISTRICT,POSTL_COD1,STREET,HOUSE_NO,STR_SUPPL1,` &&
@@ -996,7 +1015,15 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     OR ls_adr-data-communication-phone-phone IS NOT INITIAL
     OR ls_adr-data-communication-fax-fax IS NOT INITIAL
     OR ls_adr-data-communication-smtp-smtp IS NOT INITIAL.
-      APPEND ls_adr TO ls_data-partner-central_data-address-addresses.
+      IF iv_change = abap_true AND lv_aguid IS INITIAL.
+        " No standard address found - the rest of the change still goes in.
+        APPEND VALUE bapiret2( type = 'I'
+                               message = |Business partner { lv_bp ALPHA = OUT } has no standard address | &&
+                                         |(BUT020 / BUT021_FS) - address, telephone and e-mail not changed| )
+               TO lt_note.
+      ELSE.
+        APPEND ls_adr TO ls_data-partner-central_data-address-addresses.
+      ENDIF.
     ENDIF.
 
     " ---- business partner: tax numbers ----------------------------------
