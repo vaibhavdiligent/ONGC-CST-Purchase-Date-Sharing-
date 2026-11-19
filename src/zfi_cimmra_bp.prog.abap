@@ -1171,6 +1171,23 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
       ENDIF.
     ENDIF.
 
+    " An unchanged industry key is not sent on a change. CVI maps BRSCH to
+    " the partner's industry (customizing "Assign industries") and inserts
+    " it again whenever BRSCH is sent - the partner has it already, and the
+    " whole change fails with CVI_MAPPING 002 "Industry 92 for object
+    " Business Partner with ID ... could not be assigned" (CRS, 19.11.2026).
+    IF iv_change = abap_true.
+      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_vc-datax TO FIELD-SYMBOL(<lv_brx>).
+      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_vc-data  TO FIELD-SYMBOL(<lv_brv>).
+      IF <lv_brx> IS ASSIGNED AND <lv_brv> IS ASSIGNED AND <lv_brx> = abap_true.
+        DATA lv_brsch_now TYPE brsch.
+        SELECT SINGLE brsch FROM lfa1 WHERE lifnr = @lv_lifnr INTO @lv_brsch_now.
+        IF lv_brsch_now = <lv_brv>.
+          CLEAR: <lv_brv>, <lv_brx>.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
     " The trading partner has an ALPHA domain (RCOMP, 6).
     DATA(lv_vbund) = comp( is_any = ls_vc-data iv_comp = 'VBUND' ).
     IF lv_vbund IS NOT INITIAL AND lv_vbund CO '0123456789'.

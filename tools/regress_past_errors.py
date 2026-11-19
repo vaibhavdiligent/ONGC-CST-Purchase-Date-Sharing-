@@ -273,6 +273,9 @@ CASES = [
     ('HONC change: address sent without its GUID - R11 130 "An address with GUID ... does not exist" (CRS, 19.11.2026)',
      'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_cimmra_bp.prog.abap', "      ls_adr-data_key-guid = lv_aguid.\n", "")]),
+    ('HONC change: unchanged BRSCH sent - CVI_MAPPING 002 "Industry 92 ... could not be assigned" (CRS, 19.11.2026)',
+     'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_cimmra_bp.prog.abap', "          CLEAR: <lv_brv>, <lv_brx>.\n", "")]),
 ]
 
 
