@@ -1119,7 +1119,45 @@ CLASS lcl_honc_bp IMPLEMENTATION.
 
     " ---- validate, maintain, commit -------------------------------------
     IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
-      RETURN.
+      " CVI_MAPPING 002 "Industry &1 for object Business Partner with ID &2
+      " could not be assigned": CVI cannot map an industry key between the
+      " supplier (LFA1-BRSCH) and the partner - the industry assignment in
+      " the CVI customizing has no entry for it (SAP KBA 2555285). Seen in
+      " CRS on 19.11.2026 for "Industry 92". The record is then saved once
+      " more without the industry key, so that the bank, address and the
+      " rest still go in, and the log says what was left out and why.
+      DATA lv_indfail TYPE abap_bool.
+      CLEAR lv_indfail.
+      LOOP AT et_error INTO DATA(ls_e1).
+        IF ( ls_e1-id = 'CVI_MAPPING' AND ls_e1-number = '002' )
+        OR ( ls_e1-message CS 'Industry' AND ls_e1-message CS 'could not be assigned' ).
+          lv_indfail = abap_true.
+        ELSE.
+          " Any other error stops the record as before.
+          RETURN.
+        ENDIF.
+      ENDLOOP.
+      IF lv_indfail = abap_false.
+        RETURN.
+      ENDIF.
+      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_data-vendor-central_data-central-data
+        TO FIELD-SYMBOL(<lv_rbr>).
+      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_data-vendor-central_data-central-datax
+        TO FIELD-SYMBOL(<lv_rbrx>).
+      IF <lv_rbr> IS ASSIGNED AND <lv_rbrx> IS ASSIGNED.
+        CLEAR: <lv_rbr>, <lv_rbrx>.
+      ENDIF.
+      CLEAR ls_data-partner-central_data-industry-industries.
+      DATA(lv_indmsg) = et_error[ 1 ]-message.
+      CLEAR et_error.
+      IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+        RETURN.
+      ENDIF.
+      APPEND VALUE bapiret2(
+        type    = 'W'
+        message = |Saved without the industry key "{ lv_ind }": { lv_indmsg } - the CVI industry | &&
+                  |mapping (SPRO: Customer/Vendor Integration > Assign Industries) has no entry for it| )
+        TO lt_note.
     ENDIF.
 
     " ---- the vendor CVI made ---------------------------------------------

@@ -128,6 +128,9 @@ for what, pat in (
          r'ls_tel-contact-data-consnumber = ls_o2-consnumber\..*ls_fax-contact-data-consnumber = '
          r'ls_o3-consnumber\..*ls_smt-contact-data-consnumber = ls_o6-consnumber\.'),
         ('leaves the name of a person partner alone', r"IF lv_bptype = '1'\."),
+        ('saves again without the industry key when CVI cannot map it (CVI_MAPPING 002) and says so',
+         r"ls_e1-id = 'CVI_MAPPING' AND ls_e1-number = '002'.*CLEAR ls_data-partner-central_data-industry-industries\..*"
+         r"Saved without the industry key"),
         ('leaves out an unchanged industry key on a change - CVI would insert the mapped industry '
          'again (CVI_MAPPING 002 "Industry 92 ... could not be assigned")',
          r'SELECT SINGLE brsch FROM lfa1 WHERE lifnr = @lv_lifnr INTO @lv_brsch_now\.\s*\n\s*'

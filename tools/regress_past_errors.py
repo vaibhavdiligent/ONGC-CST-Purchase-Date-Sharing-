@@ -276,6 +276,9 @@ CASES = [
     ('HONC change: unchanged BRSCH sent - CVI_MAPPING 002 "Industry 92 ... could not be assigned" (CRS, 19.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "          CLEAR: <lv_brv>, <lv_brx>.\n", "")]),
+    ('HONC: CVI cannot map the industry key (CVI_MAPPING 002, "Industry 92") - whole record lost (CRS, 19.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "      CLEAR ls_data-partner-central_data-industry-industries.\n", "")]),
 ]
 
 
