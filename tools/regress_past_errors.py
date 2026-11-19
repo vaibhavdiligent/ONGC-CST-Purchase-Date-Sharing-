@@ -261,6 +261,15 @@ CASES = [
      'src/zfi_vend_honc_fd.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc_fd.prog.abap', "                  iv_comm_replace = abap_true",
        "                  iv_comm_replace = abap_false")]),
+    ('Employee vendor created as an organisation instead of a person', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "-bp_control-category = '1'.", "-bp_control-category = '2'.")]),
+    ('Employee upload: only the first file\'s header recognised', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "        lv_header_skip = '0'.          \" S/4HANA conversion: every file has its header\n", "")]),
+    ('Employee upload: XK01 batch input left in', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "        PERFORM f_bp_create.\n", "        CALL TRANSACTION 'XK01' USING ta_bdcdata MODE 'N'.\n")]),
+    ('Employee upload: bank details sent on the supplier', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "      APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.\n    ENDIF.\n\n    \" ---- supplier: control",
+       "      APPEND ls_bk TO ls_data-vendor-central_data-bankdetail-bankdetails.\n    ENDIF.\n\n    \" ---- supplier: control")]),
 ]
 
 

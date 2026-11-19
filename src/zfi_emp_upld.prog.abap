@@ -34,6 +34,19 @@
 * Transport number: CRDK9A0094
 * Description     : Bank Key Creation
 *----------------------------------------------------------------------*
+* Modification Information
+* Date            : 19.11.2026
+* Description     : S/4HANA conversion. XK01 and FK02 are gone in
+*                   S/4HANA: the employee vendor is created as a
+*                   business partner - a PERSON, with first, middle and
+*                   last name - through CL_MD_BP_MAINTAIN (local class
+*                   LCL_EMP_BP), and a changed bank account is put on
+*                   the partner. The active employee file is read in
+*                   HRMS's layout (Employee vendor creation - mapping
+*                   HRMS.xlsx) by its column headings; the 50-column
+*                   layout is still read. Files, DPR / tax invoice
+*                   check, archive and mails are unchanged.
+*----------------------------------------------------------------------*
 
 
 REPORT zfi_emp_upld NO STANDARD PAGE HEADING LINE-SIZE 255.
@@ -95,6 +108,10 @@ TYPES: BEGIN OF ty_file,
          plifz      TYPE lfm1-plifz,
          j_1icstno  TYPE j_1icstno,
          j_1ilstno  TYPE j_1ilstno,
+         " S/4HANA: the person's name, from HRMS (fname / mname / lname)
+         fname      TYPE bu_namep_f,
+         mname      TYPE bu_namemid,
+         lname      TYPE bu_namep_l,
        END OF ty_file,
 
 *   BOC BY Aishwarya - 8000003767 - 07.04.2025
@@ -208,26 +225,42 @@ TYPES: BEGIN OF ty_file,
          emp_name TYPE string,
 *         pan_no   TYPE string,
          remarks  TYPE string,
-       END OF ty_msg.
+       END OF ty_msg,
+
+       " S/4HANA: the column of each HRMS field, from the file's header
+       BEGIN OF ty_hrms_col,
+         emp   TYPE i,
+         sal   TYPE i,
+         fname TYPE i,
+         mname TYPE i,
+         lname TYPE i,
+         name  TYPE i,
+         acct  TYPE i,
+         ifsc  TYPE i,
+         bctry TYPE i,
+         mob   TYPE i,
+         func  TYPE i,
+         mail  TYPE i,
+         mail2 TYPE i,
+       END OF ty_hrms_col.
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
 
 *----------------------------------------------------------------------*
 *  D A T A                                                             *
 *----------------------------------------------------------------------*
-DATA: ta_bdcdata        LIKE bdcdata OCCURS 0 WITH HEADER LINE,
-      ta_mess           LIKE bdcmsgcoll OCCURS 0 WITH HEADER LINE,
-      ta_msg            TYPE TABLE OF ty_msg,
+* S/4HANA: no batch input (BDCDATA, BDCMSGCOLL, CTU_PARAMS) any more.
+DATA: ta_msg            TYPE TABLE OF ty_msg,
       wa_msg            TYPE ty_msg,
-      wa_ctu            TYPE ctu_params,
 *   BOC BY Aishwarya - 8000003767 - 07.04.2025
-      ta_bdcdata_update LIKE bdcdata OCCURS 0 WITH HEADER LINE,
-      ta_mess_update    LIKE bdcmsgcoll OCCURS 0 WITH HEADER LINE,
       ta_msg_update     TYPE TABLE OF ty_msg,
-      wa_msg_update     TYPE ty_msg,
       ta_msg_new        TYPE TABLE OF ty_msg,
-      wa_msg_new        TYPE ty_msg,
-      wa_ctu_update     TYPE ctu_params.
+      wa_msg_new        TYPE ty_msg.
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
+
+* S/4HANA: the layout of the file being read
+DATA: gs_col    TYPE ty_hrms_col,
+      gv_layout TYPE c LENGTH 1,
+      gv_sep    TYPE string.
 
 DATA: ta_file         TYPE TABLE OF ty_file,
       wa_file         TYPE ty_file,
@@ -259,9 +292,7 @@ DATA: ta_file         TYPE TABLE OF ty_file,
 
       ta_contents_bin TYPE STANDARD TABLE OF solisti1 WITH HEADER LINE.
 
-DATA: gv_update  TYPE char1 VALUE 'S',
-      gv_display TYPE char1 VALUE 'N',
-      gv_cnt     TYPE p.
+DATA: gv_cnt     TYPE p.
 
 DATA: ta_fc TYPE slis_t_fieldcat_alv,
       wa_fc TYPE slis_fieldcat_alv,
@@ -280,6 +311,17 @@ CONSTANTS: co_msgtyp    TYPE char1  VALUE 'S',
            co_create(3) VALUE 'New',
            co_update(8) VALUE 'Modified',
            co_failed(6) VALUE 'Failed'.
+
+* S/4HANA: the fixed values of the HRMS layout - sheet "expected output
+* file for upload" of "Employee vendor creation - mapping HRMS.xlsx".
+CONSTANTS: co_lay_hrms   TYPE c LENGTH 1 VALUE 'H',
+           co_lay_sap    TYPE c LENGTH 1 VALUE 'S',
+           co_hrms_bukrs TYPE bukrs      VALUE '1000',
+           co_hrms_ktokk TYPE ktokk      VALUE 'Z008',
+           co_hrms_land  TYPE land1      VALUE 'IN',
+           co_hrms_langu TYPE c LENGTH 2 VALUE 'EN',
+           co_hrms_akont TYPE akont      VALUE '1200013',
+           co_hrms_zwels TYPE dzwels     VALUE 'CNT'.
 
 *----------------------------------------------------------------------*
 *  S E L E C T - O P T I O N S  &  P A R A M E T E R S                 *
@@ -300,15 +342,560 @@ PARAMETERS: p_bkey  RADIOBUTTON GROUP rad1 DEFAULT 'X' USER-COMMAND toggle,
 
 SELECTION-SCREEN: END OF BLOCK b1.
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
+*----------------------------------------------------------------------*
+*  S/4HANA: THE EMPLOYEE VENDOR AS A BUSINESS PARTNER                  *
+*----------------------------------------------------------------------*
+* XK01 and FK02 are gone in S/4HANA: a supplier is a business partner,
+* created through CL_MD_BP_MAINTAIN, and CVI writes LFA1/LFB1/LFBK/LFM1
+* from it. An employee is a natural person, so the partner is created as
+* a PERSON (category 1) with first, middle and last name - not as an
+* organisation. BP grouping and supplier roles come from the account
+* group (CVIC_VEND_TO_BP1 / CVIC_VEND_TO_BP2), the partner takes the
+* employee code as its number, as RF02K-LIFNR did in XK01. Bank details
+* go on the business partner (BUT0BK), from which CVI writes LFBK.
+*
+* ABAP Cloud: CL_MD_BP_MAINTAIN, CVI_VEND_LINK and the CVIC_* tables are
+* not released for ABAP Cloud - classic ABAP (tier 2). Run ATC with
+* variant ABAP_CLOUD_READINESS and record them as known exemptions.
+*----------------------------------------------------------------------*
+CLASS lcl_emp_bp DEFINITION FINAL.
+  PUBLIC SECTION.
+    "! A new employee vendor, number IV_LIFNR (the employee code).
+    CLASS-METHODS create
+      IMPORTING is_file  TYPE ty_file
+                iv_lifnr TYPE lifnr
+      EXPORTING et_error TYPE bapiret2_t
+                et_ok    TYPE bapiret2_t.
+    "! FK02: the file's bank account into line 1 of the bank details - the
+    "! vendor's first account is replaced, the others stay.
+    CLASS-METHODS change_bank
+      IMPORTING is_file  TYPE ty_file
+                iv_lifnr TYPE lifnr
+      EXPORTING et_error TYPE bapiret2_t
+                et_ok    TYPE bapiret2_t.
+  PRIVATE SECTION.
+    CONSTANTS: c_insert TYPE c LENGTH 1 VALUE 'I',
+               c_update TYPE c LENGTH 1 VALUE 'U',
+               c_delete TYPE c LENGTH 1 VALUE 'D'.
+    CLASS-METHODS set
+      IMPORTING iv_comp  TYPE clike
+                iv_value TYPE any
+      CHANGING  cs_data  TYPE any
+                cs_datax TYPE any.
+    CLASS-METHODS alpha
+      IMPORTING iv_in     TYPE clike
+                iv_width  TYPE i
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS title_key
+      IMPORTING iv_in     TYPE clike
+      RETURNING VALUE(rv) TYPE ad_title.
+    CLASS-METHODS save
+      IMPORTING is_data   TYPE cvis_ei_extern
+      CHANGING  ct_error  TYPE bapiret2_t
+      RETURNING VALUE(rv) TYPE abap_bool.
+    CLASS-METHODS add
+      IMPORTING iv_text TYPE clike
+      CHANGING  ct      TYPE bapiret2_t.
+    CLASS-METHODS reset_bp.
+ENDCLASS.
+
+
+CLASS lcl_emp_bp IMPLEMENTATION.
+
+  METHOD set.
+    ASSIGN COMPONENT iv_comp OF STRUCTURE cs_data TO FIELD-SYMBOL(<lv_t>).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    TRY.
+        <lv_t> = iv_value.
+      CATCH cx_sy_conversion_error.
+        RETURN.
+    ENDTRY.
+    ASSIGN COMPONENT iv_comp OF STRUCTURE cs_datax TO FIELD-SYMBOL(<lv_x>).
+    IF sy-subrc = 0.
+      <lv_x> = abap_true.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD alpha.
+    rv = condense( CONV string( iv_in ) ).
+    IF rv IS NOT INITIAL AND rv CO '0123456789'.
+      rv = |{ rv ALPHA = IN WIDTH = iv_width }|.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD title_key.
+    " The file has the text ("Mr."); the partner takes its key (TSAD3T).
+    CLEAR rv.
+    DATA(lv_in) = condense( CONV string( iv_in ) ).
+    IF lv_in IS INITIAL.
+      RETURN.
+    ENDIF.
+    IF lv_in CO '0123456789'.
+      rv = |{ lv_in ALPHA = IN WIDTH = 4 }|.
+      RETURN.
+    ENDIF.
+    DATA(lv_up) = to_upper( lv_in ).
+    SELECT title, title_medi FROM tsad3t
+      WHERE langu = @sy-langu INTO TABLE @DATA(lt_t).
+    LOOP AT lt_t INTO DATA(ls_t).
+      IF to_upper( condense( CONV string( ls_t-title_medi ) ) ) = lv_up.
+        rv = ls_t-title.
+        RETURN.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD add.
+    APPEND VALUE bapiret2( type = 'E' message = iv_text ) TO ct.
+  ENDMETHOD.
+
+  METHOD reset_bp.
+    TRY.
+        CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
+      CATCH cx_sy_dyn_call_illegal_func.
+        RETURN.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD save.
+    rv = abap_false.
+    DATA lt_map TYPE mdg_bs_bp_msgmap_t.
+    TRY.
+        cl_md_bp_maintain=>validate_single(
+          EXPORTING i_data        = is_data
+          IMPORTING et_return_map = lt_map ).
+      CATCH cx_root INTO DATA(lx_val).
+        add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
+             CHANGING  ct      = ct_error ).
+        RETURN.
+    ENDTRY.
+    DATA(lv_bad) = abap_false.
+    LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
+      APPEND VALUE bapiret2( type = ls_map-type id = ls_map-id number = ls_map-number
+                             message = ls_map-message ) TO ct_error.
+      lv_bad = abap_true.
+    ENDLOOP.
+    IF lv_bad = abap_true.
+      RETURN.
+    ENDIF.
+
+    DATA: lt_in  TYPE cvis_ei_extern_t,
+          lt_ret TYPE bapiretm.
+    APPEND is_data TO lt_in.
+    TRY.
+        cl_md_bp_maintain=>maintain(
+          EXPORTING i_data   = lt_in
+          IMPORTING e_return = lt_ret ).
+      CATCH cx_root INTO DATA(lx_mnt).
+        ROLLBACK WORK.
+        reset_bp( ).
+        add( EXPORTING iv_text = |Maintain failed: { lx_mnt->get_text( ) }|
+             CHANGING  ct      = ct_error ).
+        RETURN.
+    ENDTRY.
+    " BAPIRETM lines carry a nested message table, read generically.
+    FIELD-SYMBOLS <lt_sub> TYPE ANY TABLE.
+    LOOP AT lt_ret ASSIGNING FIELD-SYMBOL(<ls_ret>).
+      ASSIGN COMPONENT 'OBJECT_MSG' OF STRUCTURE <ls_ret> TO <lt_sub>.
+      IF sy-subrc <> 0.
+        CONTINUE.
+      ENDIF.
+      LOOP AT <lt_sub> ASSIGNING FIELD-SYMBOL(<ls_sub>).
+        DATA ls_r2 TYPE bapiret2.
+        CLEAR ls_r2.
+        MOVE-CORRESPONDING <ls_sub> TO ls_r2.
+        IF ls_r2-type CA 'EAX'.
+          APPEND ls_r2 TO ct_error.
+          lv_bad = abap_true.
+        ENDIF.
+      ENDLOOP.
+    ENDLOOP.
+    IF lv_bad = abap_true.
+      ROLLBACK WORK.
+      reset_bp( ).
+      RETURN.
+    ENDIF.
+    " BAPI_TRANSACTION_COMMIT with WAIT: RETURN says whether the update ran.
+    DATA ls_cret TYPE bapiret2.
+    CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'
+      EXPORTING wait   = abap_true
+      IMPORTING return = ls_cret.
+    reset_bp( ).
+    IF ls_cret-type CA 'EAX'.
+      add( EXPORTING iv_text = |The update did not go through - nothing was saved: { ls_cret-message } (SM13)|
+           CHANGING  ct      = ct_error ).
+      RETURN.
+    ENDIF.
+    rv = abap_true.
+  ENDMETHOD.
+
+  METHOD create.
+    CLEAR: et_error, et_ok.
+    DATA: ls_data TYPE cvis_ei_extern,
+          lv_guid TYPE bu_partner_guid.
+
+    " ---- BP grouping and supplier roles of the account group -------------
+    DATA lv_grp TYPE bu_group.
+    SELECT SINGLE grouping FROM cvic_vend_to_bp1
+      WHERE account_group = @is_file-ktokk INTO @lv_grp.
+    IF lv_grp IS INITIAL.
+      add( EXPORTING iv_text = |Account group { is_file-ktokk } has no BP grouping (CVIC_VEND_TO_BP1)|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    SELECT account_group, role FROM cvic_vend_to_bp2
+      WHERE account_group = @is_file-ktokk INTO TABLE @DATA(lt_role).
+    IF lt_role IS INITIAL.
+      add( EXPORTING iv_text = |Account group { is_file-ktokk } has no supplier roles (CVIC_VEND_TO_BP2)|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    TRY.
+        lv_guid = cl_system_uuid=>if_system_uuid_static~create_uuid_x16( ).
+      CATCH cx_uuid_error.
+        add( EXPORTING iv_text = 'No GUID could be generated for the new business partner'
+             CHANGING  ct      = et_error ).
+        RETURN.
+    ENDTRY.
+
+    ls_data-partner-header-object_task                  = c_insert.
+    ls_data-partner-header-object_instance-bpartnerguid = lv_guid.
+    ls_data-partner-header-object_instance-bpartner     = iv_lifnr.  " the employee code
+    ls_data-vendor-header-object_task                   = c_insert.
+    ls_data-vendor-header-object_instance-lifnr         = iv_lifnr.
+
+    ls_data-partner-central_data-common-data-bp_control-category = '1'.  " person
+    ls_data-partner-central_data-common-data-bp_control-grouping = lv_grp.
+    LOOP AT lt_role INTO DATA(ls_role_db).
+      DATA ls_role TYPE bus_ei_bupa_roles.
+      CLEAR ls_role.
+      ls_role-task     = c_insert.
+      ls_role-data_key = ls_role_db-role.
+      APPEND ls_role TO ls_data-partner-central_data-role-roles.
+    ENDLOOP.
+
+    " ---- the person: name, title, search term, language ------------------
+    " First / middle / last name from HRMS; a file with the full name only
+    " has its last word taken as the last name.
+    DATA: lv_first TYPE string,
+          lv_mid   TYPE string,
+          lv_last  TYPE string.
+    lv_first = condense( CONV string( is_file-fname ) ).
+    lv_mid   = condense( CONV string( is_file-mname ) ).
+    lv_last  = condense( CONV string( is_file-lname ) ).
+    IF lv_last IS INITIAL.
+      DATA(lv_full) = condense( CONV string( is_file-name1 ) ).
+      IF lv_full IS INITIAL.
+        add( EXPORTING iv_text = 'The employee has no name - a person needs a last name'
+             CHANGING  ct      = et_error ).
+        RETURN.
+      ENDIF.
+      SPLIT lv_full AT space INTO TABLE DATA(lt_word).
+      DELETE lt_word WHERE table_line IS INITIAL.
+      lv_last = lt_word[ lines( lt_word ) ].
+      DELETE lt_word INDEX lines( lt_word ).
+      IF lv_first IS INITIAL.
+        lv_first = concat_lines_of( table = lt_word sep = ` ` ).
+        CLEAR lv_mid.
+      ENDIF.
+    ENDIF.
+    set( EXPORTING iv_comp = 'FIRSTNAME' iv_value = lv_first
+         CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_person
+                   cs_datax = ls_data-partner-central_data-common-datax-bp_person ).
+    IF lv_mid IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'MIDDLENAME' iv_value = lv_mid
+           CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_person
+                     cs_datax = ls_data-partner-central_data-common-datax-bp_person ).
+    ENDIF.
+    set( EXPORTING iv_comp = 'LASTNAME' iv_value = lv_last
+         CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_person
+                   cs_datax = ls_data-partner-central_data-common-datax-bp_person ).
+
+    " Language: the file has the ISO code (EN), the partner the SAP one (E).
+    DATA lv_langu TYPE spras.
+    IF strlen( condense( CONV string( is_file-langu ) ) ) = 2.
+      CALL FUNCTION 'CONVERSION_EXIT_ISOLA_INPUT'
+        EXPORTING  input            = is_file-langu
+        IMPORTING  output           = lv_langu
+        EXCEPTIONS unknown_language = 1
+                   OTHERS           = 2.
+      IF sy-subrc <> 0.
+        CLEAR lv_langu.
+      ENDIF.
+    ELSE.
+      lv_langu = is_file-langu.
+    ENDIF.
+    IF lv_langu IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'CORRESPONDLANGUAGE' iv_value = lv_langu
+           CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_person
+                     cs_datax = ls_data-partner-central_data-common-datax-bp_person ).
+      set( EXPORTING iv_comp = 'PARTNERLANGUAGE' iv_value = lv_langu
+           CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_centraldata
+                     cs_datax = ls_data-partner-central_data-common-datax-bp_centraldata ).
+    ENDIF.
+    DATA(lv_title) = title_key( is_file-title_medi ).
+    IF lv_title IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'TITLE_KEY' iv_value = lv_title
+           CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_centraldata
+                     cs_datax = ls_data-partner-central_data-common-datax-bp_centraldata ).
+    ENDIF.
+    IF is_file-sort1 IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'SEARCHTERM1' iv_value = is_file-sort1
+           CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_centraldata
+                     cs_datax = ls_data-partner-central_data-common-datax-bp_centraldata ).
+    ENDIF.
+
+    " ---- address and communication (XK01 screen 0111) --------------------
+    DATA ls_adr TYPE bus_ei_bupa_address.
+    ls_adr-task = c_insert.
+    DATA(lt_pf) = VALUE string_table( ( |COUNTRY;{ is_file-country }| ) ( |REGION;{ is_file-region }| )
+                                      ( |CITY;{ is_file-city1 }| ) ( |DISTRICT;{ is_file-city2 }| )
+                                      ( |POSTL_COD1;{ is_file-post_code1 }| ) ( |STREET;{ is_file-street }| )
+                                      ( |STR_SUPPL1;{ is_file-str_suppl1 }| )
+                                      ( |STR_SUPPL2;{ is_file-str_suppl2 }| ) ( |LANGU;{ lv_langu }| ) ).
+    LOOP AT lt_pf INTO DATA(lv_pf).
+      SPLIT lv_pf AT ';' INTO DATA(lv_pname) DATA(lv_pval).
+      CONDENSE lv_pval.
+      IF lv_pval IS NOT INITIAL.
+        set( EXPORTING iv_comp = lv_pname iv_value = lv_pval
+             CHANGING  cs_data  = ls_adr-data-postal-data
+                       cs_datax = ls_adr-data-postal-datax ).
+      ENDIF.
+    ENDLOOP.
+    " Telephone (LFA1-TELF1) and mobile in ADR2: the first is the standard
+    " number; R_3_USER 3 marks the standard mobile (SAP Help).
+    DATA lv_std TYPE abap_bool VALUE abap_true.
+    IF is_file-tel_number IS NOT INITIAL.
+      DATA ls_tel TYPE bus_ei_bupa_telephone.
+      CLEAR ls_tel.
+      ls_tel-contact-task           = c_insert.
+      ls_tel-contact-data-telephone = is_file-tel_number.
+      ls_tel-contact-data-std_no    = lv_std.
+      lv_std = abap_false.
+      APPEND ls_tel TO ls_adr-data-communication-phone-phone.
+    ENDIF.
+    IF is_file-mob_number IS NOT INITIAL.
+      CLEAR ls_tel.
+      ls_tel-contact-task           = c_insert.
+      ls_tel-contact-data-telephone = is_file-mob_number.
+      ls_tel-contact-data-r_3_user  = '3'.
+      ls_tel-contact-data-std_no    = lv_std.
+      APPEND ls_tel TO ls_adr-data-communication-phone-phone.
+    ENDIF.
+    IF is_file-fax_number IS NOT INITIAL.
+      DATA ls_fax TYPE bus_ei_bupa_fax.
+      ls_fax-contact-task        = c_insert.
+      ls_fax-contact-data-fax    = is_file-fax_number.
+      ls_fax-contact-data-std_no = abap_true.
+      APPEND ls_fax TO ls_adr-data-communication-fax-fax.
+    ENDIF.
+    IF is_file-smtp_addr IS NOT INITIAL.
+      DATA ls_smt TYPE bus_ei_bupa_smtp.
+      ls_smt-contact-task        = c_insert.
+      ls_smt-contact-data-e_mail = is_file-smtp_addr.
+      ls_smt-contact-data-std_no = abap_true.
+      APPEND ls_smt TO ls_adr-data-communication-smtp-smtp.
+    ENDIF.
+    APPEND ls_adr TO ls_data-partner-central_data-address-addresses.
+
+    " ---- bank details: on the business partner (XK01 screen 0130) ------
+    IF is_file-bankl IS NOT INITIAL AND is_file-bankn IS NOT INITIAL.
+      DATA ls_bk TYPE bus_ei_bupa_bankdetail.
+      ls_bk-task     = c_insert.
+      ls_bk-data_key = '0001'.
+      set( EXPORTING iv_comp = 'BANK_CTRY'
+                     iv_value = COND banks( WHEN is_file-banks IS NOT INITIAL
+                                            THEN to_upper( is_file-banks ) ELSE is_file-country )
+           CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+      set( EXPORTING iv_comp = 'BANK_KEY' iv_value = to_upper( is_file-bankl )
+           CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+      set( EXPORTING iv_comp = 'BANK_ACCT' iv_value = is_file-bankn
+           CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+      IF is_file-koinh IS NOT INITIAL.
+        set( EXPORTING iv_comp = 'ACCOUNTHOLDER' iv_value = is_file-koinh
+             CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+      ENDIF.
+      APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
+    ENDIF.
+
+    " ---- supplier: control data (XK01 screen 0120 / 0130) -------------
+    DATA ls_vc TYPE vmds_ei_vmd_central.
+    set( EXPORTING iv_comp = 'KTOKK' iv_value = is_file-ktokk
+         CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+    IF is_file-konzs IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'KONZS' iv_value = to_upper( is_file-konzs )
+           CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+    ENDIF.
+    IF is_file-kunnr IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'KUNNR' iv_value = alpha( iv_in = is_file-kunnr iv_width = 10 )
+           CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+    ENDIF.
+    IF is_file-vbund IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'VBUND' iv_value = alpha( iv_in = is_file-vbund iv_width = 6 )
+           CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+    ENDIF.
+    IF is_file-fiskn IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'FISKN' iv_value = alpha( iv_in = is_file-fiskn iv_width = 10 )
+           CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+    ENDIF.
+    IF is_file-lnrza IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'LNRZA' iv_value = alpha( iv_in = is_file-lnrza iv_width = 10 )
+           CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
+    ENDIF.
+    ls_data-vendor-central_data-central = ls_vc.
+
+    " ---- supplier: company code (XK01 screens 0210 / 0215) -------------
+    IF is_file-bukrs IS NOT INITIAL.
+      DATA ls_cc TYPE vmds_ei_company.
+      ls_cc-task           = c_insert.
+      ls_cc-data_key-bukrs = is_file-bukrs.
+      DATA(lt_cf) = VALUE string_table(
+        ( |AKONT;{ alpha( iv_in = is_file-akont iv_width = 10 ) }| )
+        ( |FDGRV;{ alpha( iv_in = is_file-fdgrv iv_width = 10 ) }| )
+        ( |ALTKN;{ is_file-altkn }| ) ( |PERNR;{ is_file-pernr }| ) ( |ZTERM;{ is_file-zterm }| )
+        ( |REPRF;{ is_file-reprf }| ) ( |ZWELS;{ is_file-zwels }| ) ( |ZAHLS;{ is_file-zahls }| )
+        ( |HBKID;{ is_file-hbkid }| ) ( |ZGRUP;{ is_file-zgrup }| ) ).
+      LOOP AT lt_cf INTO DATA(lv_cf).
+        SPLIT lv_cf AT ';' INTO DATA(lv_cname) DATA(lv_cval).
+        CONDENSE lv_cval.
+        IF lv_cval IS NOT INITIAL AND NOT ( lv_cname = 'PERNR' AND lv_cval CO '0' ).
+          set( EXPORTING iv_comp = lv_cname iv_value = lv_cval
+               CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
+        ENDIF.
+      ENDLOOP.
+      APPEND ls_cc TO ls_data-vendor-company_data-company.
+    ENDIF.
+
+    " ---- supplier: purchasing organisation (XK01 screen 0310) ----------
+    IF is_file-ekorg IS NOT INITIAL.
+      DATA ls_po TYPE vmds_ei_purchasing.
+      ls_po-task           = c_insert.
+      ls_po-data_key-ekorg = is_file-ekorg.
+      DATA(lt_mf) = VALUE string_table(
+        ( |WAERS;{ is_file-waers }| ) ( |ZTERM;{ is_file-zterm }| ) ( |INCO1;{ is_file-inco1 }| )
+        ( |INCO2;{ is_file-inco2 }| ) ( |KALSK;{ is_file-kalsk }| ) ( |WEBRE;{ is_file-webre }| )
+        ( |LEBRE;{ is_file-lebre }| ) ( |EKGRP;{ is_file-ekgrp }| ) ( |PLIFZ;{ is_file-plifz }| ) ).
+      LOOP AT lt_mf INTO DATA(lv_mf).
+        SPLIT lv_mf AT ';' INTO DATA(lv_mname) DATA(lv_mval).
+        CONDENSE lv_mval.
+        IF lv_mval IS NOT INITIAL AND NOT ( lv_mname = 'PLIFZ' AND lv_mval CO '0' ).
+          set( EXPORTING iv_comp = lv_mname iv_value = lv_mval
+               CHANGING  cs_data = ls_po-data cs_datax = ls_po-datax ).
+        ENDIF.
+      ENDLOOP.
+      APPEND ls_po TO ls_data-vendor-purchasing_data-purchasing.
+    ENDIF.
+
+    " ---- validate, maintain, commit ---------------------------------------
+    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+    DATA: lv_new TYPE lifnr,
+          lv_bp  TYPE bu_partner.
+    SELECT SINGLE vendor FROM cvi_vend_link WHERE partner_guid = @lv_guid INTO @lv_new.
+    SELECT SINGLE partner FROM but000 WHERE partner_guid = @lv_guid INTO @lv_bp.
+    IF lv_new IS INITIAL.
+      add( EXPORTING iv_text = COND string(
+                       WHEN lv_bp IS INITIAL
+                       THEN `Nothing was created: no business partner and no supplier exist for this employee`
+                       ELSE |Business partner { lv_bp ALPHA = OUT } was saved, but no supplier is linked | &&
+                            |to it - check the supplier roles of { is_file-ktokk } (CVIC_VEND_TO_BP2)| )
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    APPEND VALUE bapiret2( type = 'S'
+                           message = |Employee vendor { lv_new ALPHA = OUT } created as business | &&
+                                     |partner { lv_bp ALPHA = OUT } (person)| ) TO et_ok.
+  ENDMETHOD.
+
+  METHOD change_bank.
+    CLEAR: et_error, et_ok.
+    DATA: ls_data TYPE cvis_ei_extern,
+          lv_guid TYPE bu_partner_guid,
+          lv_bp   TYPE bu_partner.
+    SELECT SINGLE partner_guid FROM cvi_vend_link WHERE vendor = @iv_lifnr INTO @lv_guid.
+    IF lv_guid IS INITIAL.
+      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } has no business partner (CVI_VEND_LINK)|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    SELECT SINGLE partner FROM but000 WHERE partner_guid = @lv_guid INTO @lv_bp.
+    ls_data-partner-header-object_task                  = c_update.
+    ls_data-partner-header-object_instance-bpartnerguid = lv_guid.
+    ls_data-vendor-header-object_task                   = c_update.
+    ls_data-vendor-header-object_instance-lifnr         = iv_lifnr.
+
+    DATA: lv_banks TYPE banks,
+          lv_bankl TYPE bankk,
+          lv_bankn TYPE bankn.
+    lv_banks = to_upper( is_file-banks ).
+    lv_bankl = to_upper( is_file-bankl ).
+    lv_bankn = is_file-bankn.
+    IF lv_banks IS INITIAL.
+      SELECT SINGLE land1 FROM lfa1 WHERE lifnr = @iv_lifnr INTO @lv_banks.
+    ENDIF.
+    IF lv_bankl IS INITIAL OR lv_bankn IS INITIAL.
+      add( EXPORTING iv_text = 'The file has no complete bank account (IFSC and account number)'
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+
+    " The partner's bank details, in key order - line 1 is the one FK02
+    " typed over.
+    SELECT bkvid, banks, bankl, bankn FROM but0bk
+      WHERE partner = @lv_bp
+      ORDER BY banks, bankl, bankn INTO TABLE @DATA(lt_old).
+    IF line_exists( lt_old[ banks = lv_banks bankl = lv_bankl bankn = lv_bankn ] ).
+      APPEND VALUE bapiret2( type = 'I' message = 'The bank account is already maintained' ) TO et_ok.
+      RETURN.
+    ENDIF.
+    DATA lv_max TYPE i.
+    LOOP AT lt_old INTO DATA(ls_old).
+      IF ls_old-bkvid CO '0123456789'.
+        IF CONV i( ls_old-bkvid ) > lv_max.
+          lv_max = CONV i( ls_old-bkvid ).
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    lv_max += 1.
+
+    DATA ls_bk TYPE bus_ei_bupa_bankdetail.
+    ls_bk-task     = c_insert.
+    ls_bk-data_key = |{ lv_max WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
+    set( EXPORTING iv_comp = 'BANK_CTRY' iv_value = lv_banks
+         CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+    set( EXPORTING iv_comp = 'BANK_KEY' iv_value = lv_bankl
+         CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+    set( EXPORTING iv_comp = 'BANK_ACCT' iv_value = lv_bankn
+         CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+    IF is_file-koinh IS NOT INITIAL.
+      set( EXPORTING iv_comp = 'ACCOUNTHOLDER' iv_value = is_file-koinh
+           CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+    ENDIF.
+    APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
+    IF lt_old IS NOT INITIAL.
+      DATA ls_del TYPE bus_ei_bupa_bankdetail.
+      ls_del-task     = c_delete.
+      ls_del-data_key = lt_old[ 1 ]-bkvid.
+      APPEND ls_del TO ls_data-partner-central_data-bankdetail-bankdetails.
+    ENDIF.
+
+    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+    APPEND VALUE bapiret2( type = 'S'
+                           message = 'Employee vendor Bank details are updated as per HRMS data' ) TO et_ok.
+  ENDMETHOD.
+
+ENDCLASS.
+
 *---------------------------------------------------------------------*
 * I N I T I A L I Z A T I O N                                         *
 *---------------------------------------------------------------------*
 INITIALIZATION.
   PERFORM hide_sel_opt_interval.
-
-  wa_ctu-updmode = gv_update.
-  wa_ctu-dismode = gv_display.
-  wa_ctu-defsize = abap_true.
 
 AT SELECTION-SCREEN OUTPUT.
   LOOP AT SCREEN.
@@ -391,6 +978,7 @@ FORM f_read_n_run.
 
         "" REFRESH DATA FOR NEW LOOP PASS
         CLEAR: lwa_line, lv_file, lv_filename, lv_arcpath, lv_len, ta_msg, ta_file.
+        lv_header_skip = '0'.          " S/4HANA conversion: every file has its header
 
         "" CHECK THE EXTENSION AND ALLOW VALID EXTENSION FILES
         SPLIT lwa_files-name AT '.' INTO DATA(lv_1) DATA(lv_2).
@@ -423,13 +1011,24 @@ FORM f_read_n_run.
             READ DATASET lv_file INTO lwa_line.
             IF sy-subrc EQ 0.
 *   BOC BY Aishwarya - 8000003767 - 08.04.2025
+              " S/4HANA conversion: no carriage return at the line end (a
+              " Windows file on the Linux server), no empty lines.
+              REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf(1) IN lwa_line WITH ``.
+              IF lwa_line IS INITIAL.
+                CONTINUE.
+              ENDIF.
               " Skip the first line (header) if not already skipped
               IF lv_header_skip EQ '0'.
                 lv_header_skip = '1'. " Set flag to skip the next line
+                PERFORM f_header USING lwa_line.   " which layout the file has
                 CONTINUE. " Skip processing for header line
               ENDIF.
+              IF gv_layout = co_lay_hrms.
+                PERFORM f_convert_hrms USING lwa_line CHANGING wa_file.
+              ELSE.
+                PERFORM f_convert_wa USING lwa_line CHANGING wa_file.
+              ENDIF.
 *   EOC BY Aishwarya - 8000003767 - 08.04.2025
-              PERFORM f_convert_wa USING lwa_line CHANGING wa_file.
               APPEND wa_file TO ta_file.
             ELSE.
               EXIT.
@@ -481,7 +1080,7 @@ FORM f_runbdc.
   LOOP AT ta_file INTO wa_file.
 
 *   BOC BY Aishwarya - 8000003767 - 07.04.2025
-    REFRESH: ta_bdcdata[], ta_mess[], ta_mess_update[], ta_bdcdata_update[].
+    " S/4HANA conversion: no batch input tables to refresh any more.
 
     IF ta_create IS NOT INITIAL OR ta_update IS NOT INITIAL.
       READ TABLE ta_create INTO wa_create WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
@@ -490,197 +1089,9 @@ FORM f_runbdc.
         lv_status = co_create.
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
 
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0100'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'USE_ZAV'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-        PERFORM f_bdc_field       USING 'RF02K-LIFNR'
-                                      wa_file-lifnr.                              "'100000502'.
-        PERFORM f_bdc_field       USING 'RF02K-BUKRS'
-                                      wa_file-bukrs.                              "'1000'.
-        PERFORM f_bdc_field       USING 'RF02K-EKORG'
-                                      wa_file-ekorg.                              "'1000'.
-        PERFORM f_bdc_field       USING 'RF02K-KTOKK'
-                                      wa_file-ktokk.                              "'Z001'.
-        PERFORM f_bdc_field       USING 'USE_ZAV'
-                                      abap_true.                                  "'X'
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0111'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'SZA1_D0100-TITLE_MEDI'.
-        PERFORM f_bdc_field       USING 'SZA1_D0100-TITLE_MEDI'
-                                      wa_file-title_medi.                              "'COMPANY'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-NAME1'
-                                      wa_file-name1.                              "'BASF -YPC COMPANY LI'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-NAME2'
-                                      wa_file-name2.                              "'BASF'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-SORT1'
-                                      wa_file-sort1.                              "'BASF'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-STR_SUPPL1'
-                                      wa_file-str_suppl1.                              "'MUMBAI'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-STR_SUPPL2'
-                                      wa_file-str_suppl2.                              "'MUMBAI'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-STREET'
-                                      wa_file-street.                              "'UNDUSTRIAL CHEMICALS'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-CITY2'
-                                      wa_file-city2.                              "'MUMBAI'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-POST_CODE1'
-                                      wa_file-post_code1.   "'400018'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-CITY1'
-                                      wa_file-city1.                              "'MUMBAI'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-COUNTRY'
-                                      wa_file-country.                              "'IN'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-REGION'
-                                      wa_file-region.                              "'13'.
-        PERFORM f_bdc_field       USING 'ADDR1_DATA-LANGU'
-                                      wa_file-langu.                              "'EN'.
-        PERFORM f_bdc_field       USING 'SZA1_D0100-TEL_NUMBER'
-                                      wa_file-tel_number.   "'12345'.
-        PERFORM f_bdc_field       USING 'SZA1_D0100-MOB_NUMBER'
-                                      wa_file-mob_number.                              "'1234567890'.
-        PERFORM f_bdc_field       USING 'SZA1_D0100-FAX_NUMBER'
-                                      wa_file-fax_number.   "'123456'.
-        PERFORM f_bdc_field       USING 'SZA1_D0100-SMTP_ADDR'
-                                      wa_file-smtp_addr.                              "'NAVEEN@GMAIL.COM'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0120'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFA1-VBUND'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-        PERFORM f_bdc_field       USING 'LFA1-KUNNR'
-                                      wa_file-kunnr.        "'200050'.
-        PERFORM f_bdc_field       USING 'LFA1-VBUND'
-                                      wa_file-vbund.                              "''.
-        PERFORM f_bdc_field       USING 'LFA1-KONZS'
-                                      wa_file-konzs.                              "'CORP1'.
-        PERFORM f_bdc_field       USING 'LFA1-FISKN'
-                                      wa_file-fiskn.                              "''.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0130'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFA1-LNRZA'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '=ENTR'.
-
-        IF wa_file-lnrza IS NOT INITIAL.
-          PERFORM f_bdc_field       USING 'LFA1-LNRZA'
-                                        wa_file-lnrza.                              "'200000015'.
-        ENDIF.
-
-        PERFORM f_bdc_field       USING 'LFBK-BANKS(01)'
-                                      wa_file-banks.                              "'IN'.
-        PERFORM f_bdc_field       USING 'LFBK-BANKL(01)'
-                                      wa_file-bankl.                              "'HSBC0400002'.
-        PERFORM f_bdc_field       USING 'LFBK-BANKN(01)'
-                                      wa_file-bankn.                              "'123456789'.
-        PERFORM f_bdc_field       USING 'LFBK-KOINH(01)'
-                                      wa_file-koinh.                              "'BASF -YPC COMPANY LI'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0130'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFBK-BANKS(01)'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '=ENTR'.
-
-        IF wa_file-lnrza IS NOT INITIAL.
-          PERFORM f_bdc_field       USING 'LFA1-LNRZA'
-                                        wa_file-lnrza.                              "'200000015'.
-        ENDIF.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0380'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'KNVK-NAMEV(01)'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '=ENTR'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0210'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFB1-PERNR'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-        PERFORM f_bdc_field       USING 'LFB1-AKONT'
-                                      wa_file-akont.        "'1360003'.
-        PERFORM f_bdc_field       USING 'LFB1-FDGRV'
-                                      wa_file-fdgrv.                              "'VD'.
-        PERFORM f_bdc_field       USING 'LFB1-ALTKN'
-                                      wa_file-altkn.        "'12345'.
-
-        IF wa_file-pernr IS NOT INITIAL.
-          PERFORM f_bdc_field       USING 'LFB1-PERNR'
-                                        wa_file-pernr.                              "''.
-        ELSE.
-          PERFORM f_bdc_field       USING 'LFB1-PERNR'
-                                          ''.
-        ENDIF.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0215'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFB1-ZGRUP'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-        PERFORM f_bdc_field       USING 'LFB1-ZTERM'
-                                      wa_file-zterm.                              "'Z008'.
-        PERFORM f_bdc_field       USING 'LFB1-REPRF'
-                                      wa_file-reprf.                              "'X'.
-        PERFORM f_bdc_field       USING 'LFB1-ZWELS'
-                                      wa_file-zwels.                              "'N'.
-        PERFORM f_bdc_field       USING 'LFB1-ZAHLS'
-                                      wa_file-zahls.                              "''.
-        PERFORM f_bdc_field       USING 'LFB1-HBKID'
-                                      wa_file-hbkid.                              "'HD100'.
-        PERFORM f_bdc_field       USING 'LFB1-ZGRUP'
-                                      wa_file-zgrup.                              "'01'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0220'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFB5-MAHNA'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0610'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '=ENTR'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFB1-QLAND'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0310'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'LFM1-PLIFZ'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '/00'.
-        PERFORM f_bdc_field       USING 'LFM1-WAERS'
-                                      wa_file-waers.                              "'INR'.
-        PERFORM f_bdc_field       USING 'LFM1-ZTERM'
-                                      wa_file-zterm.                              "'Z008'.
-        PERFORM f_bdc_field       USING 'LFM1-INCO1'
-                                      wa_file-inco1.                              "'CIF'.
-        PERFORM f_bdc_field       USING 'LFM1-INCO2'
-                                      wa_file-inco2.                              "'ABC'.
-        PERFORM f_bdc_field       USING 'LFM1-KALSK'
-                                      wa_file-kalsk.                              "'01'.
-        PERFORM f_bdc_field       USING 'LFM1-WEBRE'
-                                      wa_file-webre.                              "'X'.
-        PERFORM f_bdc_field       USING 'LFM1-LEBRE'
-                                      wa_file-lebre.                              "'X'.
-        PERFORM f_bdc_field       USING 'LFM1-EKGRP'
-                                      wa_file-ekgrp.                              "'001'.
-        PERFORM f_bdc_field       USING 'LFM1-PLIFZ'
-                                      wa_file-plifz.                              "'10'.
-
-        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0320'.
-        PERFORM f_bdc_field       USING 'BDC_CURSOR'
-                                      'WYT3-PARVW(01)'.
-        PERFORM f_bdc_field       USING 'BDC_OKCODE'
-                                      '=ENTR'.
-
-        CALL TRANSACTION 'XK01' USING ta_bdcdata  "#EC CI_USAGE_OK[2226131]
-               OPTIONS FROM wa_ctu MESSAGES INTO ta_mess.    "#EC CI_USAGE_OK[2265093]
-
-        PERFORM f_message_log.
+        " S/4HANA: was CALL TRANSACTION 'XK01' - the employee vendor is created
+        " as a business partner (a person).
+        PERFORM f_bp_create.
 
 *   BOC BY Aishwarya - 8000003767 - 09.04.2025
       ELSEIF ta_update IS NOT INITIAL OR ta_create IS NOT INITIAL.
@@ -695,36 +1106,9 @@ FORM f_runbdc.
 *            lv_banka = lv_bankl(4).
 
 *   BOC BY Aishwarya - 8000003767 - 16.04.2025
-            PERFORM bdc_dynpro      USING 'SAPMF02K' '0106'.
-            PERFORM bdc_field       USING 'BDC_CURSOR'
-                                          'RF02K-D0215'.
-            PERFORM bdc_field       USING 'BDC_OKCODE'
-                                          '/00'.
-            PERFORM bdc_field       USING 'RF02K-LIFNR'
-                                          wa_file-lifnr.
-            PERFORM bdc_field       USING 'RF02K-BUKRS'
-                                          wa_file-bukrs.
-            PERFORM bdc_field       USING 'RF02K-D0130'
-                                          'X'.
-            PERFORM bdc_field       USING 'RF02K-D0215'
-                                          'X'.
-            PERFORM bdc_dynpro      USING 'SAPMF02K' '0130'.
-            PERFORM bdc_field       USING 'BDC_CURSOR'
-                                          'LFBK-BANKN(01)'.
-            PERFORM bdc_field       USING 'BDC_OKCODE'
-                                          '=UPDA'.
-            PERFORM bdc_field       USING 'LFBK-BANKS(01)'
-                                          wa_file-banks.
-            PERFORM bdc_field       USING 'LFBK-BANKL(01)'
-                                          wa_file-bankl.
-            PERFORM bdc_field       USING 'LFBK-BANKN(01)'
-                                          wa_file-bankn.
-*   EOC BY Aishwarya - 8000003767 - 16.04.2025
-
-            CALL TRANSACTION 'FK02' USING ta_bdcdata_update "#EC CI_USAGE_OK[2226131]
-                  OPTIONS FROM wa_ctu MESSAGES INTO ta_mess_update.   "#EC CI_USAGE_OK[2265093]
-
-            PERFORM f_message_log_update.
+            " S/4HANA: was CALL TRANSACTION 'FK02' - the bank account is put on
+            " the business partner.
+            PERFORM f_bp_update USING wa_update-lifnr.
 
 *          PERFORM send_email.                                                               "Commented BY Aishwarya - 8000003767 - 07.04.2025
 *          REFRESH: ta_bdcdata[], ta_mess[], ta_mess_update[], ta_bdcdata_update[].
@@ -750,66 +1134,6 @@ FORM f_runbdc.
 
 ENDFORM.
 
-*&---------------------------------------------------------------------*
-*&      Form  F_MESSAGE_LOG
-*&---------------------------------------------------------------------*
-*       text IT WILL GIVE THE MESSAGE DESCRIPTION IN LOG TABLE
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM f_message_log.
-  CONSTANTS: lc_s TYPE char1 VALUE 'S',
-             lc_e TYPE char1 VALUE 'E'.
-
-  DATA: lwa_mess LIKE LINE OF ta_mess,
-        lv_str   TYPE string.
-
-  LOOP AT ta_mess INTO lwa_mess.
-    IF NOT ( lwa_mess-msgtyp = lc_s OR lwa_mess-msgtyp = lc_e ).
-      CONTINUE.
-    ENDIF.
-
-    CALL FUNCTION 'FORMAT_MESSAGE'
-      EXPORTING
-        id        = lwa_mess-msgid
-        lang      = lwa_mess-msgspra
-        no        = lwa_mess-msgnr
-        v1        = lwa_mess-msgv1
-        v2        = lwa_mess-msgv2
-        v3        = lwa_mess-msgv3
-        v4        = lwa_mess-msgv4
-      IMPORTING
-        msg       = lv_str
-      EXCEPTIONS
-        not_found = 1
-        OTHERS    = 2.
-
-*   BOC BY Aishwarya - 8000003767 - 09.04.2025
-    IF lv_str IS NOT INITIAL.
-      wa_msg-emp_no    = wa_file-lifnr.
-      IF lwa_mess-msgtyp = lc_s AND ( lwa_mess-msgid = 'F2' AND lwa_mess-msgnr = '271' ).
-        wa_msg-status    = lv_status.
-      ELSE.
-        wa_msg-status    = co_failed.
-      ENDIF.
-
-      wa_msg-emp_name  = wa_file-name1.
-
-*      READ TABLE ta_panno INTO wa_panno WITH KEY lifnr = wa_msg-emp_no BINARY SEARCH.
-*      IF sy-subrc = 0.
-*        wa_msg-pan_no  = wa_panno-j_1ipanno.
-*      ENDIF.
-
-      wa_msg-remarks = lv_str.
-      APPEND wa_msg TO ta_msg.
-    ENDIF.
-
-    CLEAR : wa_msg, lv_str, lv_status.
-*   EOC BY Aishwarya - 8000003767 - 09.04.2025
-  ENDLOOP.
-
-ENDFORM.
 
 *&---------------------------------------------------------------------*
 *&      Form  F_CONVERT_WA
@@ -1185,7 +1509,7 @@ FORM f_mail_log USING u_subject.
 ENDFORM.
 
 FORM f_file_item USING u_tabix.
-  CONSTANTS: lc_# TYPE char1 VALUE '#'.         "','.
+  CONSTANTS: lc_sep TYPE char1 VALUE '#'.         "','.
 
   DATA: lv_cnt      TYPE p,
         lv_str      TYPE char30,
@@ -1202,9 +1526,9 @@ FORM f_file_item USING u_tabix.
     ASSIGN COMPONENT lv_cnt OF STRUCTURE wa_file TO <fs_val>.
     IF <fs_val> IS ASSIGNED.
       lv_str = CONV #( <fs_val> ). CONDENSE lv_str.
-      CONCATENATE ta_contents_bin lv_str INTO ta_contents_bin SEPARATED BY lc_#.
+      CONCATENATE ta_contents_bin lv_str INTO ta_contents_bin SEPARATED BY lc_sep.
     ELSE.
-      SHIFT ta_contents_bin LEFT DELETING LEADING lc_#.
+      SHIFT ta_contents_bin LEFT DELETING LEADING lc_sep.
       IF u_tabix NE 1.
         CONCATENATE cl_abap_char_utilities=>cr_lf ta_contents_bin INTO ta_contents_bin.
       ENDIF.
@@ -1218,26 +1542,7 @@ FORM f_file_item USING u_tabix.
 
 ENDFORM.
 
-*----------------------------------------------------------------------*
-*        Start new screen                                              *
-*----------------------------------------------------------------------*
-FORM f_bdc_dynpro USING u_program u_dynpro.
-  CLEAR ta_bdcdata.
-  ta_bdcdata-program  = u_program.
-  ta_bdcdata-dynpro   = u_dynpro.
-  ta_bdcdata-dynbegin = abap_true.                      "'X'
-  APPEND ta_bdcdata.
-ENDFORM.
 
-*----------------------------------------------------------------------*
-*        Insert field                                                  *
-*----------------------------------------------------------------------*
-FORM f_bdc_field USING u_fnam u_fval.
-  CLEAR ta_bdcdata.
-  ta_bdcdata-fnam = u_fnam.
-  ta_bdcdata-fval = u_fval.
-  APPEND ta_bdcdata.
-ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  SEND_EMAIL
 *&---------------------------------------------------------------------*
@@ -1901,164 +2206,6 @@ FORM f_convert_tax  USING uwa_line_tax CHANGING cwa_file_tax LIKE wa_file_tax.
 
 ENDFORM.
 *&---------------------------------------------------------------------*
-*&      Form  BDC_UPDATE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM bdc_update .
-
-  LOOP AT ta_file INTO wa_file.
-    READ TABLE ta_update INTO wa_update WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
-    wa_update-lifnr = |{ wa_update-lifnr ALPHA = IN }|.
-    IF sy-subrc = 0.
-      READ TABLE ta_lfbk INTO DATA(wa_lfbk) WITH KEY lifnr = wa_update-lifnr banks = wa_file-banks bankl = wa_file-bankl bankn = wa_file-bankn BINARY SEARCH.
-      IF sy-subrc <> 0.
-      ENDIF.
-    ENDIF.
-
-    PERFORM bdc_dynpro      USING 'SAPMF02K' '0106'.
-    PERFORM bdc_field       USING 'BDC_CURSOR'
-                                  'RF02K-D0215'.
-    PERFORM bdc_field       USING 'BDC_OKCODE'
-                                  '/00'.
-    PERFORM bdc_field       USING 'RF02K-LIFNR'
-                                  wa_file-lifnr.
-    PERFORM bdc_field       USING 'RF02K-BUKRS'
-                                  wa_file-bukrs.
-    PERFORM bdc_field       USING 'RF02K-D0130'
-                                  'X'.
-    PERFORM bdc_field       USING 'RF02K-D0215'
-                                  'X'.
-    PERFORM bdc_dynpro      USING 'SAPMF02K' '0130'.
-    PERFORM bdc_field       USING 'BDC_CURSOR'
-                                  wa_file-bankn.
-    PERFORM bdc_field       USING 'BDC_OKCODE'
-                                  '=UPDA'.
-    PERFORM bdc_field       USING 'LFBK-BANKL(01)'
-                                  wa_file-bankl.
-    PERFORM bdc_field       USING 'LFBK-BANKN(01)'
-                                  wa_file-bankn.
-    PERFORM bdc_dynpro      USING 'SAPLBANK' '0100'.
-    PERFORM bdc_field       USING 'BDC_CURSOR'
-                                  'BNKA-BANKA'.
-    PERFORM bdc_field       USING 'BDC_OKCODE'
-                                  '=ENTR'.
-    PERFORM bdc_field       USING 'BNKA-BANKA'
-                                  'Axis Bank'.
-
-    CALL TRANSACTION 'FK02' USING ta_bdcdata_update "#EC CI_USAGE_OK[2226131]
-          OPTIONS FROM wa_ctu MESSAGES INTO ta_mess_update.  "#EC CI_USAGE_OK[2265093]
-
-
-*    PERFORM message_log_update.
-
-    CLEAR : wa_file, wa_update, wa_lfbk.
-  ENDLOOP.
-
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  BDC_DYNPRO
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_4651   text
-*      -->P_4652   text
-*----------------------------------------------------------------------*
-FORM bdc_dynpro  USING u_program1 u_dynpro1.
-  CLEAR ta_bdcdata_update.
-  ta_bdcdata_update-program  = u_program1.
-  ta_bdcdata_update-dynpro   = u_dynpro1.
-  ta_bdcdata_update-dynbegin  = abap_true.                      "'X'
-  APPEND ta_bdcdata_update.
-
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  BDC_FIELD
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*      -->P_4656   text
-*      -->P_4657   text
-*----------------------------------------------------------------------*
-FORM bdc_field  USING   u_fnam1 u_fval1.
-  CLEAR ta_bdcdata_update.
-  ta_bdcdata_update-fnam = u_fnam1.
-  ta_bdcdata_update-fval = u_fval1.
-  APPEND ta_bdcdata_update.
-ENDFORM.
-*&---------------------------------------------------------------------*
-*&      Form  F_MESSAGE_LOG_UPDATE
-*&---------------------------------------------------------------------*
-*       text
-*----------------------------------------------------------------------*
-*  -->  p1        text
-*  <--  p2        text
-*----------------------------------------------------------------------*
-FORM f_message_log_update .
-
-  CONSTANTS: lc_s TYPE char1 VALUE 'S',
-             lc_e TYPE char1 VALUE 'E'.
-
-  DATA: lwa_mess_update LIKE LINE OF ta_mess_update,
-        lv_str_update   TYPE string.
-
-  LOOP AT ta_mess_update INTO lwa_mess_update.
-    IF NOT ( lwa_mess_update-msgtyp = lc_s OR lwa_mess_update-msgtyp = lc_e ).
-      CONTINUE.
-    ENDIF.
-
-    CALL FUNCTION 'FORMAT_MESSAGE'
-      EXPORTING
-        id        = lwa_mess_update-msgid
-        lang      = lwa_mess_update-msgspra
-        no        = lwa_mess_update-msgnr
-        v1        = lwa_mess_update-msgv1
-        v2        = lwa_mess_update-msgv2
-        v3        = lwa_mess_update-msgv3
-        v4        = lwa_mess_update-msgv4
-      IMPORTING
-        msg       = lv_str_update
-      EXCEPTIONS
-        not_found = 1
-        OTHERS    = 2.
-
-    IF lv_str_update IS NOT INITIAL.
-      wa_msg_update-emp_no    = wa_file-lifnr.
-
-      IF lwa_mess_update-msgtyp = lc_s AND ( lwa_mess_update-msgid = 'F2' AND lwa_mess_update-msgnr = '056').
-        wa_msg_update-status    = lv_status.
-      ELSE.
-        wa_msg_update-status    = co_failed.
-      ENDIF.
-
-*      wa_msg_update-status    = lv_status.
-      wa_msg_update-emp_name  = wa_file-name1.
-
-*      READ TABLE ta_panno INTO wa_panno WITH KEY lifnr = wa_msg_update-emp_no BINARY SEARCH.
-*      IF sy-subrc = 0.
-*        wa_msg_update-pan_no  = wa_panno-j_1ipanno.
-*      ENDIF.
-      IF lwa_mess_update-msgid = 'F2' AND lwa_mess_update-msgnr = '056'.
-
-        wa_msg_update-remarks = 'Employee vendor Bank details are updated as per HRMS data'.
-
-      ELSE.
-        wa_msg_update-remarks = lv_str_update.
-
-      ENDIF.
-
-
-      APPEND wa_msg_update TO ta_msg_update.
-    ENDIF.
-
-    CLEAR : wa_msg_update, lv_str_update, lv_status.
-  ENDLOOP.
-
-ENDFORM.
-*&---------------------------------------------------------------------*
 *&      Form  SEND_EMAIL_NEW
 *&---------------------------------------------------------------------*
 *       text
@@ -2354,4 +2501,235 @@ FORM hide_sel_opt_interval.
   ENDIF.
 
 
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_HEADER
+*&---------------------------------------------------------------------*
+* S/4HANA conversion: which layout the file has, from its header line.
+* HRMS's own layout ("Employee vendor creation - mapping HRMS.xlsx") is
+* found by its column headings, in any order and with either spelling
+* (Employee_Code / Emp_Code, Bank_AcctNo / Bank_AccNo, ...); any other
+* file is the 50-column layout F_CONVERT_WA has always read.
+*----------------------------------------------------------------------*
+FORM f_header USING uv_line TYPE string.
+  DATA: lt_col  TYPE string_table,
+        lt_sep  TYPE string_table,
+        lv_best TYPE i,
+        lv_n    TYPE i.
+  CLEAR: gs_col, gv_layout, gv_sep.
+  gv_layout = co_lay_sap.
+  gv_sep    = '#'.
+  " The separator: the one the header line has most of.
+  lt_sep = VALUE #( ( `#` ) ( `,` ) ( `|` ) ( `;` ) ( |{ cl_abap_char_utilities=>horizontal_tab }| ) ).
+  LOOP AT lt_sep INTO DATA(lv_sep).
+    FIND ALL OCCURRENCES OF lv_sep IN uv_line MATCH COUNT lv_n.
+    IF lv_n > lv_best.
+      lv_best = lv_n.
+      gv_sep  = lv_sep.
+    ENDIF.
+  ENDLOOP.
+  PERFORM f_split USING uv_line gv_sep CHANGING lt_col.
+  LOOP AT lt_col INTO DATA(lv_col).
+    DATA(lv_ix) = sy-tabix.
+    DATA(lv_key) = to_upper( lv_col ).
+    REPLACE ALL OCCURRENCES OF PCRE '[^A-Z0-9]' IN lv_key WITH ``.
+    CASE lv_key.
+      WHEN 'EMPLOYEECODE' OR 'EMPCODE'.     gs_col-emp   = lv_ix.
+      WHEN 'SALUTATION'.                    gs_col-sal   = lv_ix.
+      WHEN 'FNAME' OR 'FIRSTNAME'.          gs_col-fname = lv_ix.
+      WHEN 'MNAME' OR 'MIDDLENAME'.         gs_col-mname = lv_ix.
+      WHEN 'LNAME' OR 'LASTNAME'.           gs_col-lname = lv_ix.
+      WHEN 'EMPLOYEENAME' OR 'EMPNAME'.     gs_col-name  = lv_ix.
+      WHEN 'BANKACCTNO' OR 'BANKACCNO'.     gs_col-acct  = lv_ix.
+      WHEN 'BANKIFSC'.                      gs_col-ifsc  = lv_ix.
+      WHEN 'BANKCOUNTRY'.                   gs_col-bctry = lv_ix.
+      WHEN 'MOBILENO'.                      gs_col-mob   = lv_ix.
+      WHEN 'FUNCTION'.                      gs_col-func  = lv_ix.
+      WHEN 'EMAILADDRESS'.                  gs_col-mail  = lv_ix.
+      WHEN 'EMAIL'.                         gs_col-mail2 = lv_ix.
+    ENDCASE.
+  ENDLOOP.
+  IF gs_col-emp IS INITIAL.
+    gv_sep = '#'.                         " the 50-column layout
+    RETURN.
+  ENDIF.
+  gv_layout = co_lay_hrms.
+  " What a vendor cannot be created without.
+  DATA(lt_need) = VALUE string_table(
+    ( COND #( WHEN gs_col-name IS INITIAL AND gs_col-lname IS INITIAL THEN `Employee_Name` ) )
+    ( COND #( WHEN gs_col-acct IS INITIAL THEN `Bank_AcctNo` ) )
+    ( COND #( WHEN gs_col-ifsc IS INITIAL THEN `Bank IFSC` ) ) ).
+  DELETE lt_need WHERE table_line IS INITIAL.
+  IF lt_need IS NOT INITIAL.
+    wa_msg-status  = co_failed.
+    wa_msg-remarks = |HRMS file has no column { concat_lines_of( table = lt_need sep = `, ` ) } - | &&
+                     |see "Employee vendor creation - mapping HRMS"|.
+    APPEND wa_msg TO ta_msg.
+    CLEAR wa_msg.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_SPLIT
+*&---------------------------------------------------------------------*
+* One line into its columns. A column in double quotes may hold the
+* separator ("Lower Parel, Mumbai"); "" inside quotes is a quote.
+*----------------------------------------------------------------------*
+FORM f_split USING uv_line TYPE string uv_sep TYPE string CHANGING ct_col TYPE string_table.
+  CLEAR ct_col.
+  IF uv_line NS '"'.
+    SPLIT uv_line AT uv_sep INTO TABLE ct_col.
+    RETURN.
+  ENDIF.
+  DATA: lv_cur TYPE string,
+        lv_q   TYPE abap_bool,
+        lv_i   TYPE i,
+        lv_c   TYPE string.
+  DATA(lv_len) = strlen( uv_line ).
+  WHILE lv_i < lv_len.
+    lv_c = substring( val = uv_line off = lv_i len = 1 ).
+    IF lv_c = '"'.
+      IF lv_q = abap_true AND lv_i + 1 < lv_len.
+        IF substring( val = uv_line off = lv_i + 1 len = 1 ) = '"'.
+          lv_cur = lv_cur && '"'.
+          lv_i = lv_i + 2.
+          CONTINUE.
+        ENDIF.
+      ENDIF.
+      lv_q = xsdbool( lv_q = abap_false ).
+    ELSEIF lv_c = uv_sep AND lv_q = abap_false.
+      APPEND lv_cur TO ct_col.
+      CLEAR lv_cur.
+    ELSE.
+      lv_cur = lv_cur && lv_c.
+    ENDIF.
+    lv_i = lv_i + 1.
+  ENDWHILE.
+  APPEND lv_cur TO ct_col.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_COL
+*&---------------------------------------------------------------------*
+FORM f_col USING it_col TYPE string_table uv_ix TYPE i CHANGING cv_val TYPE any.
+  CLEAR cv_val.
+  IF uv_ix > 0.
+    READ TABLE it_col INTO DATA(lv_v) INDEX uv_ix.
+    IF sy-subrc = 0.
+      cv_val = condense( lv_v ).
+    ENDIF.
+  ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_CONVERT_HRMS
+*&---------------------------------------------------------------------*
+* One line of the HRMS file into the vendor record, as sheet "expected
+* output file for upload" of "Employee vendor creation - mapping
+* HRMS.xlsx" lays it down: the columns HRMS sends, the rest fixed.
+*----------------------------------------------------------------------*
+FORM f_convert_hrms USING uv_line TYPE string CHANGING cwa_file LIKE wa_file.
+  DATA lt_col TYPE string_table.
+  CLEAR cwa_file.
+  PERFORM f_split USING uv_line gv_sep CHANGING lt_col.
+  PERFORM f_col USING lt_col gs_col-emp   CHANGING cwa_file-lifnr.      " LFA1 / LFB1 - LIFNR
+  PERFORM f_col USING lt_col gs_col-sal   CHANGING cwa_file-title_medi. " LFA1 - ANRED
+  PERFORM f_col USING lt_col gs_col-fname CHANGING cwa_file-fname.      " person: first name
+  PERFORM f_col USING lt_col gs_col-mname CHANGING cwa_file-mname.      "         middle name
+  PERFORM f_col USING lt_col gs_col-lname CHANGING cwa_file-lname.      "         last name
+  PERFORM f_col USING lt_col gs_col-name  CHANGING cwa_file-name1.      " LFA1 - NAME1
+  IF cwa_file-name1 IS INITIAL.
+    cwa_file-name1 = condense( |{ cwa_file-fname } { cwa_file-mname } { cwa_file-lname }| ).
+  ENDIF.
+  cwa_file-sort1      = cwa_file-name1.                                 " LFA1 - SORTL
+  cwa_file-bukrs      = co_hrms_bukrs.                                  " LFB1 - BUKRS
+  cwa_file-ktokk      = co_hrms_ktokk.                                  " LFA1 - KTOKK
+  cwa_file-country    = co_hrms_land.                                   " LFA1 - LAND1
+  cwa_file-langu      = co_hrms_langu.                                  " LFA1 - SPRAS
+  PERFORM f_col USING lt_col gs_col-mob   CHANGING cwa_file-tel_number. " LFA1 - TELF1
+  PERFORM f_col USING lt_col gs_col-func  CHANGING cwa_file-konzs.      " LFA1 - KONZS
+  cwa_file-konzs      = to_upper( cwa_file-konzs ).
+  cwa_file-akont      = co_hrms_akont.                                  " LFB1 - AKONT
+  cwa_file-altkn      = cwa_file-lifnr.                                 " LFB1 - ALTKN
+  cwa_file-reprf      = abap_true.                                      " LFB1 - REPRF
+  cwa_file-zwels      = co_hrms_zwels.                                  " LFB1 - ZWELS
+  PERFORM f_col USING lt_col gs_col-mail  CHANGING cwa_file-smtp_addr.  " ADR6 - SMTP_ADDR
+  IF cwa_file-smtp_addr IS INITIAL.
+    PERFORM f_col USING lt_col gs_col-mail2 CHANGING cwa_file-smtp_addr.
+  ENDIF.
+  PERFORM f_col USING lt_col gs_col-bctry CHANGING cwa_file-banks.      " LFBK - BANKS
+  IF cwa_file-banks IS INITIAL.
+    cwa_file-banks    = co_hrms_land.
+  ENDIF.
+  PERFORM f_col USING lt_col gs_col-ifsc  CHANGING cwa_file-bankl.      " LFBK - BANKL
+  cwa_file-bankl      = to_upper( cwa_file-bankl ).
+  PERFORM f_col USING lt_col gs_col-acct  CHANGING cwa_file-bankn.      " LFBK - BANKN
+  cwa_file-koinh      = cwa_file-name1.                                 " LFBK - KOINH
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_BP_CREATE
+*&---------------------------------------------------------------------*
+* S/4HANA: was the XK01 batch input - the employee vendor is created as
+* a business partner (a person) through LCL_EMP_BP.
+*----------------------------------------------------------------------*
+FORM f_bp_create.
+  DATA: lt_error TYPE bapiret2_t,
+        lt_ok    TYPE bapiret2_t,
+        lv_lifnr TYPE lifnr.
+  lv_lifnr = |{ wa_file-lifnr ALPHA = IN }|.
+  lcl_emp_bp=>create( EXPORTING is_file  = wa_file
+                                iv_lifnr = lv_lifnr
+                      IMPORTING et_error = lt_error
+                                et_ok    = lt_ok ).
+  PERFORM f_bp_log USING co_create lt_error lt_ok CHANGING ta_msg.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_BP_UPDATE
+*&---------------------------------------------------------------------*
+* S/4HANA: was the FK02 batch input - the HRMS bank account replaces the
+* employee vendor's first one, on its business partner.
+*----------------------------------------------------------------------*
+FORM f_bp_update USING uv_lifnr TYPE lifnr.
+  DATA: lt_error TYPE bapiret2_t,
+        lt_ok    TYPE bapiret2_t.
+  lcl_emp_bp=>change_bank( EXPORTING is_file  = wa_file
+                                     iv_lifnr = uv_lifnr
+                           IMPORTING et_error = lt_error
+                                     et_ok    = lt_ok ).
+  PERFORM f_bp_log USING co_update lt_error lt_ok CHANGING ta_msg_update.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_BP_LOG
+*&---------------------------------------------------------------------*
+* The messages into the mail log, as F_MESSAGE_LOG(_UPDATE) put the
+* batch input's: status New / Modified when saved, Failed otherwise.
+*----------------------------------------------------------------------*
+FORM f_bp_log USING    uv_status TYPE clike
+                       it_error  TYPE bapiret2_t
+                       it_ok     TYPE bapiret2_t
+              CHANGING ct_msg    LIKE ta_msg.
+  DATA ls_msg TYPE ty_msg.
+  ls_msg-emp_no   = wa_file-lifnr.
+  ls_msg-emp_name = wa_file-name1.
+  IF it_error IS INITIAL AND it_ok IS NOT INITIAL.
+    LOOP AT it_ok INTO DATA(ls_ok).
+      ls_msg-status  = uv_status.
+      ls_msg-remarks = ls_ok-message.
+      APPEND ls_msg TO ct_msg.
+    ENDLOOP.
+    RETURN.
+  ENDIF.
+  IF it_error IS INITIAL.
+    ls_msg-status  = co_failed.
+    ls_msg-remarks = 'Not saved - no message was returned'.
+    APPEND ls_msg TO ct_msg.
+    RETURN.
+  ENDIF.
+  LOOP AT it_error INTO DATA(ls_err).
+    ls_msg-status  = co_failed.
+    ls_msg-remarks = ls_err-message.
+    IF ls_msg-remarks IS INITIAL AND ls_err-id IS NOT INITIAL.
+      MESSAGE ID ls_err-id TYPE 'S' NUMBER ls_err-number
+              WITH ls_err-message_v1 ls_err-message_v2 ls_err-message_v3 ls_err-message_v4
+              INTO ls_msg-remarks.
+    ENDIF.
+    APPEND ls_msg TO ct_msg.
+  ENDLOOP.
 ENDFORM.

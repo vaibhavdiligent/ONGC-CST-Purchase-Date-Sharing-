@@ -14,7 +14,7 @@
    <TPOOL>
     <item>
      <ID>R</ID>
-     <ENTRY>Include ZFI_EMP_UPLD</ENTRY>
+     <ENTRY>Employee vendor upload from HRMS</ENTRY>
      <LENGTH>70</LENGTH>
     </item>
    </TPOOL>
