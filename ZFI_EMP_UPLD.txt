@@ -1,0 +1,2357 @@
+*----------------------------------------------------------------------*
+* Program
+* Title             : ZFI_EMP_UPLD
+* Author            : Rahul Magdum
+* Program Type      : BDC Upload Program with file using interface
+* Creation Date     : <23-03-2018>
+* Transaction       :
+* Functional design : <FI/089>
+* Technical design  :
+* Change request    : 8000004225
+* Transport number  : CRDK953268
+* Description       : Vendor Master Upload
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : 07.01.2025
+* Author          : Shubham Mishra
+* Change request  : 8000003767
+* Transport number: CRDK994198
+* Description     : Error log via emai functionality .
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : 04.04.2025 14.04.2025 16.04.2025 24.04.2025
+*                   25.04.2025
+* Author          : Aishwarya Patil
+* Change request  : 8000003767
+* Transport number: CRDK99539, CRDK995540, CRDK995566 CRDK995694
+*                   CRDK995728
+* Description     : Employee Vendor Creation
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : 17.03.2026
+* Author          : Prashanti Pandaram
+* Change request  : 8000003767
+* Transport number: CRDK9A0094
+* Description     : Bank Key Creation
+*----------------------------------------------------------------------*
+
+
+REPORT zfi_emp_upld NO STANDARD PAGE HEADING LINE-SIZE 255.
+
+TYPE-POOLS: truxs, slis.
+TABLES: adr6.
+
+*----------------------------------------------------------------------*
+*  T Y P E S                                                           *
+*----------------------------------------------------------------------*
+TYPES: BEGIN OF ty_file,
+         lifnr      TYPE rf02k-lifnr,
+         bukrs      TYPE rf02k-bukrs,
+         ekorg      TYPE rf02k-ekorg,
+         ktokk      TYPE rf02k-ktokk,
+         title_medi TYPE sza1_d0100-title_medi,
+         name1      TYPE addr1_data-name1,
+         name2      TYPE addr1_data-name2,
+         sort1      TYPE addr1_data-sort1,
+         str_suppl1 TYPE addr1_data-str_suppl1,
+         str_suppl2 TYPE addr1_data-str_suppl2,
+         street     TYPE addr1_data-street,
+         city2      TYPE addr1_data-city2,
+         post_code1 TYPE addr1_data-post_code1,
+         city1      TYPE addr1_data-city1,
+         country    TYPE addr1_data-country,
+         region     TYPE addr1_data-region,
+         langu      TYPE addr1_data-langu,
+         tel_number TYPE sza1_d0100-tel_number,
+         mob_number TYPE sza1_d0100-mob_number,
+         fax_number TYPE sza1_d0100-fax_number,
+         smtp_addr  TYPE sza1_d0100-smtp_addr,  "21
+         kunnr      TYPE lfa1-kunnr,
+         vbund      TYPE lfa1-vbund,
+         konzs      TYPE lfa1-konzs,
+         fiskn      TYPE lfa1-fiskn,
+         lnrza      TYPE lfa1-lnrza,
+         banks      TYPE lfbk-banks,
+         bankl      TYPE lfbk-bankl,
+         bankn      TYPE lfbk-bankn,
+         koinh      TYPE lfbk-koinh,
+         akont      TYPE lfb1-akont,
+         fdgrv      TYPE lfb1-fdgrv,
+         altkn      TYPE lfb1-altkn,
+         pernr      TYPE lfb1-pernr,
+         zterm      TYPE lfb1-zterm,
+         reprf      TYPE lfb1-reprf,
+         zwels      TYPE lfb1-zwels,
+         zahls      TYPE lfb1-zahls,
+         hbkid      TYPE lfb1-hbkid,
+         zgrup      TYPE lfb1-zgrup,
+         waers      TYPE lfm1-waers,
+         inco1      TYPE lfm1-inco1,                    "LFM1-ZTERM,
+         inco2      TYPE lfm1-inco2,
+         kalsk      TYPE lfm1-kalsk,
+         webre      TYPE lfm1-webre,
+         lebre      TYPE lfm1-lebre,
+         ekgrp      TYPE lfm1-ekgrp,
+         plifz      TYPE lfm1-plifz,
+         j_1icstno  TYPE j_1icstno,
+         j_1ilstno  TYPE j_1ilstno,
+       END OF ty_file,
+
+*   BOC BY Aishwarya - 8000003767 - 07.04.2025
+       BEGIN OF ty_final_dpr,
+         lifnr(10) TYPE c,
+       END OF ty_final_dpr,
+
+       BEGIN OF ty_file_dpr,
+         buzei     TYPE string,
+         bldat     TYPE string,
+         blart     TYPE string,
+         bukrs     TYPE string,
+         event_dt  TYPE string,
+         apr_dt    TYPE string,
+         inv_sb_dt TYPE string,
+         budat     TYPE string,
+         waers     TYPE string,
+         bktxt     TYPE string,
+         kursf     TYPE string,
+         xblnr     TYPE string,
+         umskz     TYPE string,
+         lifnr(10) TYPE c,
+         dmbtr     TYPE string,
+         zfbdt     TYPE string,
+         prctr     TYPE string,
+         zuonr     TYPE string,
+         sgtxt     TYPE string,
+         bupla     TYPE string,
+         secoo     TYPE string,
+         zlspr     TYPE string,
+         zlsch     TYPE string,
+         xref1     TYPE string,
+         xref3     TYPE string,
+         qsshb     TYPE string,
+         witht     TYPE string,
+         qsskz     TYPE string,
+       END OF ty_file_dpr,
+
+       BEGIN OF ty_file_tax,
+         bukrs     TYPE string,
+         bktxt     TYPE string,
+         blart     TYPE string,
+         xblnr     TYPE string,
+         event_dt  TYPE string,
+         apr_dt    TYPE string,
+         inv_sb_dt TYPE string,
+         bldat     TYPE string,
+         budat     TYPE string,
+         lifnr(10) TYPE c,
+         bupla     TYPE string,
+         secco     TYPE string,
+         zterm     TYPE string,
+         zlspr     TYPE string,
+         zlsch     TYPE string,
+         dmbtr     TYPE string,
+         waers     TYPE string,
+         xmwst     TYPE string,
+         bstat     TYPE string,
+         name1     TYPE string,
+         rebzg     TYPE string,
+         buzei     TYPE string,
+         sgtxt     TYPE string,
+         wrbtr     TYPE string,
+         hsn_sac   TYPE string,
+         mwskz     TYPE string,
+         kschl     TYPE string,
+         mwsts     TYPE string,
+         wmwst     TYPE string,
+         kostl     TYPE string,
+         hkont     TYPE string,
+         qsshb     TYPE string,
+         witht     TYPE string,
+         qsskz     TYPE string,
+         prctr     TYPE string,
+         zuonr     TYPE string,
+       END OF ty_file_tax,
+
+       BEGIN OF ty_final_tax,
+         lifnr(10) TYPE c,
+       END OF ty_final_tax,
+
+       BEGIN OF ty_lfbk,
+         lifnr TYPE	lifnr,
+         banks TYPE banks,
+         bankl TYPE bankl,
+         bankn TYPE string,
+       END OF ty_lfbk,
+
+       BEGIN OF ty_lifnr,
+         lifnr TYPE	lifnr,
+         bukrs TYPE bukrs,
+       END OF ty_lifnr,
+
+       BEGIN OF ty_final,
+         lifnr TYPE	lifnr,
+       END OF ty_final,
+
+*       BEGIN OF ty_panno,
+*         lifnr     TYPE  lifnr,
+*         j_1ipanno TYPE j_1ipanno,
+*       END OF ty_panno,
+
+*       BEGIN OF ty_msg,
+*         emp_no  TYPE string,
+*         message TYPE string,
+*       END OF ty_msg.
+
+       BEGIN OF ty_msg,
+         emp_no   TYPE string,
+         status   TYPE string,
+         emp_name TYPE string,
+*         pan_no   TYPE string,
+         remarks  TYPE string,
+       END OF ty_msg.
+*   EOC BY Aishwarya - 8000003767 - 07.04.2025
+
+*----------------------------------------------------------------------*
+*  D A T A                                                             *
+*----------------------------------------------------------------------*
+DATA: ta_bdcdata        LIKE bdcdata OCCURS 0 WITH HEADER LINE,
+      ta_mess           LIKE bdcmsgcoll OCCURS 0 WITH HEADER LINE,
+      ta_msg            TYPE TABLE OF ty_msg,
+      wa_msg            TYPE ty_msg,
+      wa_ctu            TYPE ctu_params,
+*   BOC BY Aishwarya - 8000003767 - 07.04.2025
+      ta_bdcdata_update LIKE bdcdata OCCURS 0 WITH HEADER LINE,
+      ta_mess_update    LIKE bdcmsgcoll OCCURS 0 WITH HEADER LINE,
+      ta_msg_update     TYPE TABLE OF ty_msg,
+      wa_msg_update     TYPE ty_msg,
+      ta_msg_new        TYPE TABLE OF ty_msg,
+      wa_msg_new        TYPE ty_msg,
+      wa_ctu_update     TYPE ctu_params.
+*   EOC BY Aishwarya - 8000003767 - 07.04.2025
+
+DATA: ta_file         TYPE TABLE OF ty_file,
+      wa_file         TYPE ty_file,
+*   BOC BY Aishwarya - 8000003767 - 07.04.2025
+      ta_file_dpr     TYPE TABLE OF ty_file_dpr,
+      wa_file_dpr     TYPE ty_file_dpr,
+      ta_file_tax     TYPE TABLE OF ty_file_tax,
+      wa_file_tax     TYPE ty_file_tax,
+      ta_tax_update   TYPE TABLE OF ty_final_tax,
+      wa_tax_update   TYPE ty_final_tax,
+      wa_tax_create   TYPE ty_final_tax,
+      ta_tax_create   TYPE TABLE OF ty_final_tax,
+      ta_dpr_update   TYPE TABLE OF ty_final_dpr,
+      wa_dpr_update   TYPE ty_final_dpr,
+      ta_dpr_create   TYPE TABLE OF ty_final_dpr,
+      wa_dpr_create   TYPE ty_final_dpr,
+      ta_update       TYPE TABLE OF ty_final,
+      wa_update       TYPE ty_final,
+      ta_create       TYPE TABLE OF ty_final,
+      wa_create       TYPE ty_final,
+*      ta_panno        TYPE TABLE OF ty_panno,
+*      wa_panno        TYPE  ty_panno,
+      ta_lfbk         TYPE TABLE OF ty_lfbk,
+      ta_lifnr        TYPE TABLE OF ty_lifnr,
+      lv_status       TYPE string,
+      lv_bankl        TYPE string,
+      lv_banka        TYPE string,
+*   EOC BY Aishwarya - 8000003767 - 07.04.2025
+
+      ta_contents_bin TYPE STANDARD TABLE OF solisti1 WITH HEADER LINE.
+
+DATA: gv_update  TYPE char1 VALUE 'S',
+      gv_display TYPE char1 VALUE 'N',
+      gv_cnt     TYPE p.
+
+DATA: ta_fc TYPE slis_t_fieldcat_alv,
+      wa_fc TYPE slis_fieldcat_alv,
+      wa_lo TYPE slis_layout_alv.
+
+*----------------------------------------------------------------------*
+*  C O N S T A N T S                                                   *
+*----------------------------------------------------------------------*
+CONSTANTS: co_msgtyp    TYPE char1  VALUE 'S',
+           co_id_path   TYPE char20 VALUE 'ZFI_EMPEXP',
+           co_id_num1   TYPE numc3  VALUE 001,
+           co_id_num2   TYPE numc3  VALUE 002,
+           co_file      TYPE char40 VALUE 'Cipla_Active_Emp*',
+           co_id_em     TYPE char20 VALUE 'ZFI_EMPEM4',
+           co_pfile     TYPE char10 VALUE 'P_FILE',
+           co_create(3) VALUE 'New',
+           co_update(8) VALUE 'Modified',
+           co_failed(6) VALUE 'Failed'.
+
+*----------------------------------------------------------------------*
+*  S E L E C T - O P T I O N S  &  P A R A M E T E R S                 *
+*----------------------------------------------------------------------*
+PARAMETERS: p_file TYPE rlgrap-filename DEFAULT text-003. "OBLIGATORY.
+
+*   BOC BY Aishwarya - 8000003767 - 07.04.2025
+SELECTION-SCREEN: BEGIN OF BLOCK b1.
+*PARAMETERS: p_to TYPE string,
+*            p_cc TYPE string.
+
+SELECT-OPTIONS: s_to FOR adr6-smtp_addr NO INTERVALS,
+                s_cc FOR adr6-smtp_addr NO INTERVALS.
+"SOA by Prashanti for CRDK9A0094 on 17.03.2026
+PARAMETERS: p_bkey  RADIOBUTTON GROUP rad1 DEFAULT 'X' USER-COMMAND toggle,
+            p_empcd RADIOBUTTON GROUP rad1.
+"EOA by Prashanti for CRDK9A0094 on 17.03.2026
+
+SELECTION-SCREEN: END OF BLOCK b1.
+*   EOC BY Aishwarya - 8000003767 - 07.04.2025
+*---------------------------------------------------------------------*
+* I N I T I A L I Z A T I O N                                         *
+*---------------------------------------------------------------------*
+INITIALIZATION.
+  PERFORM hide_sel_opt_interval.
+
+  wa_ctu-updmode = gv_update.
+  wa_ctu-dismode = gv_display.
+  wa_ctu-defsize = abap_true.
+
+AT SELECTION-SCREEN OUTPUT.
+  LOOP AT SCREEN.
+    IF screen-name = co_pfile.
+      screen-input = 0.
+      screen-output = 1.
+      MODIFY SCREEN.
+    ENDIF.
+  ENDLOOP.
+
+*---------------------------------------------------------------------*
+* S T A R T - O F - S E L E C T I O N                                 *
+*---------------------------------------------------------------------*
+START-OF-SELECTION.
+  IF p_bkey EQ abap_true.
+    SUBMIT ZFFI_BANKKEY_CREATE WITH s_to = s_to
+                               WITH s_cc = s_cc
+                               AND RETURN.
+  ELSE.
+    PERFORM fetch_files.                        "Added by Aishwarya - 8000003767 - 04.04.2025
+    PERFORM f_read_n_run.
+  ENDIF.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_READ_N_RUN
+*&---------------------------------------------------------------------*
+*       text TO FETCH THE DATA FROM FILE ON APPLICATION SERVER AND
+*            EXECUTE BDC
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_read_n_run.
+  DATA: lwa_line       TYPE string,
+        lv_path        TYPE rcgiedial-iefile,
+        lv_file        TYPE rcgiedial-iefile,
+        lv_filename    TYPE rcgiedial-iefile,
+        lv_filecount   TYPE p,
+        lv_arcpath     TYPE rcgiedial-iefile,
+        lta_files      TYPE TABLE OF epsfili,
+        lwa_files      TYPE epsfili,
+        lv_len         TYPE p,
+        lv_header_skip TYPE abap_bool VALUE '0'. " Flag to skip the header line
+
+  CONSTANTS:
+    lc_ext     TYPE char4 VALUE '.csv',                  "'.csv',
+    lc_extstr1 TYPE char3 VALUE 'csv',                   "'csv',
+    lc_extstr2 TYPE char3 VALUE 'CSV'.                   "'CSV'.
+*  break abap4. "added by aasif  on 07.01.2025
+  IF sy-batch = abap_false.  " commented by SM for CR3767
+    MESSAGE text-004 TYPE co_msgtyp.
+    LEAVE LIST-PROCESSING.
+  ELSE.
+
+    "" FETCH FILE PATH FROM PARAM TABLE
+    SELECT SINGLE param_name FROM zparam_table INTO lv_path WHERE id_name EQ co_id_path AND id_number EQ co_id_num1.
+    IF sy-subrc = 0 AND lv_path IS NOT INITIAL.
+
+      CALL FUNCTION 'EPS_GET_DIRECTORY_LISTING'
+        EXPORTING
+          dir_name               = CONV epsf-epsdirnam( lv_path )
+        TABLES
+          dir_list               = lta_files
+        EXCEPTIONS
+          invalid_eps_subdir     = 1
+          sapgparam_failed       = 2
+          build_directory_failed = 3
+          no_authorization       = 4
+          read_directory_failed  = 5
+          too_many_read_errors   = 6
+          empty_directory_list   = 7
+          OTHERS                 = 8.
+
+      LOOP AT lta_files INTO lwa_files.         " FOR MULTIPLE FILES TO BE PROCESSED INDIVIDUALLY
+        IF NOT ( lwa_files-name CP co_file ).
+          CONTINUE.
+        ENDIF.
+
+        lv_filecount = lv_filecount + 1.
+
+        "" REFRESH DATA FOR NEW LOOP PASS
+        CLEAR: lwa_line, lv_file, lv_filename, lv_arcpath, lv_len, ta_msg, ta_file.
+
+        "" CHECK THE EXTENSION AND ALLOW VALID EXTENSION FILES
+        SPLIT lwa_files-name AT '.' INTO DATA(lv_1) DATA(lv_2).
+
+        IF lv_2 IS NOT INITIAL.
+
+          "" SKIP THE FILE IF NOT TEXT FILE
+          IF lv_2 NE lc_extstr1 AND lv_2 NE lc_extstr2.
+            CONTINUE.
+          ENDIF.
+
+        ELSE.
+          "" SKIP THE FILE IF NO EXTENSION
+          CONTINUE.
+        ENDIF.
+
+*        LV_LEN = STRLEN( LV_FILE ) - 3.
+*        IF LV_FILE+LV_LEN(3) NE LC_EXTSTR1 AND LV_FILE+LV_LEN(3) NE LC_EXTSTR2.                   "" IF NO EXTENSION THEN ADD IT
+*          CONCATENATE LV_FILE LC_EXT INTO LV_FILE.
+*        ENDIF.
+
+        lv_file = lwa_files-name.
+
+        lv_filename = lv_file.
+        CONCATENATE lv_path lv_file INTO lv_file.
+
+        OPEN DATASET lv_file FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+        IF sy-subrc = 0.
+          DO.
+            READ DATASET lv_file INTO lwa_line.
+            IF sy-subrc EQ 0.
+*   BOC BY Aishwarya - 8000003767 - 08.04.2025
+              " Skip the first line (header) if not already skipped
+              IF lv_header_skip EQ '0'.
+                lv_header_skip = '1'. " Set flag to skip the next line
+                CONTINUE. " Skip processing for header line
+              ENDIF.
+*   EOC BY Aishwarya - 8000003767 - 08.04.2025
+              PERFORM f_convert_wa USING lwa_line CHANGING wa_file.
+              APPEND wa_file TO ta_file.
+            ELSE.
+              EXIT.
+            ENDIF.
+          ENDDO.
+
+          "" CLOSE THE FILE
+          CLOSE DATASET lv_file.
+
+          "" ARCHIVE FILE
+          lv_arcpath = lv_path.
+          PERFORM f_get_archive_path CHANGING lv_arcpath.
+
+          CONCATENATE lv_arcpath lv_filename INTO lv_arcpath.
+
+          PERFORM f_archive USING lv_file lv_arcpath.
+
+        ELSE.
+          wa_msg-remarks = text-005.
+          APPEND wa_msg TO ta_msg.
+          CLEAR: wa_msg.
+        ENDIF.
+
+        IF ta_msg IS INITIAL.
+          PERFORM f_runbdc.
+
+          IF ta_msg IS NOT INITIAL.
+            PERFORM f_mail_log USING lv_filename.
+          ENDIF.
+        ELSE.
+          PERFORM f_mail_log USING lv_filename.
+        ENDIF.
+      ENDLOOP.
+
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_RUNBDC
+*&---------------------------------------------------------------------*
+*       text TO EXECUTE BDC WITH DATA FROM FILE READ
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_runbdc.
+  LOOP AT ta_file INTO wa_file.
+
+*   BOC BY Aishwarya - 8000003767 - 07.04.2025
+    REFRESH: ta_bdcdata[], ta_mess[], ta_mess_update[], ta_bdcdata_update[].
+
+    IF ta_create IS NOT INITIAL OR ta_update IS NOT INITIAL.
+      READ TABLE ta_create INTO wa_create WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        wa_file-lifnr = wa_create-lifnr.
+        lv_status = co_create.
+*   EOC BY Aishwarya - 8000003767 - 07.04.2025
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0100'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'USE_ZAV'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM f_bdc_field       USING 'RF02K-LIFNR'
+                                      wa_file-lifnr.                              "'100000502'.
+        PERFORM f_bdc_field       USING 'RF02K-BUKRS'
+                                      wa_file-bukrs.                              "'1000'.
+        PERFORM f_bdc_field       USING 'RF02K-EKORG'
+                                      wa_file-ekorg.                              "'1000'.
+        PERFORM f_bdc_field       USING 'RF02K-KTOKK'
+                                      wa_file-ktokk.                              "'Z001'.
+        PERFORM f_bdc_field       USING 'USE_ZAV'
+                                      abap_true.                                  "'X'
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0111'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'SZA1_D0100-TITLE_MEDI'.
+        PERFORM f_bdc_field       USING 'SZA1_D0100-TITLE_MEDI'
+                                      wa_file-title_medi.                              "'COMPANY'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-NAME1'
+                                      wa_file-name1.                              "'BASF -YPC COMPANY LI'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-NAME2'
+                                      wa_file-name2.                              "'BASF'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-SORT1'
+                                      wa_file-sort1.                              "'BASF'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-STR_SUPPL1'
+                                      wa_file-str_suppl1.                              "'MUMBAI'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-STR_SUPPL2'
+                                      wa_file-str_suppl2.                              "'MUMBAI'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-STREET'
+                                      wa_file-street.                              "'UNDUSTRIAL CHEMICALS'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-CITY2'
+                                      wa_file-city2.                              "'MUMBAI'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-POST_CODE1'
+                                      wa_file-post_code1.   "'400018'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-CITY1'
+                                      wa_file-city1.                              "'MUMBAI'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-COUNTRY'
+                                      wa_file-country.                              "'IN'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-REGION'
+                                      wa_file-region.                              "'13'.
+        PERFORM f_bdc_field       USING 'ADDR1_DATA-LANGU'
+                                      wa_file-langu.                              "'EN'.
+        PERFORM f_bdc_field       USING 'SZA1_D0100-TEL_NUMBER'
+                                      wa_file-tel_number.   "'12345'.
+        PERFORM f_bdc_field       USING 'SZA1_D0100-MOB_NUMBER'
+                                      wa_file-mob_number.                              "'1234567890'.
+        PERFORM f_bdc_field       USING 'SZA1_D0100-FAX_NUMBER'
+                                      wa_file-fax_number.   "'123456'.
+        PERFORM f_bdc_field       USING 'SZA1_D0100-SMTP_ADDR'
+                                      wa_file-smtp_addr.                              "'NAVEEN@GMAIL.COM'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0120'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFA1-VBUND'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM f_bdc_field       USING 'LFA1-KUNNR'
+                                      wa_file-kunnr.        "'200050'.
+        PERFORM f_bdc_field       USING 'LFA1-VBUND'
+                                      wa_file-vbund.                              "''.
+        PERFORM f_bdc_field       USING 'LFA1-KONZS'
+                                      wa_file-konzs.                              "'CORP1'.
+        PERFORM f_bdc_field       USING 'LFA1-FISKN'
+                                      wa_file-fiskn.                              "''.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0130'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFA1-LNRZA'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '=ENTR'.
+
+        IF wa_file-lnrza IS NOT INITIAL.
+          PERFORM f_bdc_field       USING 'LFA1-LNRZA'
+                                        wa_file-lnrza.                              "'200000015'.
+        ENDIF.
+
+        PERFORM f_bdc_field       USING 'LFBK-BANKS(01)'
+                                      wa_file-banks.                              "'IN'.
+        PERFORM f_bdc_field       USING 'LFBK-BANKL(01)'
+                                      wa_file-bankl.                              "'HSBC0400002'.
+        PERFORM f_bdc_field       USING 'LFBK-BANKN(01)'
+                                      wa_file-bankn.                              "'123456789'.
+        PERFORM f_bdc_field       USING 'LFBK-KOINH(01)'
+                                      wa_file-koinh.                              "'BASF -YPC COMPANY LI'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0130'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFBK-BANKS(01)'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '=ENTR'.
+
+        IF wa_file-lnrza IS NOT INITIAL.
+          PERFORM f_bdc_field       USING 'LFA1-LNRZA'
+                                        wa_file-lnrza.                              "'200000015'.
+        ENDIF.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0380'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'KNVK-NAMEV(01)'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '=ENTR'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0210'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFB1-PERNR'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM f_bdc_field       USING 'LFB1-AKONT'
+                                      wa_file-akont.        "'1360003'.
+        PERFORM f_bdc_field       USING 'LFB1-FDGRV'
+                                      wa_file-fdgrv.                              "'VD'.
+        PERFORM f_bdc_field       USING 'LFB1-ALTKN'
+                                      wa_file-altkn.        "'12345'.
+
+        IF wa_file-pernr IS NOT INITIAL.
+          PERFORM f_bdc_field       USING 'LFB1-PERNR'
+                                        wa_file-pernr.                              "''.
+        ELSE.
+          PERFORM f_bdc_field       USING 'LFB1-PERNR'
+                                          ''.
+        ENDIF.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0215'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFB1-ZGRUP'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM f_bdc_field       USING 'LFB1-ZTERM'
+                                      wa_file-zterm.                              "'Z008'.
+        PERFORM f_bdc_field       USING 'LFB1-REPRF'
+                                      wa_file-reprf.                              "'X'.
+        PERFORM f_bdc_field       USING 'LFB1-ZWELS'
+                                      wa_file-zwels.                              "'N'.
+        PERFORM f_bdc_field       USING 'LFB1-ZAHLS'
+                                      wa_file-zahls.                              "''.
+        PERFORM f_bdc_field       USING 'LFB1-HBKID'
+                                      wa_file-hbkid.                              "'HD100'.
+        PERFORM f_bdc_field       USING 'LFB1-ZGRUP'
+                                      wa_file-zgrup.                              "'01'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0220'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFB5-MAHNA'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0610'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '=ENTR'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFB1-QLAND'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0310'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'LFM1-PLIFZ'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '/00'.
+        PERFORM f_bdc_field       USING 'LFM1-WAERS'
+                                      wa_file-waers.                              "'INR'.
+        PERFORM f_bdc_field       USING 'LFM1-ZTERM'
+                                      wa_file-zterm.                              "'Z008'.
+        PERFORM f_bdc_field       USING 'LFM1-INCO1'
+                                      wa_file-inco1.                              "'CIF'.
+        PERFORM f_bdc_field       USING 'LFM1-INCO2'
+                                      wa_file-inco2.                              "'ABC'.
+        PERFORM f_bdc_field       USING 'LFM1-KALSK'
+                                      wa_file-kalsk.                              "'01'.
+        PERFORM f_bdc_field       USING 'LFM1-WEBRE'
+                                      wa_file-webre.                              "'X'.
+        PERFORM f_bdc_field       USING 'LFM1-LEBRE'
+                                      wa_file-lebre.                              "'X'.
+        PERFORM f_bdc_field       USING 'LFM1-EKGRP'
+                                      wa_file-ekgrp.                              "'001'.
+        PERFORM f_bdc_field       USING 'LFM1-PLIFZ'
+                                      wa_file-plifz.                              "'10'.
+
+        PERFORM f_bdc_dynpro      USING 'SAPMF02K' '0320'.
+        PERFORM f_bdc_field       USING 'BDC_CURSOR'
+                                      'WYT3-PARVW(01)'.
+        PERFORM f_bdc_field       USING 'BDC_OKCODE'
+                                      '=ENTR'.
+
+        CALL TRANSACTION 'XK01' USING ta_bdcdata  "#EC CI_USAGE_OK[2226131]
+               OPTIONS FROM wa_ctu MESSAGES INTO ta_mess.    "#EC CI_USAGE_OK[2265093]
+
+        PERFORM f_message_log.
+
+*   BOC BY Aishwarya - 8000003767 - 09.04.2025
+      ELSEIF ta_update IS NOT INITIAL OR ta_create IS NOT INITIAL.
+        READ TABLE ta_update INTO wa_update WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
+        wa_update-lifnr = |{ wa_update-lifnr ALPHA = IN }|.
+        IF sy-subrc = 0.
+          READ TABLE ta_lfbk INTO DATA(wa_lfbk) WITH KEY lifnr = wa_update-lifnr banks = wa_file-banks bankl = wa_file-bankl bankn = wa_file-bankn BINARY SEARCH.
+          IF sy-subrc <> 0.
+            lv_status = co_update.
+
+*            lv_bankl = wa_file-bankl.
+*            lv_banka = lv_bankl(4).
+
+*   BOC BY Aishwarya - 8000003767 - 16.04.2025
+            PERFORM bdc_dynpro      USING 'SAPMF02K' '0106'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'RF02K-D0215'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '/00'.
+            PERFORM bdc_field       USING 'RF02K-LIFNR'
+                                          wa_file-lifnr.
+            PERFORM bdc_field       USING 'RF02K-BUKRS'
+                                          wa_file-bukrs.
+            PERFORM bdc_field       USING 'RF02K-D0130'
+                                          'X'.
+            PERFORM bdc_field       USING 'RF02K-D0215'
+                                          'X'.
+            PERFORM bdc_dynpro      USING 'SAPMF02K' '0130'.
+            PERFORM bdc_field       USING 'BDC_CURSOR'
+                                          'LFBK-BANKN(01)'.
+            PERFORM bdc_field       USING 'BDC_OKCODE'
+                                          '=UPDA'.
+            PERFORM bdc_field       USING 'LFBK-BANKS(01)'
+                                          wa_file-banks.
+            PERFORM bdc_field       USING 'LFBK-BANKL(01)'
+                                          wa_file-bankl.
+            PERFORM bdc_field       USING 'LFBK-BANKN(01)'
+                                          wa_file-bankn.
+*   EOC BY Aishwarya - 8000003767 - 16.04.2025
+
+            CALL TRANSACTION 'FK02' USING ta_bdcdata_update "#EC CI_USAGE_OK[2226131]
+                  OPTIONS FROM wa_ctu MESSAGES INTO ta_mess_update.   "#EC CI_USAGE_OK[2265093]
+
+            PERFORM f_message_log_update.
+
+*          PERFORM send_email.                                                               "Commented BY Aishwarya - 8000003767 - 07.04.2025
+*          REFRESH: ta_bdcdata[], ta_mess[], ta_mess_update[], ta_bdcdata_update[].
+            CLEAR : wa_create, wa_lfbk, wa_update, lv_status, lv_bankl, lv_banka.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    APPEND LINES OF ta_msg TO ta_msg_new.
+    APPEND LINES OF ta_msg_update TO ta_msg_new.
+
+  ENDLOOP.
+
+  SORT ta_msg_new BY emp_no.
+  DELETE ADJACENT DUPLICATES FROM ta_msg_new COMPARING emp_no.
+
+  IF ta_msg_new IS NOT INITIAL.
+    PERFORM send_email_new.
+  ENDIF.
+
+*   EOC BY Aishwarya - 8000003767 - 07.04.2025
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_MESSAGE_LOG
+*&---------------------------------------------------------------------*
+*       text IT WILL GIVE THE MESSAGE DESCRIPTION IN LOG TABLE
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_message_log.
+  CONSTANTS: lc_s TYPE char1 VALUE 'S',
+             lc_e TYPE char1 VALUE 'E'.
+
+  DATA: lwa_mess LIKE LINE OF ta_mess,
+        lv_str   TYPE string.
+
+  LOOP AT ta_mess INTO lwa_mess.
+    IF NOT ( lwa_mess-msgtyp = lc_s OR lwa_mess-msgtyp = lc_e ).
+      CONTINUE.
+    ENDIF.
+
+    CALL FUNCTION 'FORMAT_MESSAGE'
+      EXPORTING
+        id        = lwa_mess-msgid
+        lang      = lwa_mess-msgspra
+        no        = lwa_mess-msgnr
+        v1        = lwa_mess-msgv1
+        v2        = lwa_mess-msgv2
+        v3        = lwa_mess-msgv3
+        v4        = lwa_mess-msgv4
+      IMPORTING
+        msg       = lv_str
+      EXCEPTIONS
+        not_found = 1
+        OTHERS    = 2.
+
+*   BOC BY Aishwarya - 8000003767 - 09.04.2025
+    IF lv_str IS NOT INITIAL.
+      wa_msg-emp_no    = wa_file-lifnr.
+      IF lwa_mess-msgtyp = lc_s AND ( lwa_mess-msgid = 'F2' AND lwa_mess-msgnr = '271' ).
+        wa_msg-status    = lv_status.
+      ELSE.
+        wa_msg-status    = co_failed.
+      ENDIF.
+
+      wa_msg-emp_name  = wa_file-name1.
+
+*      READ TABLE ta_panno INTO wa_panno WITH KEY lifnr = wa_msg-emp_no BINARY SEARCH.
+*      IF sy-subrc = 0.
+*        wa_msg-pan_no  = wa_panno-j_1ipanno.
+*      ENDIF.
+
+      wa_msg-remarks = lv_str.
+      APPEND wa_msg TO ta_msg.
+    ENDIF.
+
+    CLEAR : wa_msg, lv_str, lv_status.
+*   EOC BY Aishwarya - 8000003767 - 09.04.2025
+  ENDLOOP.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_CONVERT_WA
+*&---------------------------------------------------------------------*
+*       text MAP APPLICATION SERVER FILE ROW IN WORK AREA FIELDS
+*----------------------------------------------------------------------*
+FORM f_convert_wa USING uwa_line CHANGING cwa_file LIKE wa_file.
+
+  DATA: lv_val1  TYPE char100,
+        lv_val2  TYPE char100,
+        lv_val3  TYPE char100,
+        lv_val4  TYPE char100,
+        lv_val5  TYPE char100,
+        lv_val6  TYPE char100,
+        lv_val7  TYPE char100,
+        lv_val8  TYPE char100,
+        lv_val9  TYPE char100,
+        lv_val10 TYPE char100,
+        lv_val11 TYPE char100,
+        lv_val12 TYPE char100,
+        lv_val13 TYPE char100,
+        lv_val14 TYPE char100,
+        lv_val15 TYPE char100,
+        lv_val16 TYPE char100,
+        lv_val17 TYPE char100,
+        lv_val18 TYPE char100,
+        lv_val19 TYPE char100,
+        lv_val20 TYPE char100,
+        lv_val21 TYPE char100,
+        lv_val22 TYPE char100,
+        lv_val23 TYPE char100,
+        lv_val24 TYPE char100,
+        lv_val25 TYPE char100,
+        lv_val26 TYPE char100,
+        lv_val27 TYPE char100,
+        lv_val28 TYPE char100,
+        lv_val29 TYPE char100,
+        lv_val30 TYPE char100,
+        lv_val31 TYPE char100,
+        lv_val32 TYPE char100,
+        lv_val33 TYPE char100,
+        lv_val34 TYPE char100,
+        lv_val35 TYPE char100,
+        lv_val36 TYPE char100,
+        lv_val37 TYPE char100,
+        lv_val38 TYPE char100,
+        lv_val39 TYPE char100,
+        lv_val40 TYPE char100,
+        lv_val41 TYPE char100,
+        lv_val42 TYPE char100,
+        lv_val43 TYPE char100,
+        lv_val44 TYPE char100,
+        lv_val45 TYPE char100,
+        lv_val46 TYPE char100,
+        lv_val47 TYPE char100,
+        lv_val48 TYPE char100,
+        lv_val49 TYPE char100,
+        lv_val50 TYPE char100.
+
+  SPLIT uwa_line AT '#'                                                                           "Changed BY Aishwarya - 8000003767 - 24.04.2025
+  INTO lv_val1  lv_val2  lv_val3  lv_val4  lv_val5  lv_val6  lv_val7  lv_val8  lv_val9  lv_val10
+       lv_val11 lv_val12 lv_val13 lv_val14 lv_val15 lv_val16 lv_val17 lv_val18 lv_val19 lv_val20
+       lv_val21 lv_val22 lv_val23 lv_val24 lv_val25 lv_val26 lv_val27 lv_val28 lv_val29 lv_val30
+       lv_val31 lv_val32 lv_val33 lv_val34 lv_val35 lv_val36 lv_val37 lv_val38 lv_val39 lv_val40
+       lv_val41 lv_val42 lv_val43 lv_val44 lv_val45 lv_val46 lv_val47 lv_val48 lv_val49 lv_val50.
+
+  cwa_file-lifnr      = lv_val1  .
+  cwa_file-bukrs      = lv_val2  .
+  cwa_file-ekorg      = lv_val3  .
+  cwa_file-ktokk      = lv_val4  .
+  cwa_file-title_medi = lv_val5  .
+  cwa_file-name1      = lv_val6  .
+  cwa_file-name2      = lv_val7  .
+  cwa_file-sort1      = lv_val8  .
+  cwa_file-str_suppl1 = lv_val9  .
+  cwa_file-str_suppl2 = lv_val10 .
+  cwa_file-street     = lv_val11 .
+  cwa_file-city2      = lv_val12 .
+  cwa_file-post_code1 = lv_val13 .
+  cwa_file-city1      = lv_val14 .
+  cwa_file-country    = lv_val15 .
+  cwa_file-region     = lv_val16 .
+  cwa_file-langu      = lv_val17 .
+  cwa_file-tel_number = lv_val18 .
+  cwa_file-mob_number = lv_val19 .
+  cwa_file-fax_number = lv_val20 .
+  cwa_file-smtp_addr  = lv_val21 .
+  cwa_file-kunnr      = lv_val22 .
+  cwa_file-vbund      = lv_val23 .
+  cwa_file-konzs      = lv_val24 .
+  cwa_file-fiskn      = lv_val25 .
+  cwa_file-lnrza      = lv_val26 .
+  cwa_file-banks      = lv_val27 .
+  cwa_file-bankl      = lv_val28 .
+  cwa_file-bankn      = lv_val29 .
+  cwa_file-koinh      = lv_val30 .
+  cwa_file-akont      = lv_val31 .
+  cwa_file-fdgrv      = lv_val32 .
+  cwa_file-altkn      = lv_val33 .
+  cwa_file-pernr      = lv_val34 .
+  cwa_file-zterm      = lv_val35 .
+  cwa_file-reprf      = lv_val36 .
+  cwa_file-zwels      = lv_val37 .
+  cwa_file-zahls      = lv_val38 .
+  cwa_file-hbkid      = lv_val39 .
+  cwa_file-zgrup      = lv_val40 .
+  cwa_file-waers      = lv_val41 .
+  cwa_file-inco1      = lv_val42 .
+  cwa_file-inco2      = lv_val43 .
+  cwa_file-kalsk      = lv_val44 .
+  cwa_file-webre      = lv_val45 .
+  cwa_file-lebre      = lv_val46 .
+  cwa_file-ekgrp      = lv_val47 .
+  cwa_file-plifz      = lv_val48 .
+  cwa_file-j_1icstno  = lv_val49 .
+  cwa_file-j_1ilstno  = lv_val50 .
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form F_GET_ARCHIVE_PATH
+*&---------------------------------------------------------------------*
+*       text TO GET THE ARCHIVE FOLDER PATH ON APPLICATION SEREVR
+*----------------------------------------------------------------------*
+FORM f_get_archive_path CHANGING c_arcpath.
+  " Code Remediation S4 AL11 file path change **BEGIN OF CHANGE BY ABAP7 25.10.2026
+* CONSTANTS: lc_archive_folder TYPE char20 VALUE '\Archive\'.
+* DATA: lv_cnt   TYPE p,
+*       lv_whcnt TYPE p,
+*       lv_len   TYPE p,
+*       lv_level TYPE p,
+*       lv_check TYPE p,
+*       lv_str   TYPE char100 VALUE '0\'.
+*
+* lv_len = strlen( c_arcpath ).
+*
+* WHILE ( lv_whcnt <> lv_len ).
+*   IF c_arcpath+lv_whcnt(1) EQ '\'.
+*     lv_level = lv_level + 1.
+*   ENDIF.
+  CONSTANTS: lc_archive_folder TYPE char20 VALUE '/Archive/'.
+  DATA: lv_cnt   TYPE p,
+        lv_whcnt TYPE p,
+        lv_len   TYPE p,
+        lv_level TYPE p,
+        lv_check TYPE p,
+        lv_str   TYPE char100 VALUE '0/'.
+
+  lv_len = strlen( c_arcpath ).
+
+  WHILE ( lv_whcnt <> lv_len ).
+    IF c_arcpath+lv_whcnt(1) EQ '/'.
+      lv_level = lv_level + 1.
+    ENDIF.
+  " Code Remediation S4 AL11 file path change **END OF CHANGE BY ABAP7 25.10.2026
+
+    lv_whcnt = lv_whcnt + 1.
+  ENDWHILE.
+
+  lv_level = lv_level - 1.
+
+  CLEAR: lv_whcnt.
+  WHILE ( lv_whcnt <> lv_len ).
+    " Code Remediation S4 AL11 file path change **BEGIN OF CHANGE BY ABAP7 25.10.2026
+*   IF c_arcpath+lv_whcnt(1) EQ '\'.
+*     lv_check = lv_check + 1.
+*
+*     IF lv_level = lv_check.
+*       CONCATENATE c_arcpath+0(lv_whcnt) lc_archive_folder INTO lv_str.
+*       EXIT.
+*     ENDIF.
+*   ENDIF.
+    IF c_arcpath+lv_whcnt(1) EQ '/'.
+      lv_check = lv_check + 1.
+
+      IF lv_level = lv_check.
+        CONCATENATE c_arcpath+0(lv_whcnt) lc_archive_folder INTO lv_str.
+        EXIT.
+      ENDIF.
+    ENDIF.
+    " Code Remediation S4 AL11 file path change **END OF CHANGE BY ABAP7 25.10.2026
+
+    lv_whcnt = lv_whcnt + 1.
+  ENDWHILE.
+
+  "" PASS ARCHIVE DIRECTORY PATH
+  c_arcpath = lv_str.
+
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form F_GET_ARCHIVE_PATH
+*&---------------------------------------------------------------------*
+*       text TO ARCHIVE THE FILE(ON APPL. SERVER) ONCE USED IN PROGRAM
+*----------------------------------------------------------------------*
+FORM f_archive USING u_file u_arcpath.
+  CALL FUNCTION 'ARCHIVFILE_SERVER_TO_SERVER'
+    EXPORTING
+      sourcepath       = CONV sapb-sappfad( u_file )
+      targetpath       = CONV sapb-sappfad( u_arcpath )
+    EXCEPTIONS
+      error_file       = 1
+      no_authorization = 2
+      OTHERS           = 3.
+
+  DELETE DATASET u_file.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  F_MAIL_LOG
+*&---------------------------------------------------------------------*
+*       text MAIL MESSAGE LOG TO EMAIL
+*----------------------------------------------------------------------*
+FORM f_mail_log USING u_subject.
+
+  DATA: lwa_vl_doc       TYPE sodocchgi1,
+        lta_packing_list TYPE STANDARD TABLE OF sopcklsti1 WITH HEADER LINE,
+        lta_receivers    TYPE STANDARD TABLE OF somlreci1 WITH HEADER LINE,
+        lta_body         TYPE TABLE OF solisti1 WITH HEADER LINE,
+        lv_email         TYPE char100,
+        lv_cc            TYPE char100,
+        lv_param         TYPE char100,
+        lv_str           TYPE char20,
+        lv_body_cnt1     TYPE p,
+        lv_start         TYPE p,
+        lv_end           TYPE p.
+
+  CONSTANTS: lc_dc_htm      TYPE sopcklsti1-doc_type    VALUE 'HTM',
+             lc_dc_xls      TYPE sopcklsti1-doc_type    VALUE 'XLS',
+             lc_dc_txt      TYPE sopcklsti1-doc_type    VALUE 'TXT',              "CSV',     "'
+             lc_vl_obj      TYPE sodocchgi1-obj_name    VALUE 'SAPRPT',
+             lc_sensi       TYPE sodocchgi1-sensitivty  VALUE 'F',
+             lc_pl_obj1     TYPE sopcklsti1-obj_name    VALUE 'INPUT_FILE',
+             lc_pl_objdesc1 TYPE sopcklsti1-obj_descr   VALUE 'Input File',
+             lc_pl_obj2     TYPE sopcklsti1-obj_name    VALUE 'MESSAGELOG',
+             lc_pl_objdesc2 TYPE sopcklsti1-obj_descr   VALUE 'Message Log',
+             lc_rectype     TYPE somlreci1-rec_type     VALUE 'U',
+             lc_comtype     TYPE somlreci1-com_type     VALUE 'INT',
+             lc_field1      TYPE char20                 VALUE 'Emp No.',
+             lc_field2      TYPE char20                 VALUE 'Message'.
+
+** START OF MESSAGE LOG ATTACHMENT PROCESSING
+  CLEAR: ta_contents_bin, ta_contents_bin[].
+
+  "" INPUT FILE
+  LOOP AT ta_file INTO wa_file.
+    PERFORM f_file_item USING sy-tabix.
+  ENDLOOP.
+
+  "" MESSAGE LOF FILE
+  CONCATENATE lc_field1
+              lc_field2
+  INTO ta_contents_bin-line SEPARATED BY cl_abap_char_utilities=>horizontal_tab.            "SEPARATED BY TAB
+
+  CONCATENATE ta_contents_bin cl_abap_char_utilities=>cr_lf INTO ta_contents_bin.           "LINE ENDED BY ENTER
+  APPEND ta_contents_bin.
+
+  LOOP AT ta_msg INTO wa_msg.
+    CONCATENATE wa_msg-emp_no
+                wa_msg-remarks
+    INTO ta_contents_bin-line SEPARATED BY cl_abap_char_utilities=>horizontal_tab.
+
+    CONCATENATE ta_contents_bin cl_abap_char_utilities=>cr_lf INTO ta_contents_bin.
+    APPEND ta_contents_bin.
+  ENDLOOP.
+
+** END OF MESSAGE LOG ATTACHMENT PROCESSING
+
+** MAIL BODY
+  lta_body-line = text-ml1.
+  APPEND lta_body. CLEAR: lta_body.
+
+  lta_body-line = text-ml2.
+  APPEND lta_body. CLEAR: lta_body.
+
+  lta_body-line = text-ml3.
+  APPEND lta_body. CLEAR: lta_body.
+
+** DOCUMENT DATA & SUBJECT
+  lwa_vl_doc-doc_size     = 5000.
+  lwa_vl_doc-obj_langu    = sy-langu.
+  lwa_vl_doc-obj_name     = lc_vl_obj.
+  lwa_vl_doc-sensitivty   = lc_sensi.
+  lwa_vl_doc-obj_descr    = u_subject.
+
+** PACKING LIST
+  DESCRIBE TABLE lta_body LINES lta_packing_list-body_num.
+  lta_packing_list-doc_type = lc_dc_htm.
+  lta_packing_list-transf_bin = space.
+  lta_packing_list-head_start = 1.
+  lta_packing_list-body_start = 1.
+  lta_packing_list-head_num = 0.
+  APPEND lta_packing_list.
+  CLEAR: lta_packing_list.
+
+  IF ta_contents_bin[] IS NOT INITIAL.
+    IF ta_file IS NOT INITIAL.
+      DESCRIBE TABLE ta_file LINES lv_body_cnt1.
+
+      lta_packing_list-doc_type   = lc_dc_txt.
+      lta_packing_list-transf_bin = abap_true.
+      lta_packing_list-head_start = 1.
+      lta_packing_list-head_num   = 0.
+      lta_packing_list-body_start = 1.
+      lta_packing_list-body_num   = lv_body_cnt1.
+      lta_packing_list-obj_name   = lc_pl_obj1.
+      lta_packing_list-obj_descr  = u_subject.
+      APPEND lta_packing_list.
+      CLEAR: lta_packing_list.
+    ENDIF.
+
+    IF ta_msg IS NOT INITIAL.
+      lv_start = lv_body_cnt1 + 1.
+      DESCRIBE TABLE ta_contents_bin LINES lv_end.
+
+      lta_packing_list-doc_type   = lc_dc_xls.
+      lta_packing_list-transf_bin = abap_true.
+      lta_packing_list-head_start = 1.
+      lta_packing_list-head_num   = 0.
+      lta_packing_list-body_start = lv_start.
+      lta_packing_list-body_num   = lv_end.
+      lta_packing_list-obj_name   = lc_pl_obj2.
+      lta_packing_list-obj_descr  = lc_pl_objdesc2.
+      APPEND lta_packing_list.
+      CLEAR: lta_packing_list.
+    ENDIF.
+  ENDIF.
+
+** RECEIVERS EMAIL
+  SELECT SINGLE param_name FROM zparam_table INTO lv_email WHERE id_name EQ co_id_em AND id_number EQ co_id_num1.
+  IF sy-subrc = 0 AND lv_email IS NOT INITIAL.
+    lta_receivers-receiver = lv_email.
+    lta_receivers-rec_type = lc_rectype.
+    lta_receivers-com_type = lc_comtype.
+    APPEND lta_receivers.
+    CLEAR: lta_receivers.
+  ENDIF.
+
+  SELECT SINGLE param_name FROM zparam_table INTO lv_cc WHERE id_name EQ co_id_em AND id_number EQ co_id_num2.
+  IF sy-subrc = 0 AND lv_cc IS NOT INITIAL.
+    lta_receivers-receiver = lv_cc.
+    lta_receivers-rec_type = lc_rectype.
+    lta_receivers-com_type = lc_comtype.
+    lta_receivers-copy     = abap_true.
+    APPEND lta_receivers.
+    CLEAR: lta_receivers.
+  ENDIF.
+
+  CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+    EXPORTING
+      document_data              = lwa_vl_doc
+      put_in_outbox              = abap_true
+      sender_address             = CONV soextreci1-receiver( sy-uname )
+      sender_address_type        = CONV soextreci1-adr_typ( lc_rectype )                           "'B'
+      commit_work                = abap_true
+    TABLES
+      packing_list               = lta_packing_list
+      contents_bin               = ta_contents_bin               "LTA_TEXT                      "
+      contents_txt               = lta_body
+      receivers                  = lta_receivers
+    EXCEPTIONS
+      too_many_receivers         = 1
+      document_not_sent          = 2
+      document_type_not_exist    = 3
+      operation_no_authorization = 4
+      parameter_error            = 5
+      x_error                    = 6
+      enqueue_error              = 7
+      OTHERS                     = 8.
+  IF sy-subrc <> 0.
+    MESSAGE text-006 TYPE co_msgtyp.
+  ENDIF.
+ENDFORM.
+
+FORM f_file_item USING u_tabix.
+  CONSTANTS: lc_# TYPE char1 VALUE '#'.         "','.
+
+  DATA: lv_cnt      TYPE p,
+        lv_str      TYPE char30,
+        lv_datatype TYPE char30.
+
+  FIELD-SYMBOLS: <fs_wa>  LIKE wa_file,
+                 <fs_val>.
+
+  CLEAR: ta_contents_bin.
+
+  DO.
+    lv_cnt = lv_cnt + 1.
+
+    ASSIGN COMPONENT lv_cnt OF STRUCTURE wa_file TO <fs_val>.
+    IF <fs_val> IS ASSIGNED.
+      lv_str = CONV #( <fs_val> ). CONDENSE lv_str.
+      CONCATENATE ta_contents_bin lv_str INTO ta_contents_bin SEPARATED BY lc_#.
+    ELSE.
+      SHIFT ta_contents_bin LEFT DELETING LEADING lc_#.
+      IF u_tabix NE 1.
+        CONCATENATE cl_abap_char_utilities=>cr_lf ta_contents_bin INTO ta_contents_bin.
+      ENDIF.
+      CONDENSE ta_contents_bin.
+      APPEND ta_contents_bin.
+      EXIT.
+    ENDIF.
+
+    UNASSIGN: <fs_val>.
+  ENDDO.
+
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*        Start new screen                                              *
+*----------------------------------------------------------------------*
+FORM f_bdc_dynpro USING u_program u_dynpro.
+  CLEAR ta_bdcdata.
+  ta_bdcdata-program  = u_program.
+  ta_bdcdata-dynpro   = u_dynpro.
+  ta_bdcdata-dynbegin = abap_true.                      "'X'
+  APPEND ta_bdcdata.
+ENDFORM.
+
+*----------------------------------------------------------------------*
+*        Insert field                                                  *
+*----------------------------------------------------------------------*
+FORM f_bdc_field USING u_fnam u_fval.
+  CLEAR ta_bdcdata.
+  ta_bdcdata-fnam = u_fnam.
+  ta_bdcdata-fval = u_fval.
+  APPEND ta_bdcdata.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_EMAIL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM send_email.
+*  IF ta_msg IS NOT INITIAL.
+*
+*    CLASS cl_abap_char_utilities DEFINITION LOAD.
+*
+*    CONSTANTS: con_tab  TYPE c VALUE cl_abap_char_utilities=>horizontal_tab,
+*               con_cret TYPE c VALUE cl_abap_char_utilities=>cr_lf.
+*
+*    DATA:   it_attach TYPE STANDARD TABLE OF solisti1 INITIAL SIZE 0
+*                    WITH HEADER LINE.
+*
+*    DATA:   it_message TYPE STANDARD TABLE OF solisti1 INITIAL SIZE 0
+*                    WITH HEADER LINE.
+*
+*    DATA: t_packing_list  LIKE sopcklsti1 OCCURS 0 WITH HEADER LINE,
+*          t_contents      LIKE solisti1 OCCURS 0 WITH HEADER LINE,
+*          t_receivers     LIKE somlreci1 OCCURS 0 WITH HEADER LINE,
+*          t_attachment    LIKE solisti1 OCCURS 0 WITH HEADER LINE,
+*          t_object_header LIKE solisti1 OCCURS 0 WITH HEADER LINE,
+*          w_cnt           TYPE i,
+*          w_sent_all(1)   TYPE c,
+*          w_doc_data      LIKE sodocchgi1,
+*          gd_error        TYPE sy-subrc,
+*          gd_reciever     TYPE sy-subrc.
+*
+*    DATA : lv_to TYPE string,
+*           lv_cc TYPE string.
+*
+*    TYPES : BEGIN OF ty_zparam_table,
+*              id_name    TYPE zparam_table-id_name,
+*              id_number  TYPE zparam_table-id_number,
+*              param_name TYPE zparam_table-param_name,
+*            END OF ty_zparam_table.
+*
+*    DATA : ta_param TYPE TABLE OF ty_zparam_table,
+*           wa_param TYPE          ty_zparam_table.
+*
+*    DATA : ta_param1 TYPE TABLE OF ty_zparam_table,
+*           wa_param1 TYPE          ty_zparam_table.
+*
+*    CONSTANTS : c_emp1 TYPE zparam_table-id_name VALUE 'ZFI_EMPEM1',
+*                c_emp2 TYPE zparam_table-id_name VALUE 'ZFI_EMPEM2'.
+*
+*
+*    """Load Heading in EXCEL Sheet
+*    it_attach-line = |{ it_attach-line }Employee No{ con_tab }|.
+*    it_attach-line = |{ it_attach-line }Message Description{ con_tab }|.
+*    it_attach-line = |{ con_cret }{ it_attach-line }|.
+*    APPEND it_attach.
+*    CLEAR it_attach.
+*
+*    """Load Items in Excel Sheet.
+*    LOOP AT ta_msg INTO wa_msg.
+*      it_attach-line = |{ it_attach-line }{ wa_msg-emp_no }{ con_tab }|.
+*      it_attach-line = |{ it_attach-line }{ wa_msg-remarks }{ con_tab }|.
+*
+*      it_attach-line = |{ con_cret }{ it_attach-line }|.
+*      APPEND it_attach.
+*      CLEAR it_attach.
+*    ENDLOOP.
+*
+*    """Mail Body Context
+*    it_message = 'Dear Sir/Madam'.
+*    APPEND it_message.
+*
+*    it_message = ''.
+*    APPEND it_message.
+*
+*    it_message = 'Please Find Log message.'.
+*    APPEND it_message.
+*
+*    it_message = ''.
+*    APPEND it_message.
+*
+*    it_message = ''.
+*    APPEND it_message.
+*
+*    it_message = 'Thanks & Regards,'.
+*    APPEND it_message.
+*
+*    it_message = ''.
+*    APPEND it_message.
+*
+** Fill the document data.
+*    w_doc_data-doc_size = 1.
+*
+** Populate the subject/generic message attributes
+*    w_doc_data-obj_langu = sy-langu.
+*    w_doc_data-obj_name  = 'SAPRPT'.
+**    w_doc_data-obj_descr = 'EMP UPLD Report'.                "Commented By Aishwarya - 8000003767 - 07.04.2025
+*    w_doc_data-obj_descr = 'Employee Vendor Daily Log'.       "Added By Aishwarya - 8000003767 - 07.04.2025
+*    w_doc_data-sensitivty = 'F'.
+*
+** Fill the document data and get size of attachment
+*    CLEAR w_doc_data.
+*    READ TABLE it_attach INDEX w_cnt.
+*    w_doc_data-doc_size = ( w_cnt - 1 ) * 255 + strlen( it_attach ).
+*    w_doc_data-obj_langu  = sy-langu.
+*    w_doc_data-obj_name   = 'SAPRPT'.
+*    w_doc_data-obj_descr  = 'Error Log for ZFI_EMPMAST_UPD'.
+*    w_doc_data-sensitivty = 'F'.
+*    CLEAR t_attachment.
+*    REFRESH t_attachment.
+*    t_attachment[] = it_attach[].
+*
+** Describe the body of the message
+*    CLEAR t_packing_list.
+*    REFRESH t_packing_list.
+*    t_packing_list-transf_bin = space.
+*    t_packing_list-head_start = 1.
+*    t_packing_list-head_num = 0.
+*    t_packing_list-body_start = 1.
+*    DESCRIBE TABLE it_message LINES t_packing_list-body_num.
+*    t_packing_list-doc_type = 'RAW'.
+*    APPEND t_packing_list.
+*
+** Create attachment notification
+*    t_packing_list-transf_bin = 'X'.
+*    t_packing_list-head_start = 1.
+*    t_packing_list-head_num   = 1.
+*    t_packing_list-body_start = 1.
+*
+*    DESCRIBE TABLE t_attachment LINES t_packing_list-body_num.
+*    t_packing_list-doc_type   = 'XLS'.
+*    t_packing_list-obj_descr  = |ZFI_EMPMAST_UPD log{ sy-datum }|.
+*    t_packing_list-obj_name   = 'TEST'.
+*    t_packing_list-doc_size   =  t_packing_list-body_num * 255.
+*    APPEND t_packing_list.
+*
+*** RECEIVERS EMAIL
+*    SELECT id_name
+*           id_number
+*           param_name
+*       FROM zparam_table INTO TABLE ta_param WHERE id_name EQ c_emp1.
+*
+*    LOOP AT ta_param INTO wa_param .
+*      IF sy-subrc = 0 AND ta_param IS NOT INITIAL.
+**        REFRESH t_receivers.
+*        t_receivers-receiver = wa_param-param_name.
+*        t_receivers-rec_type = 'U'.
+*        t_receivers-com_type = 'INT'.
+*        t_receivers-notif_del = 'X'.
+*        t_receivers-notif_ndel = 'X'.
+*        APPEND t_receivers.
+*      ENDIF.
+*    ENDLOOP.
+*    CLEAR: t_receivers.
+*    CLEAR wa_param.
+*
+*    SELECT id_name
+*           id_number
+*           param_name
+*       FROM zparam_table INTO TABLE ta_param1 WHERE id_name EQ c_emp2.
+*
+*    LOOP AT ta_param1 INTO wa_param1 .
+*      IF sy-subrc = 0 AND ta_param1 IS NOT INITIAL.
+*        t_receivers-receiver = wa_param1-param_name.
+*        t_receivers-rec_type = 'U'.
+*        t_receivers-com_type = 'INT'.
+*        t_receivers-notif_del = 'X'.
+*        t_receivers-copy = 'X'.
+*        t_receivers-notif_ndel = 'X'.
+*        APPEND t_receivers.
+*      ENDIF.
+*    ENDLOOP.
+*    CLEAR: t_receivers.
+*    CLEAR wa_param1.
+*
+*  ENDIF.
+*
+*  CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+*    EXPORTING
+*      document_data              = w_doc_data
+*      put_in_outbox              = 'X'
+*      sender_address             = ' '
+*      sender_address_type        = ' '
+*      commit_work                = 'X'
+*    IMPORTING
+*      sent_to_all                = w_sent_all
+*    TABLES
+*      packing_list               = t_packing_list
+**     contents_bin               = t_attachment
+*      contents_txt               = it_message
+*      receivers                  = t_receivers
+*    EXCEPTIONS
+*      too_many_receivers         = 1
+*      document_not_sent          = 2
+*      document_type_not_exist    = 3
+*      operation_no_authorization = 4
+*      parameter_error            = 5
+*      x_error                    = 6
+*      enqueue_error              = 7
+*      OTHERS                     = 8.
+*
+**  IF sy-subrc = 0.
+**    WAIT UP TO 2 SECONDS.
+**    SUBMIT rsconn01 WITH mode = 'INT'
+**                  WITH output = 'X'
+**                  AND RETURN.
+**  ENDIF.
+*
+**ENDIF.
+*
+*ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  FETCH_XML
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM fetch_files .
+
+  DATA: lwa_line           TYPE string,
+        lv_line            TYPE string,
+        lv_file            TYPE rcgiedial-iefile,
+        lv_filename        TYPE rcgiedial-iefile,
+        lv_source          TYPE rcgiedial-iefile,
+        lv_target          TYPE rcgiedial-iefile,
+        lv_arcpath         TYPE rcgiedial-iefile,
+        lv_len             TYPE p,
+        lta_file           TYPE TABLE OF eps2fili,
+        lwa_file           TYPE eps2fili,
+        lv_message         TYPE string,
+        lv_counter         TYPE i,
+        gv_dir             TYPE eps2filnam,
+        lv_header_skip_tax TYPE abap_bool VALUE '0', " Flag to skip the header line
+        lv_header_skip_dpr TYPE abap_bool VALUE '0'. " Flag to skip the header line
+
+  CONSTANTS : lc_ext     TYPE char4 VALUE '.csv',
+              lc_extstr1 TYPE char3 VALUE 'csv',
+              lc_extstr2 TYPE char3 VALUE 'CSV'.
+
+  CONSTANTS : co_param      TYPE string VALUE 'HRMS_IN',
+              co_param1     TYPE string VALUE 'HRMS_OUT',
+              co_file_name  TYPE string VALUE 'TAXINVOICE*',
+              co_file_name1 TYPE string VALUE 'DPR*'.
+
+  CONSTANTS : co_s(1) VALUE 'S',
+              co_e(1) VALUE 'E'.
+
+  SELECT SINGLE * FROM zparam_table INTO @DATA(lv_path) WHERE id_name = @co_param.  "#EC CI_NOORDER
+  IF sy-subrc = 0 AND lv_path-param_name IS NOT INITIAL.
+    CLEAR gv_dir.
+    gv_dir = lv_path-param_name.
+
+    CALL FUNCTION 'EPS2_GET_DIRECTORY_LISTING'
+      EXPORTING
+        iv_dir_name            = gv_dir
+      TABLES
+        dir_list               = lta_file
+      EXCEPTIONS
+        invalid_eps_subdir     = 1
+        sapgparam_failed       = 2
+        build_directory_failed = 3
+        no_authorization       = 4
+        read_directory_failed  = 5
+        too_many_read_errors   = 6
+        empty_directory_list   = 7
+        OTHERS                 = 8.
+    IF sy-subrc <> 0.
+* Implement suitable error handling here
+    ENDIF.
+
+    IF NOT lta_file IS INITIAL.
+      CLEAR: lwa_file.
+
+      LOOP AT lta_file INTO lwa_file.                  " FOR MULTIPLE FILES TO BE PROCESSED INDIVIDUALLY
+        IF NOT ( lwa_file-name CP co_file_name1 ).
+          CONTINUE.
+        ENDIF.
+
+        lv_counter = lv_counter + 1.
+
+        "" REFRESH DATA FOR NEW LOOP PASS
+        CLEAR: lwa_line, lv_file, lv_filename, lv_arcpath, lv_len, ta_msg, ta_file_dpr.
+
+        "" CHECK THE EXTENSION AND ALLOW VALID EXTENSION FILES
+        SPLIT lwa_file-name AT '.' INTO DATA(lv_1) DATA(lv_2).
+
+        IF lv_2 IS NOT INITIAL.
+          "" SKIP THE FILE IF NOT TEXT FILE
+          IF lv_2 NE lc_extstr1 AND lv_2 NE lc_extstr2.
+            CONTINUE.
+          ENDIF.
+        ELSE.
+          "" SKIP THE FILE IF NO EXTENSION
+          CONTINUE.
+        ENDIF.
+
+        lv_file = lwa_file-name.
+        lv_filename = lv_file.
+        CONCATENATE gv_dir lv_file INTO lv_file.
+
+        OPEN DATASET lv_file FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+        IF sy-subrc = 0.
+          DO.
+            READ DATASET lv_file INTO lwa_line.
+            IF sy-subrc EQ 0.
+              " Skip the first line (header) if not already skipped
+              IF lv_header_skip_dpr EQ '0'.
+                lv_header_skip_dpr = '1'. " Set flag to skip the next line
+                CONTINUE. " Skip processing for header line
+              ENDIF.
+              PERFORM f_convert_dpr USING lwa_line CHANGING wa_file_dpr.
+              APPEND wa_file_dpr TO ta_file_dpr.
+            ELSE.
+              EXIT.
+            ENDIF.
+          ENDDO.
+
+          "" CLOSE THE FILE
+          CLOSE DATASET lv_file.
+        ENDIF.
+      ENDLOOP.
+
+      CLEAR: lwa_file.
+      LOOP AT lta_file INTO lwa_file.         " FOR MULTIPLE FILES TO BE PROCESSED INDIVIDUALLY
+        IF NOT ( lwa_file-name CP co_file_name ).
+          CONTINUE.
+        ENDIF.
+
+        lv_counter = lv_counter + 1.
+
+        "" REFRESH DATA FOR NEW LOOP PASS
+        CLEAR: lwa_line, lv_file, lv_filename, lv_arcpath, lv_len, ta_msg, ta_file_tax.
+
+        "" CHECK THE EXTENSION AND ALLOW VALID EXTENSION FILES
+        SPLIT lwa_file-name AT '.' INTO lv_1 lv_2.
+        IF lv_2 IS NOT INITIAL.
+          "" SKIP THE FILE IF NOT TEXT FILE
+          IF lv_2 NE lc_extstr1 AND lv_2 NE lc_extstr2.
+            CONTINUE.
+          ENDIF.
+        ELSE.
+          "" SKIP THE FILE IF NO EXTENSION
+          CONTINUE.
+        ENDIF.
+
+        lv_file = lwa_file-name.
+        lv_filename = lv_file.
+        CONCATENATE gv_dir lv_file INTO lv_file.
+
+        OPEN DATASET lv_file FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+        IF sy-subrc = 0.
+          DO.
+            READ DATASET lv_file INTO lwa_line.
+            IF sy-subrc EQ 0.
+              " Skip the first line (header) if not already skipped
+              IF lv_header_skip_tax EQ '0'.
+                lv_header_skip_tax = '1'. " Set flag to skip the next line
+                CONTINUE. " Skip processing for header line
+              ENDIF.
+              PERFORM f_convert_tax USING lwa_line CHANGING wa_file_tax.
+              APPEND wa_file_tax TO ta_file_tax.
+            ELSE.
+              EXIT.
+            ENDIF.
+          ENDDO.
+
+          "" CLOSE THE FILE
+          CLOSE DATASET lv_file.
+        ENDIF.
+      ENDLOOP.
+
+    ELSE.
+      MESSAGE text-032 TYPE co_s DISPLAY LIKE co_e.
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+
+*    SELECT lifnr FROM lfa1 INTO TABLE ta_lifnr.                                       "Commented by Aishwarya - 8000003767 - 25.04.2025
+    SELECT lifnr bukrs FROM lfb1 INTO TABLE ta_lifnr WHERE bukrs = '1000'. "#EC CI_NOFIRST             "Added by Aishwarya - 8000003767 - 25.04.2025
+    SORT ta_lifnr BY lifnr.
+
+    SELECT lifnr banks bankl bankn FROM lfbk INTO TABLE ta_lfbk. "#EC CI_NOWHERE
+
+    SORT ta_lfbk BY lifnr banks bankl bankn.
+
+    LOOP AT ta_file_tax INTO wa_file_tax.
+
+      wa_file_tax-lifnr = |{ wa_file_tax-lifnr ALPHA = IN }|.
+
+      READ TABLE ta_lifnr INTO DATA(wa_lifnr) WITH KEY lifnr = wa_file_tax-lifnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        SHIFT wa_lifnr-lifnr LEFT DELETING LEADING '0'.
+        wa_tax_update-lifnr = wa_lifnr-lifnr.
+        APPEND wa_tax_update TO ta_tax_update.
+      ELSE.
+        SHIFT wa_file_tax-lifnr LEFT DELETING LEADING '0'.
+        wa_tax_create-lifnr = wa_file_tax-lifnr.
+        APPEND wa_tax_create TO ta_tax_create.
+      ENDIF.
+
+      CLEAR : wa_file_tax, wa_tax_update, wa_tax_create, wa_lifnr.
+    ENDLOOP.
+
+    LOOP AT ta_file_dpr INTO wa_file_dpr.
+
+      wa_file_dpr-lifnr = |{ wa_file_dpr-lifnr ALPHA = IN }|.
+
+      READ TABLE ta_lifnr INTO wa_lifnr WITH KEY lifnr = wa_file_dpr-lifnr BINARY SEARCH.
+      IF sy-subrc = 0.
+        SHIFT wa_lifnr-lifnr LEFT DELETING LEADING '0'.
+        wa_dpr_update-lifnr = wa_lifnr-lifnr.
+        APPEND wa_dpr_update TO ta_dpr_update.
+      ELSE.
+        SHIFT wa_file_dpr-lifnr LEFT DELETING LEADING '0'.
+        wa_dpr_create-lifnr = wa_file_dpr-lifnr.
+        APPEND wa_dpr_create TO ta_dpr_create.
+      ENDIF.
+
+      CLEAR : wa_file_dpr, wa_dpr_create, wa_dpr_update, wa_lifnr.
+    ENDLOOP.
+
+* Merge ta_final_tax and ta_final_dpr into ta_final_combined
+    APPEND LINES OF ta_tax_update TO ta_update.                      "If LIFNR Present in lfa1 table
+    APPEND LINES OF ta_dpr_update TO ta_update.
+
+    SORT ta_update BY lifnr.
+    DELETE ADJACENT DUPLICATES FROM ta_update.
+
+* Merge ta_final_tax and ta_final_dpr into ta_final_combined
+    APPEND LINES OF ta_dpr_create TO ta_create.                       "If LIFNR is not Present in lfa1 table
+    APPEND LINES OF ta_tax_create TO ta_create.
+
+    SORT ta_create BY lifnr.
+    DELETE ADJACENT DUPLICATES FROM ta_create.
+
+  ELSE.
+    MESSAGE text-031 TYPE co_e.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+  SELECT SINGLE * FROM zparam_table INTO @DATA(lv_hrms) WHERE id_name = @co_param1.  "#EC CI_NOORDER
+  IF sy-subrc = 0 AND lv_hrms-param_name IS NOT INITIAL..
+
+    IF lta_file IS NOT INITIAL.
+      LOOP AT lta_file INTO lwa_file.
+
+        CLEAR: lv_filename, lv_source, lv_target, lv_line.
+
+        lv_file = lwa_file-name.
+        lv_filename = lv_file.
+        CONCATENATE lv_hrms-param_name lv_filename INTO lv_target.
+
+        lv_file = lwa_file-name.
+        lv_filename = lv_file.
+        CONCATENATE gv_dir lv_filename INTO lv_source.
+
+        OPEN DATASET lv_source FOR INPUT IN TEXT MODE ENCODING DEFAULT.
+        IF sy-subrc <> 0.
+          MESSAGE text-034 TYPE co_s DISPLAY LIKE co_e.
+          CONTINUE.
+        ENDIF.
+
+        OPEN DATASET lv_target FOR OUTPUT IN TEXT MODE ENCODING DEFAULT.
+        IF sy-subrc <> 0.
+          MESSAGE text-035 TYPE co_s DISPLAY LIKE co_e.
+          CLOSE DATASET lv_source.
+          CONTINUE.
+        ENDIF.
+
+        WHILE sy-subrc = 0.
+          READ DATASET lv_source INTO lv_line.
+          IF sy-subrc = 0.
+            TRANSFER lv_line TO lv_target.
+          ENDIF.
+        ENDWHILE.
+
+        DELETE DATASET lv_source.
+
+        CLOSE DATASET lv_source.
+        CLOSE DATASET lv_target.
+
+      ENDLOOP.
+    ELSE.
+      MESSAGE text-032 TYPE co_s DISPLAY LIKE co_e.
+      LEAVE LIST-PROCESSING.
+    ENDIF.
+
+  ELSE.
+    MESSAGE text-031 TYPE co_e.
+    LEAVE LIST-PROCESSING.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_CONVERT_WA1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LWA_LINE  text
+*      <--P_WA_FILES  text
+*----------------------------------------------------------------------*
+FORM f_convert_dpr  USING uwa_line_dpr CHANGING cwa_file_dpr LIKE wa_file_dpr.
+
+  DATA: lv_val1  TYPE char100,
+        lv_val2  TYPE char100,
+        lv_val3  TYPE char100,
+        lv_val4  TYPE char100,
+        lv_val5  TYPE char100,
+        lv_val6  TYPE char100,
+        lv_val7  TYPE char100,
+        lv_val8  TYPE char100,
+        lv_val9  TYPE char100,
+        lv_val10 TYPE char100,
+        lv_val11 TYPE char100,
+        lv_val12 TYPE char100,
+        lv_val13 TYPE char100,
+        lv_val14 TYPE char100,
+        lv_val15 TYPE char100,
+        lv_val16 TYPE char100,
+        lv_val17 TYPE char100,
+        lv_val18 TYPE char100,
+        lv_val19 TYPE char100,
+        lv_val20 TYPE char100,
+        lv_val21 TYPE char100,
+        lv_val22 TYPE char100,
+        lv_val23 TYPE char100,
+        lv_val24 TYPE char100,
+        lv_val25 TYPE char100,
+        lv_val26 TYPE char100,
+        lv_val27 TYPE char100,
+        lv_val28 TYPE char100.
+
+*  SPLIT uwa_line_dpr AT ','    "'#'                                                                "CL_ABAP_CHAR_UTILITIES=>HORIZONTAL_TAB
+  SPLIT uwa_line_dpr AT '|'               "Added By vema for Cr8000003767  on 03.02.2026
+  INTO lv_val1  lv_val2  lv_val3  lv_val4  lv_val5  lv_val6  lv_val7  lv_val8  lv_val9  lv_val10
+       lv_val11 lv_val12 lv_val13 lv_val14 lv_val15 lv_val16 lv_val17 lv_val18 lv_val19 lv_val20
+       lv_val21 lv_val22 lv_val23 lv_val24 lv_val25 lv_val26 lv_val27 lv_val28.
+
+  cwa_file_dpr-buzei      = lv_val1  .
+  cwa_file_dpr-bldat      = lv_val2  .
+  cwa_file_dpr-blart      = lv_val3  .
+  cwa_file_dpr-bukrs      = lv_val4  .
+  cwa_file_dpr-event_dt   = lv_val5  .
+  cwa_file_dpr-apr_dt     = lv_val6  .
+  cwa_file_dpr-inv_sb_dt  = lv_val7  .
+  cwa_file_dpr-budat      = lv_val8  .
+  cwa_file_dpr-waers      = lv_val9  .
+  cwa_file_dpr-bktxt      = lv_val10 .
+  cwa_file_dpr-kursf      = lv_val11 .
+  cwa_file_dpr-xblnr      = lv_val12  .
+  cwa_file_dpr-umskz      = lv_val13 .
+  cwa_file_dpr-lifnr      = lv_val14 .
+  cwa_file_dpr-dmbtr      = lv_val15 .
+  cwa_file_dpr-zfbdt      = lv_val16 .
+  cwa_file_dpr-prctr      = lv_val17 .
+  cwa_file_dpr-zuonr      = lv_val18 .
+  cwa_file_dpr-sgtxt      = lv_val19 .
+  cwa_file_dpr-bupla      = lv_val20 .
+  cwa_file_dpr-secoo      = lv_val21 .
+  cwa_file_dpr-zlspr      = lv_val22 .
+  cwa_file_dpr-zlsch      = lv_val23 .
+  cwa_file_dpr-xref1      = lv_val24 .
+  cwa_file_dpr-xref3      = lv_val25 .
+  cwa_file_dpr-qsshb      = lv_val26 .
+  cwa_file_dpr-witht      = lv_val27 .
+  cwa_file_dpr-qsskz      = lv_val28 .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_CONVERT_TAX
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_LWA_LINE  text
+*      <--P_WA_FILES  text
+*----------------------------------------------------------------------*
+FORM f_convert_tax  USING uwa_line_tax CHANGING cwa_file_tax LIKE wa_file_tax.
+
+  DATA: lv_val1  TYPE char100,
+        lv_val2  TYPE char100,
+        lv_val3  TYPE char100,
+        lv_val4  TYPE char100,
+        lv_val5  TYPE char100,
+        lv_val6  TYPE char100,
+        lv_val7  TYPE char100,
+        lv_val8  TYPE char100,
+        lv_val9  TYPE char100,
+        lv_val10 TYPE char100,
+        lv_val11 TYPE char100,
+        lv_val12 TYPE char100,
+        lv_val13 TYPE char100,
+        lv_val14 TYPE char100,
+        lv_val15 TYPE char100,
+        lv_val16 TYPE char100,
+        lv_val17 TYPE char100,
+        lv_val18 TYPE char100,
+        lv_val19 TYPE char100,
+        lv_val20 TYPE char100,
+        lv_val21 TYPE char100,
+        lv_val22 TYPE char100,
+        lv_val23 TYPE char100,
+        lv_val24 TYPE char100,
+        lv_val25 TYPE char100,
+        lv_val26 TYPE char100,
+        lv_val27 TYPE char100,
+        lv_val28 TYPE char100,
+        lv_val29 TYPE char100,
+        lv_val30 TYPE char100,
+        lv_val31 TYPE char100,
+        lv_val32 TYPE char100,
+        lv_val33 TYPE char100,
+        lv_val34 TYPE char100,
+        lv_val35 TYPE char100,
+        lv_val36 TYPE char100.
+
+*  SPLIT uwa_line_tax AT ','                                                                "CL_ABAP_CHAR_UTILITIES=>HORIZONTAL_TAB
+  SPLIT uwa_line_tax AT '|'                      "Added By vema for Cr8000003767  on 03.02.2026
+  INTO lv_val1  lv_val2  lv_val3  lv_val4  lv_val5  lv_val6  lv_val7  lv_val8  lv_val9  lv_val10
+       lv_val11 lv_val12 lv_val13 lv_val14 lv_val15 lv_val16 lv_val17 lv_val18 lv_val19 lv_val20
+       lv_val21 lv_val22 lv_val23 lv_val24 lv_val25 lv_val26 lv_val27 lv_val28 lv_val29 lv_val30
+       lv_val31 lv_val32 lv_val33 lv_val34 lv_val35 lv_val36.
+
+  cwa_file_tax-bukrs      = lv_val1  .
+  cwa_file_tax-bktxt      = lv_val2  .
+  cwa_file_tax-blart      = lv_val3  .
+  cwa_file_tax-xblnr      = lv_val4  .
+  cwa_file_tax-event_dt   = lv_val5  .
+  cwa_file_tax-apr_dt     = lv_val6  .
+  cwa_file_tax-inv_sb_dt  = lv_val7  .
+  cwa_file_tax-bldat      = lv_val8  .
+  cwa_file_tax-budat      = lv_val9  .
+  cwa_file_tax-lifnr      = lv_val10  .
+  cwa_file_tax-bupla      = lv_val11 .
+  cwa_file_tax-secco      = lv_val12 .
+  cwa_file_tax-zterm      = lv_val13 .
+  cwa_file_tax-zlspr      = lv_val14 .
+  cwa_file_tax-zlsch      = lv_val15 .
+  cwa_file_tax-dmbtr      = lv_val16 .
+  cwa_file_tax-waers      = lv_val17 .
+  cwa_file_tax-xmwst      = lv_val18 .
+  cwa_file_tax-bstat      = lv_val19 .
+  cwa_file_tax-name1      = lv_val20 .
+  cwa_file_tax-rebzg      = lv_val21 .
+  cwa_file_tax-buzei      = lv_val22 .
+  cwa_file_tax-sgtxt      = lv_val23 .
+  cwa_file_tax-wrbtr      = lv_val24 .
+  cwa_file_tax-hsn_sac    = lv_val25 .
+  cwa_file_tax-mwskz      = lv_val26 .
+  cwa_file_tax-kschl      = lv_val27 .
+  cwa_file_tax-mwsts      = lv_val28 .
+  cwa_file_tax-wmwst      = lv_val29 .
+  cwa_file_tax-kostl      = lv_val30 .
+  cwa_file_tax-hkont      = lv_val31 .
+  cwa_file_tax-qsshb      = lv_val32 .
+  cwa_file_tax-witht      = lv_val33 .
+  cwa_file_tax-qsskz      = lv_val34 .
+  cwa_file_tax-prctr      = lv_val35 .
+  cwa_file_tax-zuonr      = lv_val36 .
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BDC_UPDATE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM bdc_update .
+
+  LOOP AT ta_file INTO wa_file.
+    READ TABLE ta_update INTO wa_update WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
+    wa_update-lifnr = |{ wa_update-lifnr ALPHA = IN }|.
+    IF sy-subrc = 0.
+      READ TABLE ta_lfbk INTO DATA(wa_lfbk) WITH KEY lifnr = wa_update-lifnr banks = wa_file-banks bankl = wa_file-bankl bankn = wa_file-bankn BINARY SEARCH.
+      IF sy-subrc <> 0.
+      ENDIF.
+    ENDIF.
+
+    PERFORM bdc_dynpro      USING 'SAPMF02K' '0106'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'RF02K-D0215'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '/00'.
+    PERFORM bdc_field       USING 'RF02K-LIFNR'
+                                  wa_file-lifnr.
+    PERFORM bdc_field       USING 'RF02K-BUKRS'
+                                  wa_file-bukrs.
+    PERFORM bdc_field       USING 'RF02K-D0130'
+                                  'X'.
+    PERFORM bdc_field       USING 'RF02K-D0215'
+                                  'X'.
+    PERFORM bdc_dynpro      USING 'SAPMF02K' '0130'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  wa_file-bankn.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=UPDA'.
+    PERFORM bdc_field       USING 'LFBK-BANKL(01)'
+                                  wa_file-bankl.
+    PERFORM bdc_field       USING 'LFBK-BANKN(01)'
+                                  wa_file-bankn.
+    PERFORM bdc_dynpro      USING 'SAPLBANK' '0100'.
+    PERFORM bdc_field       USING 'BDC_CURSOR'
+                                  'BNKA-BANKA'.
+    PERFORM bdc_field       USING 'BDC_OKCODE'
+                                  '=ENTR'.
+    PERFORM bdc_field       USING 'BNKA-BANKA'
+                                  'Axis Bank'.
+
+    CALL TRANSACTION 'FK02' USING ta_bdcdata_update "#EC CI_USAGE_OK[2226131]
+          OPTIONS FROM wa_ctu MESSAGES INTO ta_mess_update.  "#EC CI_USAGE_OK[2265093]
+
+
+*    PERFORM message_log_update.
+
+    CLEAR : wa_file, wa_update, wa_lfbk.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BDC_DYNPRO
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_4651   text
+*      -->P_4652   text
+*----------------------------------------------------------------------*
+FORM bdc_dynpro  USING u_program1 u_dynpro1.
+  CLEAR ta_bdcdata_update.
+  ta_bdcdata_update-program  = u_program1.
+  ta_bdcdata_update-dynpro   = u_dynpro1.
+  ta_bdcdata_update-dynbegin  = abap_true.                      "'X'
+  APPEND ta_bdcdata_update.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  BDC_FIELD
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*      -->P_4656   text
+*      -->P_4657   text
+*----------------------------------------------------------------------*
+FORM bdc_field  USING   u_fnam1 u_fval1.
+  CLEAR ta_bdcdata_update.
+  ta_bdcdata_update-fnam = u_fnam1.
+  ta_bdcdata_update-fval = u_fval1.
+  APPEND ta_bdcdata_update.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_MESSAGE_LOG_UPDATE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM f_message_log_update .
+
+  CONSTANTS: lc_s TYPE char1 VALUE 'S',
+             lc_e TYPE char1 VALUE 'E'.
+
+  DATA: lwa_mess_update LIKE LINE OF ta_mess_update,
+        lv_str_update   TYPE string.
+
+  LOOP AT ta_mess_update INTO lwa_mess_update.
+    IF NOT ( lwa_mess_update-msgtyp = lc_s OR lwa_mess_update-msgtyp = lc_e ).
+      CONTINUE.
+    ENDIF.
+
+    CALL FUNCTION 'FORMAT_MESSAGE'
+      EXPORTING
+        id        = lwa_mess_update-msgid
+        lang      = lwa_mess_update-msgspra
+        no        = lwa_mess_update-msgnr
+        v1        = lwa_mess_update-msgv1
+        v2        = lwa_mess_update-msgv2
+        v3        = lwa_mess_update-msgv3
+        v4        = lwa_mess_update-msgv4
+      IMPORTING
+        msg       = lv_str_update
+      EXCEPTIONS
+        not_found = 1
+        OTHERS    = 2.
+
+    IF lv_str_update IS NOT INITIAL.
+      wa_msg_update-emp_no    = wa_file-lifnr.
+
+      IF lwa_mess_update-msgtyp = lc_s AND ( lwa_mess_update-msgid = 'F2' AND lwa_mess_update-msgnr = '056').
+        wa_msg_update-status    = lv_status.
+      ELSE.
+        wa_msg_update-status    = co_failed.
+      ENDIF.
+
+*      wa_msg_update-status    = lv_status.
+      wa_msg_update-emp_name  = wa_file-name1.
+
+*      READ TABLE ta_panno INTO wa_panno WITH KEY lifnr = wa_msg_update-emp_no BINARY SEARCH.
+*      IF sy-subrc = 0.
+*        wa_msg_update-pan_no  = wa_panno-j_1ipanno.
+*      ENDIF.
+      IF lwa_mess_update-msgid = 'F2' AND lwa_mess_update-msgnr = '056'.
+
+        wa_msg_update-remarks = 'Employee vendor Bank details are updated as per HRMS data'.
+
+      ELSE.
+        wa_msg_update-remarks = lv_str_update.
+
+      ENDIF.
+
+
+      APPEND wa_msg_update TO ta_msg_update.
+    ENDIF.
+
+    CLEAR : wa_msg_update, lv_str_update, lv_status.
+  ENDLOOP.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SEND_EMAIL_NEW
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM send_email_new .
+
+  DATA : lta_message            TYPE STANDARD TABLE OF solisti1,
+         lwa_message            TYPE solisti1,
+         lv_subject             LIKE sodocchgi1-obj_descr,
+         lv_srno                TYPE c VALUE 0,
+         lwa_doc_data           LIKE sodocchgi1,
+         lta_packing_list       TYPE TABLE OF sopcklsti1,
+         lwa_packing_list       TYPE sopcklsti1,
+         lta_receivers          TYPE TABLE OF somlreci1,
+         lwa_receivers          TYPE somlreci1,
+         lv_send_address        TYPE so_rec_ext,
+         lv_sender_address_type LIKE soextreci1-adr_typ,
+         lv_sent_all            TYPE c,
+         lv_srno1               TYPE c VALUE 0.
+
+  CONSTANTS: co_s(1) VALUE 'S',
+             co_e(1) VALUE 'E'.
+
+  CLEAR: lwa_message.
+
+  lwa_message-line = 'Dear Sir/Madam,'.
+  APPEND lwa_message TO lta_message.
+  CLEAR: lwa_message.
+
+  lwa_message = '<br />'.
+  APPEND lwa_message TO lta_message.
+  CLEAR lwa_message.
+
+  lwa_message = '<br />'.
+  APPEND lwa_message TO lta_message.
+  CLEAR lwa_message.
+
+  lwa_message = 'Please find log of creation/modification of Employee Vendor Codes in Z008 vendor account group of the General Vendor Master in SAP'.
+  APPEND lwa_message TO lta_message.
+  CLEAR: lwa_message.
+
+  lwa_message = '<br />'.
+  APPEND lwa_message TO lta_message.
+  CLEAR lwa_message.
+
+  lwa_message = '<br />'.
+  APPEND lwa_message TO lta_message.
+  CLEAR lwa_message.
+
+**Table.
+*   table display
+  CLEAR lwa_message.
+  lwa_message-line = '<table style="MARGIN: 10px" bordercolor="#90EE90" '.
+  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message-line = ' cellspacing="0" cellpadding="3" width="95%"'.
+  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message-line = ' border="1"><tbody><tr>'.
+  APPEND lwa_message TO lta_message.
+
+*   table header   Sr No, Vendor Code, Status, Name of Employee, PAN No Of Employee, Remarks
+  CLEAR lwa_message.
+  lwa_message-line = '<th bgcolor=#eeeeee>Sr No</th>'.
+  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message-line = '<th bgcolor=#eeeeee>Vendor Code</th>'.
+  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message-line = '<th bgcolor=#eeeeee>Status</th>'.
+  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message-line = '<th bgcolor=#eeeeee>Name of Employee</th>'.
+  APPEND lwa_message TO lta_message.
+
+*  CLEAR lwa_message.
+*  lwa_message-line = '<th bgcolor=#eeeeee>PAN No Of Employee</th>'.
+*  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message-line = '<th bgcolor=#eeeeee>Remarks</th>'.
+  APPEND lwa_message TO lta_message.
+
+  DESCRIBE TABLE ta_msg_new LINES DATA(lv_line).
+
+  LOOP AT ta_msg_new INTO wa_msg_new. " WHERE emp_no = wa_file-lifnr.
+
+    lv_srno = lv_srno + 1.
+    DATA(wa_msg_temp) = wa_msg_new.
+
+    CLEAR lwa_message.
+    lwa_message-line = '<tr style="text-align: center;">'.
+    APPEND lwa_message TO lta_message.
+
+    CLEAR lwa_message.
+    CONCATENATE '<td>' lv_srno'</td>' INTO lwa_message-line.
+    APPEND lwa_message TO lta_message.
+
+    CLEAR lwa_message.
+    CONCATENATE '<td>' wa_msg_temp-emp_no'</td>' INTO lwa_message-line.
+    APPEND lwa_message TO lta_message.
+
+    CLEAR lwa_message.
+    CONCATENATE '<td>' wa_msg_temp-status'</td>' INTO lwa_message-line.
+    APPEND lwa_message TO lta_message.
+
+    CLEAR lwa_message.
+    CONCATENATE '<td>' wa_msg_temp-emp_name'</td>' INTO lwa_message-line.
+    APPEND lwa_message TO lta_message.
+
+*    CLEAR lwa_message.
+*    CONCATENATE '<td>' wa_msg_temp-pan_no'</td>' INTO lwa_message-line.
+*    APPEND lwa_message TO lta_message.
+
+    CLEAR lwa_message.
+    CONCATENATE '<td>' wa_msg_temp-remarks'</td>' INTO lwa_message-line.
+    APPEND lwa_message TO lta_message.
+
+    CLEAR lwa_message.
+    lwa_message = '</tr>'.
+    APPEND lwa_message TO lta_message.
+
+    CLEAR : wa_msg_new, lwa_message, wa_msg_temp.
+
+  ENDLOOP.
+
+*Table close
+  CLEAR lwa_message.
+  lwa_message-line = '</tbody> </table>'.
+  APPEND lwa_message TO lta_message.
+
+  CLEAR lwa_message.
+  lwa_message = '<br />'.
+  APPEND lwa_message TO lta_message.
+
+  lwa_message = '<br />'.
+  APPEND lwa_message TO lta_message.
+  CLEAR lwa_message.
+
+  DESCRIBE TABLE lta_message LINES lv_line.
+  READ TABLE lta_message INTO lwa_message INDEX lv_line.
+  lwa_doc_data-doc_size = ( lv_line - 1 ) * 255 + strlen( lwa_message ).
+
+  MODIFY lta_packing_list FROM lwa_packing_list INDEX 1 TRANSPORTING body_num.
+  CLEAR  lwa_packing_list.
+  lwa_packing_list-transf_bin = space.
+  lwa_packing_list-head_start = 1.
+  lwa_packing_list-head_num   = 0.
+  lwa_packing_list-body_start = 1.
+  DESCRIBE TABLE lta_message LINES  lwa_packing_list-body_num.
+  lwa_packing_list-doc_type = 'HTM'.
+  APPEND  lwa_packing_list TO lta_packing_list .
+
+  lv_subject = 'Employee Vendor Daily Log'.
+  lwa_doc_data-obj_langu = sy-langu.
+  lwa_doc_data-obj_name  = 'SAPRPT'.
+  lwa_doc_data-obj_descr = lv_subject .
+  lwa_doc_data-sensitivty = 'F'.
+
+  lv_sender_address_type = 'INT'.
+  lv_send_address = 'Do_Not_Reply@Cipla.com'.
+
+  " Define recipient
+
+  IF NOT s_to[] IS INITIAL.
+    LOOP AT s_to INTO DATA(lwa_to).
+      lwa_receivers-receiver   = lwa_to-low.
+      lwa_receivers-rec_type   = 'U'. " User Email
+      lwa_receivers-com_type   = 'INT'.
+      lwa_receivers-notif_del  = ''.
+      lwa_receivers-notif_ndel = ''.
+      APPEND lwa_receivers TO lta_receivers.
+      CLEAR: lwa_to,lwa_receivers.
+    ENDLOOP.
+  ENDIF.
+
+  IF NOT s_cc[] IS INITIAL.
+    LOOP AT s_cc INTO DATA(lwa_cc).
+      lwa_receivers-receiver   = lwa_cc-low.
+      lwa_receivers-rec_type   = 'U'.
+      lwa_receivers-com_type   = 'INT'.
+      lwa_receivers-notif_del  = ''.
+      lwa_receivers-notif_ndel = ''.
+      lwa_receivers-copy       = 'X'.
+      APPEND lwa_receivers  TO lta_receivers .
+      CLEAR: lwa_cc,lwa_receivers.
+    ENDLOOP.
+  ENDIF.
+
+  IF lta_receivers IS NOT INITIAL.
+
+    CALL FUNCTION 'SO_DOCUMENT_SEND_API1'
+      EXPORTING
+        document_data              = lwa_doc_data
+*       put_in_outbox              = 'X'
+        sender_address             = lv_send_address
+        sender_address_type        = lv_sender_address_type
+        commit_work                = 'X'
+      IMPORTING
+        sent_to_all                = lv_sent_all
+      TABLES
+        packing_list               = lta_packing_list
+*       contents_bin               = lta_attachment
+*       contents_hex               = lta_content_hex
+        contents_txt               = lta_message
+        receivers                  = lta_receivers
+      EXCEPTIONS
+        too_many_receivers         = 1
+        document_not_sent          = 2
+        document_type_not_exist    = 3
+        operation_no_authorization = 4
+        parameter_error            = 5
+        x_error                    = 6
+        enqueue_error              = 7
+        OTHERS                     = 8.
+
+    IF sy-subrc = 0.
+      MESSAGE text-040 TYPE co_s.
+    ENDIF.
+  ENDIF.
+
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  HIDE_SEL_OPT_INTERVAL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM hide_sel_opt_interval.
+
+*-- Variable Declarations
+  DATA: restrict TYPE sscr_restrict,
+        opt_list TYPE sscr_opt_list_tab WITH HEADER LINE,
+        ass_tab  TYPE sscr_ass_tab WITH HEADER LINE.
+
+*-- Constants Declarations
+  CONSTANTS:
+    c_name_all TYPE rsrestrict-optionlist VALUE 'ALL',
+    c_kind_s   TYPE rsscr-kind            VALUE 'S',
+    c_s_to     TYPE rsrestrict-objectname VALUE 'S_TO',
+    c_s_cc     TYPE rsrestrict-objectname VALUE 'S_CC',
+    c_main_i   TYPE rsrestrict-sign       VALUE 'I'.
+
+*-- Options fill
+  opt_list-name       = c_name_all.
+  opt_list-options-eq = abap_true.
+  APPEND opt_list TO restrict-opt_list_tab.
+
+*-- Hide ranges
+  CLEAR ass_tab.
+  ass_tab-kind    = c_kind_s.
+  ass_tab-name    = c_s_to.
+  ass_tab-sg_main = c_main_i.
+  ass_tab-sg_addy = space.
+  ass_tab-op_main = c_name_all.
+  APPEND ass_tab TO restrict-ass_tab.
+
+  CLEAR ass_tab.
+  ass_tab-kind    = c_kind_s.
+  ass_tab-name    = c_s_cc.
+  ass_tab-sg_main = c_main_i.
+  ass_tab-sg_addy = space.
+  ass_tab-op_main = c_name_all.
+  APPEND ass_tab TO restrict-ass_tab.
+
+*-- Interval restrictions
+  CALL FUNCTION 'SELECT_OPTIONS_RESTRICT'
+    EXPORTING
+      restriction            = restrict
+    EXCEPTIONS
+      too_late               = 1
+      repeated               = 2
+      selopt_without_options = 3
+      selopt_without_signs   = 4
+      invalid_sign           = 5
+      empty_option_list      = 6
+      invalid_kind           = 7
+      repeated_kind_a        = 8
+      OTHERS                 = 9.
+  IF sy-subrc <> 0.
+* MESSAGE ID SY-MSGID TYPE SY-MSGTY NUMBER SY-MSGNO
+*         WITH SY-MSGV1 SY-MSGV2 SY-MSGV3 SY-MSGV4.
+  ENDIF.
+
+
+ENDFORM.
