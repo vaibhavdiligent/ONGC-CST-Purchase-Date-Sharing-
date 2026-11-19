@@ -1023,7 +1023,7 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM change_vendor .
 * S/4HANA: FK02 is gone - the vendor is changed through its business
-* partner (LCL_CIMMRA_BP=>CHANGE, include ZFI_CIMMRA_BP). It changes what
+* partner (LCL_HONC_BP=>CHANGE, program ZFI_VEND_HONC). It changes what
 * the FK02 batch input did: name, search term, address, telephone,
 * mobile, fax, e-mail (a new one overwrites the standard one, as FK02
 * did), GSTIN, corporate group NONFIELD, industry key, the bank account
@@ -1050,7 +1050,7 @@ FORM change_vendor .
                       CHANGING ls_central ls_postal ls_cin ls_comp
                                lt_tel lt_fax lt_mail lt_bank lt_wtax.
 
-      lcl_cimmra_bp=>change(
+      lcl_honc_bp=>change(
         EXPORTING iv_lifnr        = wa_data-vendor
                   is_central      = ls_central
                   is_postal       = ls_postal
@@ -1104,7 +1104,7 @@ ENDFORM.
 *&      Form  CREATE_VENDOR
 *&---------------------------------------------------------------------*
 * S/4HANA: FK01 is gone - the vendor is created as a business partner
-* (LCL_CIMMRA_BP=>CREATE, include ZFI_CIMMRA_BP) with what the FK01 batch
+* (LCL_HONC_BP=>CREATE, program ZFI_VEND_HONC) with what the FK01 batch
 * input entered: account group Z001 (BP grouping and supplier roles from
 * CVIC_VEND_TO_BP1 / 2), title, name, search term, address, language EN,
 * mobile, e-mail, GSTIN, industry key, bank account, company code 1000
@@ -1135,7 +1135,7 @@ FORM create_vendor .
                     CHANGING ls_central ls_postal ls_cin ls_comp
                              lt_tel lt_fax lt_mail lt_bank lt_wtax.
 
-    lcl_cimmra_bp=>create(
+    lcl_honc_bp=>create(
       EXPORTING is_central  = ls_central
                 is_postal   = ls_postal
                 is_company  = ls_comp
@@ -1181,7 +1181,7 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  BP_DATA
 *&---------------------------------------------------------------------*
-* S/4HANA: one record of the file as LCL_CIMMRA_BP takes it - what the
+* S/4HANA: one record of the file as LCL_HONC_BP takes it - what the
 * FK01 (IV_CHANGE = false) and FK02 (true) batch input entered.
 *----------------------------------------------------------------------*
 FORM bp_data USING    is_data    TYPE ty_vendor
@@ -1239,7 +1239,7 @@ FORM bp_data USING    is_data    TYPE ty_vendor
   ENDIF.
 
   " ---- control data (screen 0120) ---------------------------------------
-  " GSTIN: LCL_CIMMRA_BP files it as the partner's tax number IN3.
+  " GSTIN: LCL_HONC_BP files it as the partner's tax number IN3.
   cs_central-data-stcd3 = is_data-gst.
   IF iv_change = abap_true.
     cs_central-data-konzs = 'NONFIELD'.
@@ -1279,9 +1279,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  BP_RESULT
 *&---------------------------------------------------------------------*
-* S/4HANA: the messages of LCL_CIMMRA_BP into the log and into the text
+* S/4HANA: the messages of LCL_HONC_BP into the log and into the text
 * for ZFI_HONC_VEND, as the batch input's messages were. CV_VEND is the
-* vendor saved - LCL_CIMMRA_BP's success line is
+* vendor saved - LCL_HONC_BP's success line is
 * "<vendor>;<address number> <text>".
 *----------------------------------------------------------------------*
 FORM bp_result USING    is_data    TYPE ty_vendor

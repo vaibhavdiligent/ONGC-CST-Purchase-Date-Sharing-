@@ -396,7 +396,7 @@ hand-edit the generated program**, only the skeleton (see §8).
 | `zmms_bp_mass_upload` | Vendor mass upload / download (Excel template) | own engine |
 | `zsds_cust_tmpl_download` (tcode ZBP_CREATE_CUST) | Customer templates: create, extend, block, credit | generated from skeleton |
 | `zfi_cimmra_vendor_create`, `_empvend`, `_empvend_upd`, `_vendor_ext`, `_vendor_blk` | CIMMRA AL11 interface (create / change / extend / block) | shared include `zfi_cimmra_bp` (LCL_CIMMRA_BP) |
-| `zfi_vend_honc` (+ `_dd`, `_ss`, `_fd`) | HONC doctors' file (FK01 / FK02) | `zfi_cimmra_bp` |
+| `zfi_vend_honc` (+ `_dd`, `_ss`, `_fd`) | HONC doctors' file (FK01 / FK02) | own local class LCL_HONC_BP in the main program (kept apart from CIMMRA) |
 | `zfi_emp_upld` | Employee vendors from HRMS (XK01 / FK02), **person** BPs | own local class LCL_EMP_BP |
 
 Audits per program:

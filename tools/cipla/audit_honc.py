@@ -3,10 +3,12 @@
 ECC: ZFI_VEND_HONC (includes _DD, _SS, _FD) read the HONC file from AL11 and
 created the vendor with an FK01 batch input, changed it with FK02. Both
 transactions are gone in S/4HANA. Since November 2026 the program posts
-through include ZFI_CIMMRA_BP (LCL_CIMMRA_BP, CL_MD_BP_MAINTAIN). This keeps
+through its own local class LCL_HONC_BP (CL_MD_BP_MAINTAIN), kept apart from
+the CIMMRA interface's ZFI_CIMMRA_BP. This keeps
 it that way:
 
-  - no batch input is left, and ZFI_CIMMRA_BP comes before the forms that
+  - no batch input is left, ZFI_CIMMRA_BP is not included, and LCL_HONC_BP
+    comes before the forms that
     call it (a local class is known only below its definition);
   - create and change go through LCL_CIMMRA_BP, with what FK01 / FK02
     entered: account group Z001, company code 1000, mobile as R_3_USER 3,
@@ -35,7 +37,7 @@ def code(text):
 MAIN = code(read('zfi_vend_honc.prog.abap'))
 DD = code(read('zfi_vend_honc_dd.prog.abap'))
 FD = code(read('zfi_vend_honc_fd.prog.abap'))
-INC = code(read('zfi_cimmra_bp.prog.abap'))
+INC = MAIN                     # LCL_HONC_BP lives in the main program
 
 # The HONC file, column by column, and the TY_VENDOR field each goes into.
 CSV_HEADER = ('Title|Vendorcode|Vendorname|VendorSearchName|VendorAddress1|VendorAddress2|'
@@ -57,10 +59,13 @@ for name, src in (('ZFI_VEND_HONC', MAIN), ('ZFI_VEND_HONC_DD', DD), ('ZFI_VEND_
     if re.search(r'vmd_ei_api=>maintain', src, re.I):
         fail.append(f'{name}: maintains the vendor through VMD_EI_API, past its business partner')
 
-if not re.search(r'^INCLUDE zfi_vend_honc_ss\.\s*\nINCLUDE zfi_cimmra_bp\.\s*\nINCLUDE zfi_vend_honc_fd\.',
-                 MAIN, re.I | re.M):
-    fail.append('ZFI_VEND_HONC: ZFI_CIMMRA_BP is not included between _SS and _FD - the forms in '
-                '_FD would not know LCL_CIMMRA_BP')
+if re.search(r'^\s*INCLUDE\s+zfi_cimmra_bp', MAIN + DD + FD, re.I | re.M) or \
+   re.search(r'lcl_cimmra_bp', MAIN + DD + FD, re.I):
+    fail.append('ZFI_VEND_HONC uses ZFI_CIMMRA_BP - HONC has its own class LCL_HONC_BP, the CIMMRA '
+                'include is kept apart')
+if not re.search(r'^CLASS lcl_honc_bp IMPLEMENTATION\..*^INCLUDE zfi_vend_honc_fd\.', MAIN, re.I | re.M | re.S):
+    fail.append('ZFI_VEND_HONC: LCL_HONC_BP is not defined before INCLUDE ZFI_VEND_HONC_FD - the '
+                'forms would not know it')
 if not re.search(r'^START-OF-SELECTION\.', MAIN, re.I | re.M):
     fail.append('ZFI_VEND_HONC: no START-OF-SELECTION - after a class implementation the '
                 'processing would not be reached')
@@ -72,10 +77,10 @@ def form(src, name):
 
 
 create, change, bp_data = form(FD, 'create_vendor'), form(FD, 'change_vendor'), form(FD, 'bp_data')
-if 'lcl_cimmra_bp=>create(' not in create:
-    fail.append('CREATE_VENDOR does not create the vendor through LCL_CIMMRA_BP=>CREATE')
-if 'lcl_cimmra_bp=>change(' not in change:
-    fail.append('CHANGE_VENDOR does not change the vendor through LCL_CIMMRA_BP=>CHANGE')
+if 'lcl_honc_bp=>create(' not in create:
+    fail.append('CREATE_VENDOR does not create the vendor through LCL_HONC_BP=>CREATE')
+if 'lcl_honc_bp=>change(' not in change:
+    fail.append('CHANGE_VENDOR does not change the vendor through LCL_HONC_BP=>CHANGE')
 if not re.search(r'iv_bank_replace\s*=\s*abap_true', change):
     fail.append('CHANGE_VENDOR adds the file\'s bank account next to the old one - FK02 replaced '
                 'the first account')
@@ -83,7 +88,7 @@ if not re.search(r'iv_comm_replace\s*=\s*abap_true', change):
     fail.append('CHANGE_VENDOR adds the file\'s mobile and e-mail next to the old ones - FK02 '
                 'overwrote the standard ones')
 if re.search(r'vendor-central_data-bankdetail', INC, re.I):
-    fail.append('ZFI_CIMMRA_BP sends bank details on the supplier - in S/4HANA CVI takes them from '
+    fail.append('LCL_HONC_BP sends bank details on the supplier - in S/4HANA CVI takes them from '
                 'the business partner (CVI_EI004)')
 if not re.search(r'iv_keep_blank\s*=\s*`VEN_CLASS`', change):
     fail.append('CHANGE_VENDOR does not send a blank GST classification - a vendor that registers '
@@ -132,7 +137,7 @@ for what, pat in (
          r'SELECT SINGLE address_guid FROM but020.*ls_adr-data_key-guid = lv_aguid\.'),
         ('passes the telephone extension', r'ls_tel-contact-data-extension = lv_ext\.')):
     if not re.search(pat, INC, re.I | re.S):
-        fail.append(f'ZFI_CIMMRA_BP no longer {what} (ZFI_VEND_HONC needs it)')
+        fail.append(f'LCL_HONC_BP no longer {what}')
 
 if fail:
     print(f'{len(fail)} problem(s):')
@@ -140,4 +145,4 @@ if fail:
         print('  -', f)
     sys.exit(1)
 print('clean - ZFI_VEND_HONC creates and changes HONC vendors as business partners through '
-      'ZFI_CIMMRA_BP, with the FK01 / FK02 data and the HONC file layout')
+      'their own LCL_HONC_BP, with the FK01 / FK02 data and the HONC file layout')

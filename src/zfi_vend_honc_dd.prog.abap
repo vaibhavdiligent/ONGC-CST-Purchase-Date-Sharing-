@@ -51,7 +51,7 @@
 * Description       : S/4HANA conversion - the vendor is a business
 *                     partner. FK01 / FK02 are gone in S/4HANA, so the
 *                     batch input that created and changed the vendor is
-*                     replaced by include ZFI_CIMMRA_BP (LCL_CIMMRA_BP,
+*                     replaced by program ZFI_VEND_HONC (LCL_HONC_BP,
 *                     CL_MD_BP_MAINTAIN): BP grouping and supplier roles
 *                     from account group Z001, name / address / mobile /
 *                     e-mail on the partner, GSTIN as the partner's tax
@@ -178,7 +178,7 @@ DATA : ta_bnka TYPE TABLE OF ty_bnka, " LOC added by Sushil as on 10.03.2021
 DATA : gv_file TYPE eps2filnam,
        wa_data TYPE ty_vendor.
 * S/4HANA: no batch input any more (BDCDATA, BDCMSGCOLL) - the vendor is
-* posted through LCL_CIMMRA_BP, which takes these:
+* posted through LCL_HONC_BP, which takes these:
 TYPES: BEGIN OF ty_bp_cin,                 " supplier: PAN, GST class
          j_1ipanno TYPE lfa1-j_1ipanno,
          ven_class TYPE lfa1-ven_class,

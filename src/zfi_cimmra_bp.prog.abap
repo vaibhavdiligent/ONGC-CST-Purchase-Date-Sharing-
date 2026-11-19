@@ -5,7 +5,7 @@
 *               partner (S/4HANA)
 * Used by     : ZFI_CIMMRA_VENDOR_CREATE, ZFI_CIMMRA_EMPVEND,
 *               ZFI_CIMMRA_EMPVEND_UPD, ZFI_CIMMRA_VENDOR_EXT,
-*               ZFI_CIMMRA_VENDOR_BLK, ZFI_VEND_HONC (HONC doctors)
+*               ZFI_CIMMRA_VENDOR_BLK
 * Description : In ECC the three reports called the RFCs
 *               ZMM_RFC_VENDOR_CREATE and ZMM_RFC_VENDOR_CHANGE, which
 *               maintained the vendor (LFA1/LFB1/LFM1) on its own. In
@@ -43,20 +43,6 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
   PUBLIC SECTION.
     "! A new vendor. IV_LIFNR only for an account group with external
     "! numbering; the business partner then gets the same number.
-    "! Options of CREATE and CHANGE (ZFI_VEND_HONC uses them):
-    "! IV_INDUSTRY     - the industry key of the file (ECC LFA1-BRSCH). It
-    "!                   goes to the supplier as BRSCH when T016 has it and to
-    "!                   the business partner as its industry sector (BP >
-    "!                   Industries) when one industry system (TB038A) holds
-    "!                   it - both when both do.
-    "! IV_KEEP_BLANK    - supplier / CIN fields, comma separated, that are sent
-    "!                   even when blank, so that a blank in the file clears
-    "!                   them (e.g. VEN_CLASS: blank = registered for GST).
-    "! IV_BANK_REPLACE  - CHANGE: the file's account replaces the vendor's
-    "!                   first bank account, as typing over line 1 in FK02 did.
-    "! IV_COMM_REPLACE  - CHANGE: a new telephone, mobile, fax or e-mail
-    "!                   overwrites the partner's standard one of its kind (by
-    "!                   its CONSNUMBER), as FK02 did, instead of being added.
     CLASS-METHODS create
       IMPORTING iv_lifnr   TYPE lifnr OPTIONAL
                 is_central TYPE vmds_ei_vmd_central
@@ -70,10 +56,6 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
                 it_bank    TYPE ANY TABLE OPTIONAL
                 it_wtax    TYPE ANY TABLE OPTIONAL
                 it_tan     TYPE ANY TABLE OPTIONAL
-                iv_industry     TYPE clike OPTIONAL
-                iv_keep_blank   TYPE string OPTIONAL
-                iv_bank_replace TYPE abap_bool DEFAULT abap_false
-                iv_comm_replace TYPE abap_bool DEFAULT abap_false
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
@@ -92,10 +74,6 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
                 it_bank    TYPE ANY TABLE OPTIONAL
                 it_wtax    TYPE ANY TABLE OPTIONAL
                 it_tan     TYPE ANY TABLE OPTIONAL
-                iv_industry     TYPE clike OPTIONAL
-                iv_keep_blank   TYPE string OPTIONAL
-                iv_bank_replace TYPE abap_bool DEFAULT abap_false
-                iv_comm_replace TYPE abap_bool DEFAULT abap_false
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
@@ -144,8 +122,7 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
 
   PRIVATE SECTION.
     CONSTANTS: c_insert TYPE c LENGTH 1 VALUE 'I',
-               c_update TYPE c LENGTH 1 VALUE 'U',
-               c_delete TYPE c LENGTH 1 VALUE 'D'.
+               c_update TYPE c LENGTH 1 VALUE 'U'.
 
     CLASS-METHODS post
       IMPORTING iv_change  TYPE abap_bool
@@ -161,10 +138,6 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
                 it_bank    TYPE ANY TABLE OPTIONAL
                 it_wtax    TYPE ANY TABLE OPTIONAL
                 it_tan     TYPE ANY TABLE OPTIONAL
-                iv_industry     TYPE clike OPTIONAL
-                iv_keep_blank   TYPE string OPTIONAL
-                iv_bank_replace TYPE abap_bool DEFAULT abap_false
-                iv_comm_replace TYPE abap_bool DEFAULT abap_false
       EXPORTING et_error   TYPE bapiret2_t
                 et_success TYPE bapiret2_t.
 
@@ -239,10 +212,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
                     it_bank    = it_bank
                     it_wtax    = it_wtax
                     it_tan     = it_tan
-                    iv_industry     = iv_industry
-                    iv_keep_blank   = iv_keep_blank
-                    iv_bank_replace = iv_bank_replace
-                    iv_comm_replace = iv_comm_replace
           IMPORTING et_error   = et_error
                     et_success = et_success ).
   ENDMETHOD.
@@ -261,10 +230,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
                     it_bank    = it_bank
                     it_wtax    = it_wtax
                     it_tan     = it_tan
-                    iv_industry     = iv_industry
-                    iv_keep_blank   = iv_keep_blank
-                    iv_bank_replace = iv_bank_replace
-                    iv_comm_replace = iv_comm_replace
           IMPORTING et_error   = et_error
                     et_success = et_success ).
   ENDMETHOD.
@@ -714,9 +679,7 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
           lv_lifnr TYPE lifnr,
           lv_land  TYPE land1,
           lv_adrnr TYPE adrnr,
-          lv_bp    TYPE bu_partner,
-          lv_bptype TYPE bu_type,
-          lt_note  TYPE bapiret2_t.
+          lv_bp    TYPE bu_partner.
 
     lv_lifnr = iv_lifnr.
     DATA(lv_task) = COND char1( WHEN iv_change = abap_true THEN c_update ELSE c_insert ).
@@ -732,8 +695,8 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
       ENDIF.
       SELECT SINGLE land1, adrnr FROM lfa1
         WHERE lifnr = @lv_lifnr INTO (@lv_land, @lv_adrnr).
-      SELECT SINGLE partner, type FROM but000
-        WHERE partner_guid = @lv_guid INTO (@lv_bp, @lv_bptype).
+      SELECT SINGLE partner FROM but000
+        WHERE partner_guid = @lv_guid INTO @lv_bp.
     ELSE.
       " A new partner has no number until it is saved; the message names it
       " by a GUID generated here, which becomes its PARTNER_GUID.
@@ -804,18 +767,8 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
            CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_centraldata
                      cs_datax = ls_data-partner-central_data-common-datax-bp_centraldata ).
     ENDIF.
-    " An existing partner that is a person (category 1) has first and last
-    " name, not NAME1-4: its name is left as it is, and the log says so.
     DATA(lt_name) = VALUE string_table( ( |NAME1;NAME| ) ( |NAME2;NAME_2| )
                                         ( |NAME3;NAME_3| ) ( |NAME4;NAME_4| ) ).
-    IF lv_bptype = '1'.
-      IF is_postal-data-name IS NOT INITIAL.
-        APPEND VALUE bapiret2( type = 'I'
-                               message = |Business partner { lv_bp ALPHA = OUT } is a person - | &&
-                                         |its name was not changed (change it in BP)| ) TO lt_note.
-      ENDIF.
-      CLEAR lt_name.
-    ENDIF.
     LOOP AT lt_name INTO DATA(lv_np).
       SPLIT lv_np AT ';' INTO DATA(lv_to) DATA(lv_from).
       DATA(lv_nm) = comp( is_any = is_postal-data iv_comp = lv_from ).
@@ -830,27 +783,8 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     DATA ls_adr TYPE bus_ei_bupa_address.
     CLEAR ls_adr.
     ls_adr-task = lv_task.
-    " A change of an existing address is keyed by the address GUID. With the
-    " usage XXDFLT alone BP looks for an address under a GUID of its own and
-    " refuses the change: "An address with GUID ... does not exist for
-    " business partner ...". The GUID is that of the partner's standard
-    " address - the vendor's (LFA1-ADRNR), else the one with usage XXDEFAULT.
-    DATA lv_aguid TYPE bu_address_guid.
     IF iv_change = abap_true.
       ls_adr-data_key-operation = 'XXDFLT'.      " the standard address
-      IF lv_bp IS NOT INITIAL AND lv_adrnr IS NOT INITIAL.
-        SELECT SINGLE address_guid FROM but020
-          WHERE partner = @lv_bp AND addrnumber = @lv_adrnr INTO @lv_aguid.
-      ENDIF.
-      IF lv_aguid IS INITIAL AND lv_bp IS NOT INITIAL.
-        SELECT SINGLE addrnumber FROM but021_fs
-          WHERE partner = @lv_bp AND adr_kind = 'XXDEFAULT' INTO @DATA(lv_stdadr).
-        IF lv_stdadr IS NOT INITIAL.
-          SELECT SINGLE address_guid FROM but020
-            WHERE partner = @lv_bp AND addrnumber = @lv_stdadr INTO @lv_aguid.
-        ENDIF.
-      ENDIF.
-      ls_adr-data_key-guid = lv_aguid.
     ENDIF.
     copy( EXPORTING is_src  = is_postal-data
                     iv_only = `CITY,DISTRICT,POSTL_COD1,STREET,HOUSE_NO,STR_SUPPL1,` &&
@@ -862,29 +796,22 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     DATA: lt_have_tel  TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line,
           lt_have_fax  TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line,
           lt_have_mail TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
-    " The standard entry comes first: with IV_COMM_REPLACE it is the one a new
-    " value overwrites, as FK02 did.
-    DATA lt_used TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     IF iv_change = abap_true AND lv_adrnr IS NOT INITIAL.
-      " R_3_USER 3 is the default mobile, 1 the default landline (SAP Help).
-      SELECT addrnumber, consnumber, tel_number, flgdefault, r3_user FROM adr2
-        WHERE addrnumber = @lv_adrnr AND persnumber = @space
-        ORDER BY flgdefault DESCENDING, r3_user DESCENDING, consnumber INTO TABLE @DATA(lt_a2).
+      SELECT addrnumber, tel_number FROM adr2
+        WHERE addrnumber = @lv_adrnr INTO TABLE @DATA(lt_a2).
       DATA lv_have TYPE string.
       LOOP AT lt_a2 INTO DATA(ls_a2).
         lv_have = condense( CONV string( ls_a2-tel_number ) ).
         INSERT lv_have INTO TABLE lt_have_tel.
       ENDLOOP.
-      SELECT addrnumber, consnumber, fax_number, flgdefault FROM adr3
-        WHERE addrnumber = @lv_adrnr AND persnumber = @space
-        ORDER BY flgdefault DESCENDING, consnumber INTO TABLE @DATA(lt_a3).
+      SELECT addrnumber, fax_number FROM adr3
+        WHERE addrnumber = @lv_adrnr INTO TABLE @DATA(lt_a3).
       LOOP AT lt_a3 INTO DATA(ls_a3).
         lv_have = condense( CONV string( ls_a3-fax_number ) ).
         INSERT lv_have INTO TABLE lt_have_fax.
       ENDLOOP.
-      SELECT addrnumber, consnumber, smtp_addr, flgdefault FROM adr6
-        WHERE addrnumber = @lv_adrnr AND persnumber = @space
-        ORDER BY flgdefault DESCENDING, consnumber INTO TABLE @DATA(lt_a6).
+      SELECT addrnumber, smtp_addr FROM adr6
+        WHERE addrnumber = @lv_adrnr INTO TABLE @DATA(lt_a6).
       LOOP AT lt_a6 INTO DATA(ls_a6).
         lv_have = to_upper( condense( CONV string( ls_a6-smtp_addr ) ) ).
         INSERT lv_have INTO TABLE lt_have_mail.
@@ -904,10 +831,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
         CLEAR ls_tel.
         ls_tel-contact-task           = c_insert.
         ls_tel-contact-data-telephone = lv_tel.
-        DATA(lv_ext) = comp( is_any = <ls_mob> iv_comp = 'EXTENSION' ).
-        IF lv_ext IS NOT INITIAL.
-          ls_tel-contact-data-extension = lv_ext.
-        ENDIF.
         " R_3_USER is a code, not a flag: space or 1 a landline, 2 or 3 a
         " mobile - anything else stops the save with MESSAGE_TYPE_X.
         DATA(lv_r3) = comp( is_any = <ls_mob> iv_comp = 'R_3_USER' ).
@@ -916,29 +839,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
         ENDIF.
         ls_tel-contact-data-std_no = lv_first.
         lv_first = abap_false.
-        " Replace: the partner's standard number of the same kind (mobile =
-        " R_3_USER 2 or 3) gets the new number; its flags stay as they are.
-        IF iv_change = abap_true AND iv_comm_replace = abap_true.
-          DATA(lv_ismob) = xsdbool( lv_r3 CA '23' ).
-          LOOP AT lt_a2 INTO DATA(ls_o2).
-            DATA(lv_ocons) = CONV string( ls_o2-consnumber ).
-            IF xsdbool( ls_o2-r3_user CA '23' ) <> lv_ismob
-            OR line_exists( lt_used[ table_line = lv_ocons ] ).
-              CONTINUE.
-            ENDIF.
-            INSERT lv_ocons INTO TABLE lt_used.
-            CLEAR ls_tel.
-            ls_tel-contact-task            = c_update.
-            ls_tel-contact-data-consnumber = ls_o2-consnumber.
-            set( EXPORTING iv_comp = 'TELEPHONE' iv_value = lv_tel
-                 CHANGING  cs_data = ls_tel-contact-data cs_datax = ls_tel-contact-datax ).
-            IF lv_ext IS NOT INITIAL.
-              set( EXPORTING iv_comp = 'EXTENSION' iv_value = lv_ext
-                   CHANGING  cs_data = ls_tel-contact-data cs_datax = ls_tel-contact-datax ).
-            ENDIF.
-            EXIT.
-          ENDLOOP.
-        ENDIF.
         APPEND ls_tel TO ls_adr-data-communication-phone-phone.
       ENDLOOP.
     ENDIF.
@@ -957,21 +857,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
         ls_fax-contact-data-fax    = lv_fax.
         ls_fax-contact-data-std_no = lv_first.
         lv_first = abap_false.
-        IF iv_change = abap_true AND iv_comm_replace = abap_true.
-          LOOP AT lt_a3 INTO DATA(ls_o3).
-            DATA(lv_fcons) = |F{ ls_o3-consnumber }|.
-            IF line_exists( lt_used[ table_line = lv_fcons ] ).
-              CONTINUE.
-            ENDIF.
-            INSERT lv_fcons INTO TABLE lt_used.
-            CLEAR ls_fax.
-            ls_fax-contact-task            = c_update.
-            ls_fax-contact-data-consnumber = ls_o3-consnumber.
-            set( EXPORTING iv_comp = 'FAX' iv_value = lv_fax
-                 CHANGING  cs_data = ls_fax-contact-data cs_datax = ls_fax-contact-datax ).
-            EXIT.
-          ENDLOOP.
-        ENDIF.
         APPEND ls_fax TO ls_adr-data-communication-fax-fax.
       ENDLOOP.
     ENDIF.
@@ -991,21 +876,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
         ls_smt-contact-data-e_mail = lv_mail.
         ls_smt-contact-data-std_no = lv_first.
         lv_first = abap_false.
-        IF iv_change = abap_true AND iv_comm_replace = abap_true.
-          LOOP AT lt_a6 INTO DATA(ls_o6).
-            DATA(lv_scons) = |S{ ls_o6-consnumber }|.
-            IF line_exists( lt_used[ table_line = lv_scons ] ).
-              CONTINUE.
-            ENDIF.
-            INSERT lv_scons INTO TABLE lt_used.
-            CLEAR ls_smt.
-            ls_smt-contact-task            = c_update.
-            ls_smt-contact-data-consnumber = ls_o6-consnumber.
-            set( EXPORTING iv_comp = 'E_MAIL' iv_value = lv_mail
-                 CHANGING  cs_data = ls_smt-contact-data cs_datax = ls_smt-contact-datax ).
-            EXIT.
-          ENDLOOP.
-        ENDIF.
         APPEND ls_smt TO ls_adr-data-communication-smtp-smtp.
       ENDLOOP.
     ENDIF.
@@ -1015,15 +885,7 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     OR ls_adr-data-communication-phone-phone IS NOT INITIAL
     OR ls_adr-data-communication-fax-fax IS NOT INITIAL
     OR ls_adr-data-communication-smtp-smtp IS NOT INITIAL.
-      IF iv_change = abap_true AND lv_aguid IS INITIAL.
-        " No standard address found - the rest of the change still goes in.
-        APPEND VALUE bapiret2( type = 'I'
-                               message = |Business partner { lv_bp ALPHA = OUT } has no standard address | &&
-                                         |(BUT020 / BUT021_FS) - address, telephone and e-mail not changed| )
-               TO lt_note.
-      ELSE.
-        APPEND ls_adr TO ls_data-partner-central_data-address-addresses.
-      ENDIF.
+      APPEND ls_adr TO ls_data-partner-central_data-address-addresses.
     ENDIF.
 
     " ---- business partner: tax numbers ----------------------------------
@@ -1093,101 +955,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
                     iv_only = `J_1IPANNO,VEN_CLASS,J_1ISSIST`
           CHANGING  cs_data  = ls_vc-data
                     cs_datax = ls_vc-datax ).
-    " Fields the caller wants sent even when blank: a blank clears them.
-    IF iv_keep_blank IS NOT INITIAL.
-      DATA lv_keep TYPE string.
-      lv_keep = to_upper( iv_keep_blank ).
-      SPLIT lv_keep AT ',' INTO TABLE DATA(lt_keep).
-      FIELD-SYMBOLS <lv_kv> TYPE any.
-      LOOP AT lt_keep INTO DATA(lv_kf).
-        CONDENSE lv_kf.
-        IF lv_kf IS INITIAL OR lv_kf = 'STCD3' OR lv_kf = 'STCD5' OR lv_kf = 'KTOKK'.
-          CONTINUE.
-        ENDIF.
-        UNASSIGN <lv_kv>.
-        ASSIGN COMPONENT lv_kf OF STRUCTURE is_cin TO <lv_kv>.
-        IF sy-subrc <> 0.
-          ASSIGN COMPONENT lv_kf OF STRUCTURE is_central-data TO <lv_kv>.
-        ENDIF.
-        IF <lv_kv> IS ASSIGNED AND <lv_kv> IS INITIAL.
-          set( EXPORTING iv_comp = lv_kf iv_value = <lv_kv>
-               CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
-        ENDIF.
-      ENDLOOP.
-    ENDIF.
-
-    " ---- industry key ----------------------------------------------------
-    " ECC kept it in LFA1-BRSCH. In S/4HANA the business partner has its own
-    " industry sectors (BUT0IS), each filed under an industry system
-    " (TB038A); Cipla's vendor template of November 2026 maintains those.
-    " The key goes wherever it is defined: the supplier's BRSCH when T016
-    " has it, the partner's industry sector when exactly one industry system
-    " holds it.
-    DATA(lv_ind) = to_upper( condense( CONV string( iv_industry ) ) ).
-    IF lv_ind IS NOT INITIAL.
-      DATA lv_brsch TYPE brsch.
-      lv_brsch = lv_ind.
-      DATA lv_t016 TYPE abap_bool.
-      CLEAR lv_t016.
-      SELECT SINGLE @abap_true FROM t016 WHERE brsch = @lv_brsch INTO @lv_t016.
-      IF lv_t016 = abap_true.
-        set( EXPORTING iv_comp = 'BRSCH' iv_value = lv_brsch
-             CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
-      ENDIF.
-      DATA lv_sec TYPE bu_indsect.
-      lv_sec = lv_ind.
-      SELECT istype FROM tb038a WHERE ind_sector = @lv_sec
-        ORDER BY istype INTO TABLE @DATA(lt_istype).
-      IF lines( lt_istype ) = 1.
-        DATA(lv_istype) = lt_istype[ 1 ]-istype.
-        DATA lv_ihave TYPE abap_bool.
-        CLEAR lv_ihave.
-        IF lv_bp IS NOT INITIAL.
-          SELECT SINGLE @abap_true FROM but0is
-            WHERE partner = @lv_bp AND istype = @lv_istype AND ind_sector = @lv_sec
-            INTO @lv_ihave.
-        ENDIF.
-        IF lv_ihave = abap_false.
-          DATA ls_is TYPE bus_ei_bupa_industrysector.
-          CLEAR ls_is.
-          ls_is-task                = c_insert.
-          ls_is-data_key-keysystem  = lv_istype.
-          ls_is-data_key-ind_sector = lv_sec.
-          IF iv_change = abap_false.
-            ls_is-data-ind_default  = abap_true.
-            ls_is-datax-ind_default = abap_true.
-          ENDIF.
-          APPEND ls_is TO ls_data-partner-central_data-industry-industries.
-        ENDIF.
-      ELSEIF lv_t016 = abap_false.
-        add( EXPORTING iv_text = COND string(
-                         WHEN lt_istype IS INITIAL
-                         THEN |Industry key { lv_ind } is neither an industry (T016) nor an | &&
-                              |industry sector of an industry system (TB038A)|
-                         ELSE |Industry key { lv_ind } is an industry sector of { lines( lt_istype ) } | &&
-                              |industry systems (TB038A) and no industry (T016) - it cannot be placed| )
-             CHANGING  ct      = et_error ).
-        RETURN.
-      ENDIF.
-    ENDIF.
-
-    " An unchanged industry key is not sent on a change. CVI maps BRSCH to
-    " the partner's industry (customizing "Assign industries") and inserts
-    " it again whenever BRSCH is sent - the partner has it already, and the
-    " whole change fails with CVI_MAPPING 002 "Industry 92 for object
-    " Business Partner with ID ... could not be assigned" (CRS, 19.11.2026).
-    IF iv_change = abap_true.
-      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_vc-datax TO FIELD-SYMBOL(<lv_brx>).
-      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_vc-data  TO FIELD-SYMBOL(<lv_brv>).
-      IF <lv_brx> IS ASSIGNED AND <lv_brv> IS ASSIGNED AND <lv_brx> = abap_true.
-        DATA lv_brsch_now TYPE brsch.
-        SELECT SINGLE brsch FROM lfa1 WHERE lifnr = @lv_lifnr INTO @lv_brsch_now.
-        IF lv_brsch_now = <lv_brv>.
-          CLEAR: <lv_brv>, <lv_brx>.
-        ENDIF.
-      ENDIF.
-    ENDIF.
-
     " The trading partner has an ALPHA domain (RCOMP, 6).
     DATA(lv_vbund) = comp( is_any = ls_vc-data iv_comp = 'VBUND' ).
     IF lv_vbund IS NOT INITIAL AND lv_vbund CO '0123456789'.
@@ -1196,88 +963,38 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     ENDIF.
     ls_data-vendor-central_data-central = ls_vc.
 
-    " ---- bank details: on the business partner ---------------------------
-    " In S/4HANA the business partner's bank details (BUT0BK) lead and CVI
-    " writes the supplier's (LFBK) from them - CVI_EI004 "Bank data is
-    " provided from the business partner". Each line is keyed by its bank
-    " details ID; a new one takes the next free number.
+    " ---- supplier: bank details -----------------------------------------
     IF it_bank IS SUPPLIED.
-      TYPES: BEGIN OF lty_bk,
-               bkvid TYPE bu_bkvid,
-               banks TYPE banks,
-               bankl TYPE bankk,
-               bankn TYPE bankn,
-             END OF lty_bk.
-      DATA: lt_bk_old TYPE STANDARD TABLE OF lty_bk WITH EMPTY KEY,
-            lt_bk_new TYPE STANDARD TABLE OF lty_bk WITH EMPTY KEY,
-            lv_bk_max TYPE i.
-      IF lv_bp IS NOT INITIAL.
-        SELECT bkvid, banks, bankl, bankn FROM but0bk
-          WHERE partner = @lv_bp
-          ORDER BY banks, bankl, bankn
-          INTO CORRESPONDING FIELDS OF TABLE @lt_bk_old.
-      ENDIF.
-      LOOP AT lt_bk_old INTO DATA(ls_bk_old).
-        IF ls_bk_old-bkvid CO '0123456789'.
-          IF CONV i( ls_bk_old-bkvid ) > lv_bk_max.
-            lv_bk_max = CONV i( ls_bk_old-bkvid ).
-          ENDIF.
-        ENDIF.
-      ENDLOOP.
-
-      " The file's accounts, complete ones only.
       LOOP AT it_bank ASSIGNING FIELD-SYMBOL(<ls_bank>).
-        DATA ls_bk_in TYPE lty_bk.
-        CLEAR ls_bk_in.
-        ls_bk_in-bankn = comp( is_any = <ls_bank> iv_comp = 'BANKN' ).
-        ls_bk_in-bankl = to_upper( comp( is_any = <ls_bank> iv_comp = 'BANKL' ) ).
-        ls_bk_in-banks = to_upper( comp( is_any = <ls_bank> iv_comp = 'BANKS' ) ).
-        IF ls_bk_in-banks IS INITIAL.
-          ls_bk_in-banks = lv_land.
-        ENDIF.
-        IF ls_bk_in-bankn IS INITIAL OR ls_bk_in-bankl IS INITIAL.
+        DATA(lv_bankn) = comp( is_any = <ls_bank> iv_comp = 'BANKN' ).
+        DATA(lv_bankl) = to_upper( comp( is_any = <ls_bank> iv_comp = 'BANKL' ) ).
+        DATA(lv_banks) = to_upper( comp( is_any = <ls_bank> iv_comp = 'BANKS' ) ).
+        IF lv_bankn IS INITIAL OR lv_bankl IS INITIAL.
           CONTINUE.
         ENDIF.
-        DATA ls_bk TYPE bus_ei_bupa_bankdetail.
-        CLEAR ls_bk.
-        READ TABLE lt_bk_old INTO DATA(ls_bk_same)
-          WITH KEY banks = ls_bk_in-banks bankl = ls_bk_in-bankl bankn = ls_bk_in-bankn.
-        IF sy-subrc = 0.
-          ls_bk-task     = c_update.
-          ls_bk-data_key = ls_bk_same-bkvid.
-        ELSE.
-          lv_bk_max += 1.
-          ls_bk-task     = c_insert.
-          ls_bk-data_key = |{ lv_bk_max WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
-          set( EXPORTING iv_comp = 'BANK_CTRY' iv_value = ls_bk_in-banks
-               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
-          set( EXPORTING iv_comp = 'BANK_KEY' iv_value = ls_bk_in-bankl
-               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
-          set( EXPORTING iv_comp = 'BANK_ACCT' iv_value = ls_bk_in-bankn
-               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
-          APPEND ls_bk_in TO lt_bk_new.
+        IF lv_banks IS INITIAL.
+          lv_banks = lv_land.
         ENDIF.
+        DATA lv_bhave TYPE abap_bool.
+        CLEAR lv_bhave.
+        IF iv_change = abap_true.
+          SELECT SINGLE @abap_true FROM lfbk
+            WHERE lifnr = @lv_lifnr AND banks = @lv_banks
+              AND bankl = @lv_bankl AND bankn = @lv_bankn INTO @lv_bhave.
+        ENDIF.
+        DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
+        CLEAR ls_bk.
+        ls_bk-task           = COND #( WHEN lv_bhave = abap_true THEN c_update ELSE c_insert ).
+        ls_bk-data_key-banks = lv_banks.
+        ls_bk-data_key-bankl = lv_bankl.
+        ls_bk-data_key-bankn = lv_bankn.
         DATA(lv_koinh) = comp( is_any = <ls_bank> iv_comp = 'KOINH' ).
         IF lv_koinh IS NOT INITIAL.
-          set( EXPORTING iv_comp = 'ACCOUNTHOLDER' iv_value = lv_koinh
+          set( EXPORTING iv_comp = 'KOINH' iv_value = lv_koinh
                CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
         ENDIF.
-        IF ls_bk-task = c_insert OR ls_bk-datax IS NOT INITIAL.
-          APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
-        ENDIF.
+        APPEND ls_bk TO ls_data-vendor-central_data-bankdetail-bankdetails.
       ENDLOOP.
-
-      " FK02 took the file's account into line 1 of the bank details: the
-      " vendor's first account (in key order) was replaced, the others stayed.
-      " Only when the file brings an account the vendor does not have yet.
-      IF iv_change = abap_true AND iv_bank_replace = abap_true
-      AND lt_bk_new IS NOT INITIAL AND lt_bk_old IS NOT INITIAL.
-        DATA ls_bkdel TYPE bus_ei_bupa_bankdetail.
-        CLEAR ls_bkdel.
-        ls_bkdel-task     = c_delete.
-        ls_bkdel-data_key = lt_bk_old[ 1 ]-bkvid.
-        APPEND ls_bkdel TO ls_data-partner-central_data-bankdetail-bankdetails.
-      ENDIF.
     ENDIF.
 
     " ---- supplier: company code and withholding tax ---------------------
@@ -1428,7 +1145,6 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
       message = |{ lv_new };{ lv_adrnr } Vendor { lv_new ALPHA = OUT } | &&
                 |{ COND string( WHEN iv_change = abap_true THEN `changed` ELSE `created` ) } | &&
                 |as business partner { lv_bp ALPHA = OUT }| ) TO et_success.
-    APPEND LINES OF lt_note TO et_success.
   ENDMETHOD.
 
 ENDCLASS.
