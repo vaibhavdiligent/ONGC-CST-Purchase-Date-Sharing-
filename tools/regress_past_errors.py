@@ -287,6 +287,10 @@ CASES = [
     ('HONC change: industry sent although the BP has it - CVI maps 0009 to 92, "Industry 92 ... could not be assigned" (CRS, BP 100092735, 20.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "      IF lv_bp_has_ind = abap_true.\n        CLEAR lv_ind.\n", "      IF lv_bp_has_ind = abap_true.\n")]),
+    ('HONC change: unchanged supplier fields sent - CVI re-derives industry 92 (CRS, BP 100096289, 20.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "            IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>.\n              CLEAR: <lv_vd>, <lv_vx>.\n",
+       "            IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>.\n")]),
 ]
 
 

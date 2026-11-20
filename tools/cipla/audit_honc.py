@@ -133,6 +133,12 @@ for what, pat in (
          r'ls_tel-contact-data-consnumber = ls_o2-consnumber\..*ls_fax-contact-data-consnumber = '
          r'ls_o3-consnumber\..*ls_smt-contact-data-consnumber = ls_o6-consnumber\.'),
         ('leaves the name of a person partner alone', r"IF lv_bptype = '1'\."),
+        ('sends on a change only supplier fields that differ from LFA1 - any supplier field makes CVI '
+         're-derive the industry (CVI_MAPPING 002 "Industry 92")',
+         r"SELECT SINGLE \* FROM lfa1 WHERE lifnr = @lv_lifnr INTO @DATA\(ls_lfa1_now\)\..*"
+         r"get_included_view\( \).*IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>\.\s*\n\s*CLEAR: <lv_vd>, <lv_vx>\."),
+        ('drops all supplier fields when saving again after CVI_MAPPING 002',
+         r"CLEAR: ls_data-vendor-central_data-central-data,\s*\n\s*ls_data-vendor-central_data-central-datax\."),
         ('sends no industry on a change when the partner already has it (BUT0IS) - CVI maps 0009 to 92 '
          'and cannot assign it next to the partner\'s 0009 (CVI_MAPPING 002)',
          r'FROM but0is\s*\n\s*WHERE partner = @lv_bp AND ind_sector = @lv_sec_have INTO @lv_bp_has_ind\.\s*\n'

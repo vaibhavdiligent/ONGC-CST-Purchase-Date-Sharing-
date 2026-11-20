@@ -962,6 +962,39 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       set( EXPORTING iv_comp = 'VBUND' iv_value = |{ lv_vbund ALPHA = IN WIDTH = 6 }|
            CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
     ENDIF.
+    " On a change only what differs from the supplier as it is is sent. A
+    " supplier field in the request - even an unchanged one (KONZS NONFIELD,
+    " the GST class), as FK02 always typed them - makes CVI derive the
+    " partner's industry from the supplier's industry key again: Cipla's CVI
+    " mapping turns 0009 into 92, which cannot sit next to the partner's own
+    " 0009 - CVI_MAPPING 002 "Industry 92 for object Business Partner with ID
+    " ... could not be assigned" (CRS, BP 100096289, 20.11.2026).
+    IF iv_change = abap_true AND ls_vc-datax IS NOT INITIAL.
+      SELECT SINGLE * FROM lfa1 WHERE lifnr = @lv_lifnr INTO @DATA(ls_lfa1_now).
+      IF sy-subrc = 0.
+        DATA lo_vxd TYPE REF TO cl_abap_structdescr.
+        lo_vxd ?= cl_abap_typedescr=>describe_by_data( ls_vc-datax ).
+        FIELD-SYMBOLS: <lv_vx> TYPE any,
+                       <lv_vd> TYPE any,
+                       <lv_vo> TYPE any.
+        " The included view: the India fields (GST class, PAN) sit in includes.
+        DATA(lt_vxc) = lo_vxd->get_included_view( ).
+        LOOP AT lt_vxc INTO DATA(ls_vxc).
+          IF ls_vxc-type->type_kind <> cl_abap_typedescr=>typekind_char.
+            CONTINUE.
+          ENDIF.
+          UNASSIGN: <lv_vx>, <lv_vd>, <lv_vo>.
+          ASSIGN COMPONENT ls_vxc-name OF STRUCTURE ls_vc-datax TO <lv_vx>.
+          ASSIGN COMPONENT ls_vxc-name OF STRUCTURE ls_vc-data  TO <lv_vd>.
+          ASSIGN COMPONENT ls_vxc-name OF STRUCTURE ls_lfa1_now TO <lv_vo>.
+          IF <lv_vx> IS ASSIGNED AND <lv_vd> IS ASSIGNED AND <lv_vo> IS ASSIGNED.
+            IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>.
+              CLEAR: <lv_vd>, <lv_vx>.
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
     ls_data-vendor-central_data-central = ls_vc.
 
     " ---- bank details: on the business partner ---------------------------
@@ -1165,6 +1198,10 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         CLEAR: <lv_rbr>, <lv_rbrx>.
       ENDIF.
       CLEAR ls_data-partner-central_data-industry-industries.
+      " No supplier field at all: any of them makes CVI derive the industry.
+      DATA(lv_vc_left) = xsdbool( ls_data-vendor-central_data-central-datax IS NOT INITIAL ).
+      CLEAR: ls_data-vendor-central_data-central-data,
+             ls_data-vendor-central_data-central-datax.
       DATA(lv_indmsg) = et_error[ 1 ]-message.
       CLEAR et_error.
       IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
@@ -1172,8 +1209,11 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       ENDIF.
       APPEND VALUE bapiret2(
         type    = 'W'
-        message = |Saved without the industry key "{ lv_ind }": { lv_indmsg } - the CVI industry | &&
-                  |mapping (SPRO: Customer/Vendor Integration > Assign Industries) has no entry for it| )
+        message = |Saved without the industry key "{ lv_ind }"| &&
+                  |{ COND string( WHEN lv_vc_left = abap_true
+                                  THEN ` and without the supplier control data (corporate group, GST class)` ) }| &&
+                  |: { lv_indmsg } - the CVI industry mapping (SPRO: Customer/Vendor Integration > | &&
+                  |Assign Industries) does not fit the industry of the business partner| )
         TO lt_note.
     ENDIF.
 
