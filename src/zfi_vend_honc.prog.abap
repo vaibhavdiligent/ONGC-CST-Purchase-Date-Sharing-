@@ -246,6 +246,18 @@ CLASS lcl_honc_bp DEFINITION FINAL.
                 iv_adrnr TYPE adrnr
       CHANGING  ct_error TYPE bapiret2_t.
 
+    "! The standard industry system (TB038, the one flagged), initial when
+    "! it cannot be told.
+    CLASS-METHODS std_system
+      RETURNING VALUE(rv) TYPE bu_istype.
+
+    "! Whether a customizing table has a row that holds both values.
+    CLASS-METHODS row_has
+      IMPORTING iv_tab    TYPE tabname
+                iv_a      TYPE clike
+                iv_b      TYPE clike
+      RETURNING VALUE(rv) TYPE abap_bool.
+
     "! The rows of a customizing table that hold one of two values, as text.
     CLASS-METHODS rows_with
       IMPORTING iv_tab    TYPE tabname
@@ -489,6 +501,91 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " does not.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
     reset_bp( ).
+  ENDMETHOD.
+
+  METHOD std_system.
+    " TB038 is read without relying on the name of its flag: the standard
+    " industry system is the one row with a one-character field set to X.
+    DATA lr_tab TYPE REF TO data.
+    FIELD-SYMBOLS: <lt_any> TYPE STANDARD TABLE,
+                   <ls_any> TYPE any,
+                   <lv_any> TYPE any,
+                   <lv_sys> TYPE any.
+    CLEAR rv.
+    DATA(lv_n) = 0.
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF ('TB038').
+        ASSIGN lr_tab->* TO <lt_any>.
+        SELECT * FROM ('TB038') INTO TABLE @<lt_any>.
+        LOOP AT <lt_any> ASSIGNING <ls_any>.
+          ASSIGN COMPONENT 'ISTYPE' OF STRUCTURE <ls_any> TO <lv_sys>.
+          IF sy-subrc <> 0.
+            RETURN.
+          ENDIF.
+          DATA(lv_flag) = abap_false.
+          DO.
+            ASSIGN COMPONENT sy-index OF STRUCTURE <ls_any> TO <lv_any>.
+            IF sy-subrc <> 0.
+              EXIT.
+            ENDIF.
+            DATA(lo_td) = cl_abap_typedescr=>describe_by_data( <lv_any> ).
+            IF lo_td->type_kind = cl_abap_typedescr=>typekind_char
+            AND lo_td->length = cl_abap_char_utilities=>charsize.
+              IF <lv_any> = 'X'.
+                lv_flag = abap_true.
+              ENDIF.
+            ENDIF.
+          ENDDO.
+          IF lv_flag = abap_true.
+            lv_n = lv_n + 1.
+            rv = <lv_sys>.
+          ENDIF.
+        ENDLOOP.
+      CATCH cx_root.
+        CLEAR rv.
+        RETURN.
+    ENDTRY.
+    IF lv_n <> 1.
+      CLEAR rv.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD row_has.
+    DATA lr_tab TYPE REF TO data.
+    FIELD-SYMBOLS: <lt_any> TYPE STANDARD TABLE,
+                   <ls_any> TYPE any,
+                   <lv_any> TYPE any.
+    rv = abap_false.
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF (iv_tab).
+        ASSIGN lr_tab->* TO <lt_any>.
+        SELECT * FROM (iv_tab) INTO TABLE @<lt_any> UP TO 20000 ROWS.
+        LOOP AT <lt_any> ASSIGNING <ls_any>.
+          DATA(lv_ha) = abap_false.
+          DATA(lv_hb) = abap_false.
+          DO.
+            ASSIGN COMPONENT sy-index OF STRUCTURE <ls_any> TO <lv_any>.
+            IF sy-subrc <> 0.
+              EXIT.
+            ENDIF.
+            IF sy-index = 1.
+              CONTINUE.
+            ENDIF.
+            DATA(lv_val) = condense( CONV string( <lv_any> ) ).
+            IF lv_val = iv_a AND lv_ha = abap_false.
+              lv_ha = abap_true.
+            ELSEIF lv_val = iv_b.
+              lv_hb = abap_true.
+            ENDIF.
+          ENDDO.
+          IF lv_ha = abap_true AND lv_hb = abap_true.
+            rv = abap_true.
+            RETURN.
+          ENDIF.
+        ENDLOOP.
+      CATCH cx_root.
+        rv = abap_false.
+    ENDTRY.
   ENDMETHOD.
 
   METHOD rows_with.
@@ -1071,8 +1168,37 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       lv_sec = lv_ind.
       SELECT istype FROM tb038a WHERE ind_sector = @lv_sec
         ORDER BY istype INTO TABLE @DATA(lt_istype).
+      " An industry filed under no industry system is not one a partner can
+      " have. Cipla's TB038A holds 0009-0015 once under a blank system and
+      " once under 0001: the industry counted as "in two systems" and was
+      " not set at all (CRS, BP 100154602, 20.11.2026).
+      DELETE lt_istype WHERE istype IS INITIAL.
+      " The industry system: the only one that holds the industry, or - when
+      " several do - the standard industry system (the one BP shows).
+      DATA lv_istype TYPE bu_istype.
+      CLEAR lv_istype.
       IF lines( lt_istype ) = 1.
-        DATA(lv_istype) = lt_istype[ 1 ]-istype.
+        lv_istype = lt_istype[ 1 ]-istype.
+      ELSEIF lines( lt_istype ) > 1.
+        DATA(lv_stdsys) = std_system( ).
+        IF lv_stdsys IS NOT INITIAL AND line_exists( lt_istype[ istype = lv_stdsys ] ).
+          lv_istype = lv_stdsys.
+        ELSE.
+          " Else the one system for which CVI has the industry assigned.
+          DATA(lv_nmap) = 0.
+          LOOP AT lt_istype INTO DATA(ls_cand).
+            IF row_has( iv_tab = 'TP038M1' iv_a = ls_cand-istype iv_b = lv_sec ) = abap_true
+            OR row_has( iv_tab = 'TP038M2' iv_a = ls_cand-istype iv_b = lv_sec ) = abap_true.
+              lv_nmap   = lv_nmap + 1.
+              lv_istype = ls_cand-istype.
+            ENDIF.
+          ENDLOOP.
+          IF lv_nmap <> 1.
+            CLEAR lv_istype.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+      IF lv_istype IS NOT INITIAL.
         DATA lv_ihave TYPE abap_bool.
         CLEAR lv_ihave.
         IF lv_bp IS NOT INITIAL.
@@ -1090,6 +1216,11 @@ CLASS lcl_honc_bp IMPLEMENTATION.
           ls_is-data-ind_default  = abap_true.
           ls_is-datax-ind_default = abap_true.
           APPEND ls_is TO ls_data-partner-central_data-industry-industries.
+          IF iv_change = abap_true.
+            APPEND VALUE bapiret2( type = 'I'
+              message = |Industry { lv_sec } set as the standard industry of business partner | &&
+                        |{ lv_bp ALPHA = OUT } (it had none)| ) TO lt_note.
+          ENDIF.
         ENDIF.
       ELSEIF lv_t016 = abap_false.
         add( EXPORTING iv_text = COND string(
@@ -1100,6 +1231,14 @@ CLASS lcl_honc_bp IMPLEMENTATION.
                               |industry systems (TB038A) and no industry (T016) - it cannot be placed| )
              CHANGING  ct      = et_error ).
         RETURN.
+      ELSEIF iv_change = abap_true.
+        " Not left unsaid: the partner has no industry and gets none.
+        APPEND VALUE bapiret2( type = 'I'
+          message = |Industry { lv_ind } not set on business partner { lv_bp ALPHA = OUT }: | &&
+                    |{ COND string( WHEN lt_istype IS INITIAL
+                                    THEN `it is in no industry system (BP customizing, Industries)`
+                                    ELSE |it is in { lines( lt_istype ) } industry systems and none | &&
+                                         |of them is the standard one| ) }| ) TO lt_note.
       ENDIF.
     ENDIF.
 
@@ -1414,8 +1553,16 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         IF lv_fsys IS INITIAL.
           SELECT istype FROM tb038a WHERE ind_sector = @lv_fsec
             ORDER BY istype INTO TABLE @DATA(lt_fsys).
+          DELETE lt_fsys WHERE istype IS INITIAL.
           IF lines( lt_fsys ) = 1.
             lv_fsys = lt_fsys[ 1 ]-istype.
+          ELSEIF lines( lt_fsys ) > 1.
+            DATA(lv_stdsys2) = std_system( ).
+            IF lv_stdsys2 IS NOT INITIAL AND line_exists( lt_fsys[ istype = lv_stdsys2 ] ).
+              lv_fsys = lv_stdsys2.
+            ENDIF.
+          ENDIF.
+          IF lv_fsys IS NOT INITIAL.
             LOOP AT lt_bpis INTO ls_bpis WHERE istype = lv_fsys AND isdef = abap_true.
               lv_oldstd = ls_bpis-ind_sector.
             ENDLOOP.

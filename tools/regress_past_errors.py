@@ -318,6 +318,13 @@ CASES = [
     ('HONC change refused for good: partner\'s standard industry 92 has no vendor industry key, vendor has 0009 (CRS, BP 100113814, 20.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "          IF save( EXPORTING is_data  = ls_alt\n", "          IF save( EXPORTING is_data  = ls_data2\n")]),
+    ('HONC change: industry in several industry systems - silently not set on a partner without one (CRS, 20.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "      ELSEIF lines( lt_istype ) > 1.\n        DATA(lv_stdsys) = std_system( ).\n",
+       "      ELSEIF lines( lt_istype ) > 99.\n        DATA(lv_stdsys) = std_system( ).\n")]),
+    ('HONC change: 0009 also filed under a blank industry system (TB038A) - industry not set, BP 100154602 (CRS, 20.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "      DELETE lt_istype WHERE istype IS INITIAL.\n", "")]),
 ]
 
 

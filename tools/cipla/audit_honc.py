@@ -170,6 +170,14 @@ for what, pat in (
          r'FROM but0is\s*\n\s*WHERE partner = @lv_bp INTO @lv_bp_has_ind\.\s*\n'
          r'\s*IF lv_bp_has_ind = abap_true\.\s*\n\s*CLEAR lv_ind\.'),
         ('never sends BRSCH on a change', r"IF lv_t016 = abap_true AND iv_change = abap_false\."),
+        ('picks the standard industry system (TB038) when several hold the file\'s industry - the industry '
+         'was silently not set',
+         r"ELSEIF lines\( lt_istype \) > 1\.\s*\n\s*DATA\(lv_stdsys\) = std_system\( \)\..*METHOD std_system\.|"
+         r"METHOD std_system\..*ELSEIF lines\( lt_istype \) > 1\.\s*\n\s*DATA\(lv_stdsys\) = std_system\( \)\."),
+        ('ignores industries filed under a blank industry system (TB038A) - 0009 counted as in two systems '
+         'and was not set',
+         r"INTO TABLE @DATA\(lt_istype\)\..*?DELETE lt_istype WHERE istype IS INITIAL\."),
+        ('says in the log when a partner without an industry gets none', r"Industry \{ lv_ind \} not set on business partner"),
 
         ('leaves out an unchanged industry key on a change - CVI would insert the mapped industry '
          'again (CVI_MAPPING 002 "Industry 92 ... could not be assigned")',
