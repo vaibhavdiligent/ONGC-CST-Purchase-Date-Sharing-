@@ -137,15 +137,15 @@ for what, pat in (
          're-derive the industry (CVI_MAPPING 002 "Industry 92")',
          r"SELECT SINGLE \* FROM lfa1 WHERE lifnr = @lv_lifnr INTO @DATA\(ls_lfa1_now\)\..*"
          r"get_included_view\( \).*IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>\.\s*\n\s*CLEAR: <lv_vd>, <lv_vx>\."),
-        ('drops all supplier fields when saving again after CVI_MAPPING 002',
-         r"CLEAR: ls_data-vendor-central_data-central-data,\s*\n\s*ls_data-vendor-central_data-central-datax\."),
+        ('saves a change in two steps - bank, address, tax first, the supplier fields on their own after '
+         'it - so a CVI_MAPPING 002 refusal loses only those',
+         r"ls_vc_later = ls_data-vendor-central_data-central\.\s*\n\s*CLEAR ls_data-vendor-central_data-central\..*"
+         r"ls_data2-vendor-central_data-central\s*= ls_vc_later\..*save\( EXPORTING is_data = ls_data2"),
         ('sends no industry on a change when the partner already has it (BUT0IS) - CVI maps 0009 to 92 '
          'and cannot assign it next to the partner\'s 0009 (CVI_MAPPING 002)',
          r'FROM but0is\s*\n\s*WHERE partner = @lv_bp AND ind_sector = @lv_sec_have INTO @lv_bp_has_ind\.\s*\n'
          r'\s*IF lv_bp_has_ind = abap_true\.\s*\n\s*CLEAR lv_ind\.'),
-        ('saves again without the industry key when CVI cannot map it (CVI_MAPPING 002) and says so',
-         r"ls_e1-id = 'CVI_MAPPING' AND ls_e1-number = '002'.*CLEAR ls_data-partner-central_data-industry-industries\..*"
-         r"Saved without the industry key"),
+
         ('leaves out an unchanged industry key on a change - CVI would insert the mapped industry '
          'again (CVI_MAPPING 002 "Industry 92 ... could not be assigned")',
          r'SELECT SINGLE brsch FROM lfa1 WHERE lifnr = @lv_lifnr INTO @lv_brsch_now\.\s*\n\s*'
@@ -156,6 +156,11 @@ for what, pat in (
         ('passes the telephone extension', r'ls_tel-contact-data-extension = lv_ext\.')):
     if not re.search(pat, INC, re.I | re.S):
         fail.append(f'LCL_HONC_BP no longer {what}')
+
+n_save = len(re.findall(r'save\( EXPORTING is_data = ls_data CHANGING', INC))
+if n_save != 1:
+    fail.append(f'LCL_HONC_BP saves the same request {n_save} times - after a failed save the partner\'s '
+                f'buffers still hold it, and a second save writes the bank details twice (CRS, 20.11.2026)')
 
 if fail:
     print(f'{len(fail)} problem(s):')

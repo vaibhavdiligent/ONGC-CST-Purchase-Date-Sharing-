@@ -1168,53 +1168,50 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     ENDIF.
 
     " ---- validate, maintain, commit -------------------------------------
+    " A change is saved in two steps. The supplier's own fields (corporate
+    " group, GST class, industry key) go in a save of their own, after the
+    " rest: any of them makes CVI derive the partner's industry from the
+    " supplier's industry key again, and with Cipla's mapping (0009 -> 92)
+    " that can be refused - CVI_MAPPING 002 "Industry 92 for object Business
+    " Partner with ID ... could not be assigned". Saved with the rest, that
+    " refusal lost the bank, address and tax number; saved again after it,
+    " the partner's buffers still held the first attempt's bank details and
+    " the account was written twice (CRS, 20.11.2026). Now the bank, address,
+    " communication and tax numbers are saved once, and a refusal of the
+    " supplier fields only leaves those unchanged, with a warning.
+    DATA ls_vc_later TYPE vmds_ei_vmd_central.
+    IF iv_change = abap_true AND ls_data-vendor-central_data-central-datax IS NOT INITIAL.
+      ls_vc_later = ls_data-vendor-central_data-central.
+      CLEAR ls_data-vendor-central_data-central.
+    ENDIF.
+
     IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
-      " CVI_MAPPING 002 "Industry &1 for object Business Partner with ID &2
-      " could not be assigned": CVI cannot map an industry key between the
-      " supplier (LFA1-BRSCH) and the partner - the industry assignment in
-      " the CVI customizing has no entry for it (SAP KBA 2555285). Seen in
-      " CRS on 19.11.2026 for "Industry 92". The record is then saved once
-      " more without the industry key, so that the bank, address and the
-      " rest still go in, and the log says what was left out and why.
-      DATA lv_indfail TYPE abap_bool.
-      CLEAR lv_indfail.
-      LOOP AT et_error INTO DATA(ls_e1).
-        IF ( ls_e1-id = 'CVI_MAPPING' AND ls_e1-number = '002' )
-        OR ( ls_e1-message CS 'Industry' AND ls_e1-message CS 'could not be assigned' ).
-          lv_indfail = abap_true.
-        ELSE.
-          " Any other error stops the record as before.
-          RETURN.
-        ENDIF.
-      ENDLOOP.
-      IF lv_indfail = abap_false.
-        RETURN.
+      RETURN.
+    ENDIF.
+
+    IF ls_vc_later-datax IS NOT INITIAL.
+      DATA: ls_data2  TYPE cvis_ei_extern,
+            lt_err2   TYPE bapiret2_t.
+      ls_data2-partner-header-object_task                  = c_update.
+      ls_data2-partner-header-object_instance-bpartnerguid = lv_guid.
+      ls_data2-vendor-header-object_task                   = c_update.
+      ls_data2-vendor-header-object_instance-lifnr         = lv_lifnr.
+      ls_data2-vendor-central_data-central                 = ls_vc_later.
+      IF save( EXPORTING is_data = ls_data2 CHANGING ct_error = lt_err2 ) = abap_false.
+        DATA(lv_err2) = VALUE string( ).
+        LOOP AT lt_err2 INTO DATA(ls_e2).
+          lv_err2 = COND #( WHEN lv_err2 IS INITIAL THEN CONV string( ls_e2-message )
+                            ELSE |{ lv_err2 } / { ls_e2-message }| ).
+        ENDLOOP.
+        APPEND VALUE bapiret2(
+          type    = 'W'
+          message = |Bank, address and tax data saved; supplier control data (corporate group, | &&
+                    |GST class, industry key) not changed: { lv_err2 }| &&
+                    |{ COND string( WHEN line_exists( lt_err2[ id = 'CVI_MAPPING' number = '002' ] )
+                                    THEN ` - the CVI industry mapping (SPRO: Customer/Vendor Integration > ` &&
+                                         `Assign Industries) does not fit the industry of the business partner` ) }| )
+          TO lt_note.
       ENDIF.
-      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_data-vendor-central_data-central-data
-        TO FIELD-SYMBOL(<lv_rbr>).
-      ASSIGN COMPONENT 'BRSCH' OF STRUCTURE ls_data-vendor-central_data-central-datax
-        TO FIELD-SYMBOL(<lv_rbrx>).
-      IF <lv_rbr> IS ASSIGNED AND <lv_rbrx> IS ASSIGNED.
-        CLEAR: <lv_rbr>, <lv_rbrx>.
-      ENDIF.
-      CLEAR ls_data-partner-central_data-industry-industries.
-      " No supplier field at all: any of them makes CVI derive the industry.
-      DATA(lv_vc_left) = xsdbool( ls_data-vendor-central_data-central-datax IS NOT INITIAL ).
-      CLEAR: ls_data-vendor-central_data-central-data,
-             ls_data-vendor-central_data-central-datax.
-      DATA(lv_indmsg) = et_error[ 1 ]-message.
-      CLEAR et_error.
-      IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
-        RETURN.
-      ENDIF.
-      APPEND VALUE bapiret2(
-        type    = 'W'
-        message = |Saved without the industry key "{ lv_ind }"| &&
-                  |{ COND string( WHEN lv_vc_left = abap_true
-                                  THEN ` and without the supplier control data (corporate group, GST class)` ) }| &&
-                  |: { lv_indmsg } - the CVI industry mapping (SPRO: Customer/Vendor Integration > | &&
-                  |Assign Industries) does not fit the industry of the business partner| )
-        TO lt_note.
     ENDIF.
 
     " ---- the vendor CVI made ---------------------------------------------
