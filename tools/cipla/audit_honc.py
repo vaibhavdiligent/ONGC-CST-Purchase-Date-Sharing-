@@ -141,12 +141,29 @@ for what, pat in (
          r"get_included_view\( \).*IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>\.\s*\n\s*CLEAR: <lv_vd>, <lv_vx>\."),
         ('saves a change in two steps - bank, address, tax first, the supplier fields on their own after '
          'it - so a CVI_MAPPING 002 refusal loses only those',
-         r"ls_vc_later = ls_data-vendor-central_data-central\.\s*\n\s*CLEAR ls_data-vendor-central_data-central\..*"
-         r"ls_data2-vendor-central_data-central\s*= ls_vc_later\..*save\( EXPORTING is_data = ls_data2"),
-        ('sends no industry on a change when the partner already has it (BUT0IS) - CVI maps 0009 to 92 '
-         'and cannot assign it next to the partner\'s 0009 (CVI_MAPPING 002)',
-         r'FROM but0is\s*\n\s*WHERE partner = @lv_bp AND ind_sector = @lv_sec_have INTO @lv_bp_has_ind\.\s*\n'
+         r"ls_vc_later = ls_data-vendor-central_data-central\.\s*\n\s*ENDIF\.\s*\n\s*CLEAR ls_data-vendor-central_data-central\..*"
+         r"ls_data2-vendor-central_data-central\s*= ls_vc_later\..*save\( EXPORTING is_data\s*= ls_data2"),
+        ('posts a change of the partner without the supplier part when only partner data changes, as BP does',
+         r"IF ls_data-vendor-company_data-company IS INITIAL\s*\n\s*AND ls_data-vendor-purchasing_data-purchasing "
+         r"IS INITIAL\.\s*\n\s*CLEAR ls_data-vendor\."),
+        ('posts a change without VALIDATE_SINGLE first - its buffer met the same insert again in MAINTAIN '
+         '(R1 228 bank not unique, AM 605 mobile usage not unique)',
+         r"IF iv_validate = abap_true\.\s*\n\s*TRY\.\s*\n\s*cl_md_bp_maintain=>validate_single\(.*"
+         r"iv_validate = xsdbool\( iv_change = abap_false \)"),
+        ('reads the partner\'s numbers and e-mails without restricting to an empty person number - a person\'s '
+         'mobile was not seen and inserted again (AM 605)',
+         r"FROM adr2\s*\n\s*WHERE addrnumber = @lv_bpadr\s*\n\s*ORDER BY"),
+        ('sends nothing for a bank account the partner already has',
+         r"OR to_upper\( lv_koinh_in \) = to_upper\( condense\( CONV string\( ls_bk_same-koinh \) \) \)\.\s*\n\s*CONTINUE\."),
+        ('shows the partner\'s bank details, industries and CVI assignment, or telephone numbers when SAP '
+         'refuses a change with R1 228, CVI_MAPPING 002 or AM 605',
+         r"diagnose\( EXPORTING iv_bp\s*= lv_bp.*METHOD diagnose\.|METHOD diagnose\..*diagnose\( EXPORTING iv_bp\s*= lv_bp"),
+        ('leaves the industry alone on a change when the partner has any (BUT0IS) - the supplier\'s key '
+         'is derived from the partner\'s standard industry and cannot be set through the supplier '
+         '(KBA 3581473, CVI_MAPPING 002)',
+         r'FROM but0is\s*\n\s*WHERE partner = @lv_bp INTO @lv_bp_has_ind\.\s*\n'
          r'\s*IF lv_bp_has_ind = abap_true\.\s*\n\s*CLEAR lv_ind\.'),
+        ('never sends BRSCH on a change', r"IF lv_t016 = abap_true AND iv_change = abap_false\."),
 
         ('leaves out an unchanged industry key on a change - CVI would insert the mapped industry '
          'again (CVI_MAPPING 002 "Industry 92 ... could not be assigned")',
@@ -159,7 +176,7 @@ for what, pat in (
     if not re.search(pat, INC, re.I | re.S):
         fail.append(f'LCL_HONC_BP no longer {what}')
 
-n_save = len(re.findall(r'save\( EXPORTING is_data = ls_data CHANGING', INC))
+n_save = len(re.findall(r'save\( EXPORTING is_data\s*= ls_data\s*\n', INC))
 if n_save != 1:
     fail.append(f'LCL_HONC_BP saves the same request {n_save} times - after a failed save the partner\'s '
                 f'buffers still hold it, and a second save writes the bank details twice (CRS, 20.11.2026)')

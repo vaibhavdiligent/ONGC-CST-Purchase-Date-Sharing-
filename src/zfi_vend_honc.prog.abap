@@ -229,9 +229,27 @@ CLASS lcl_honc_bp DEFINITION FINAL.
     "! Validate, maintain, commit. False when anything stopped it; the
     "! reasons are in CT_ERROR.
     CLASS-METHODS save
-      IMPORTING is_data   TYPE cvis_ei_extern
-      CHANGING  ct_error  TYPE bapiret2_t
-      RETURNING VALUE(rv) TYPE abap_bool.
+      IMPORTING is_data     TYPE cvis_ei_extern
+                iv_validate TYPE abap_bool DEFAULT abap_true
+      CHANGING  ct_error    TYPE bapiret2_t
+      RETURNING VALUE(rv)   TYPE abap_bool.
+
+    "! What the partner looks like where SAP refused the change: its bank
+    "! details for R1 228, its industries and the CVI industry assignment
+    "! for CVI_MAPPING 002, its telephone numbers for AM 605 - so the log
+    "! shows the data the message is about, not only the message.
+    CLASS-METHODS diagnose
+      IMPORTING iv_bp    TYPE bu_partner
+                iv_lifnr TYPE lifnr
+                iv_adrnr TYPE adrnr
+      CHANGING  ct_error TYPE bapiret2_t.
+
+    "! The rows of a customizing table that hold one of two values, as text.
+    CLASS-METHODS rows_with
+      IMPORTING iv_tab    TYPE tabname
+                iv_v1     TYPE clike
+                iv_v2     TYPE clike
+      RETURNING VALUE(rv) TYPE string.
 
 ENDCLASS.
 
@@ -378,15 +396,23 @@ CLASS lcl_honc_bp IMPLEMENTATION.
   METHOD save.
     rv = abap_false.
     DATA lt_map TYPE mdg_bs_bp_msgmap_t.
-    TRY.
-        cl_md_bp_maintain=>validate_single(
-          EXPORTING i_data        = is_data
-          IMPORTING et_return_map = lt_map ).
-      CATCH cx_root INTO DATA(lx_val).
-        add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
-             CHANGING  ct      = ct_error ).
-        RETURN.
-    ENDTRY.
+    " A change is not validated first: VALIDATE_SINGLE works on the partner's
+    " buffers, and what it put there - a new bank account, a new mobile
+    " number - met the same insert again in MAINTAIN: R1 228 "Bank details
+    " ... in the validity period are not unique", AM 605 "Assignment of usage
+    " AD_MBDEFAU to communication type TEL not unique" (CRS, 20.11.2026).
+    " MAINTAIN reports every error itself, and nothing is committed on one.
+    IF iv_validate = abap_true.
+      TRY.
+          cl_md_bp_maintain=>validate_single(
+            EXPORTING i_data        = is_data
+            IMPORTING et_return_map = lt_map ).
+        CATCH cx_root INTO DATA(lx_val).
+          add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
+               CHANGING  ct      = ct_error ).
+          RETURN.
+      ENDTRY.
+    ENDIF.
     DATA(lv_bad) = abap_false.
     LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
       APPEND VALUE bapiret2( type = ls_map-type id = ls_map-id number = ls_map-number
@@ -455,6 +481,125 @@ CLASS lcl_honc_bp IMPLEMENTATION.
 
 
 
+
+  METHOD rows_with.
+    " Read without knowing the field names: every row with one of the two
+    " values in any field, fields joined by "/" (the client left out).
+    DATA lr_tab TYPE REF TO data.
+    FIELD-SYMBOLS: <lt_any> TYPE STANDARD TABLE,
+                   <ls_any> TYPE any,
+                   <lv_any> TYPE any.
+    CLEAR rv.
+    DATA(lv_n) = 0.
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF (iv_tab).
+        ASSIGN lr_tab->* TO <lt_any>.
+        SELECT * FROM (iv_tab) INTO TABLE @<lt_any> UP TO 20000 ROWS.
+        LOOP AT <lt_any> ASSIGNING <ls_any>.
+          DATA(lv_row) = VALUE string( ).
+          DATA(lv_hit) = abap_false.
+          DO.
+            ASSIGN COMPONENT sy-index OF STRUCTURE <ls_any> TO <lv_any>.
+            IF sy-subrc <> 0.
+              EXIT.
+            ENDIF.
+            IF sy-index = 1.
+              CONTINUE.
+            ENDIF.
+            DATA(lv_val) = condense( CONV string( <lv_any> ) ).
+            IF lv_val IS NOT INITIAL AND ( lv_val = iv_v1 OR lv_val = iv_v2 ).
+              lv_hit = abap_true.
+            ENDIF.
+            lv_row = COND #( WHEN lv_row IS INITIAL THEN lv_val ELSE |{ lv_row }/{ lv_val }| ).
+          ENDDO.
+          IF lv_hit = abap_true AND lv_n < 6.
+            lv_n = lv_n + 1.
+            rv = COND #( WHEN rv IS INITIAL THEN lv_row ELSE |{ rv }; { lv_row }| ).
+          ENDIF.
+        ENDLOOP.
+      CATCH cx_root.
+        rv = 'not readable'.
+        RETURN.
+    ENDTRY.
+    IF rv IS INITIAL.
+      rv = 'no entry'.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD diagnose.
+    DATA: lv_bank TYPE abap_bool,
+          lv_indu TYPE abap_bool,
+          lv_tel  TYPE abap_bool.
+    LOOP AT ct_error INTO DATA(ls_err).
+      IF ( ls_err-id = 'R1' AND ls_err-number = '228' )
+      OR ls_err-message CS 'validity period are not unique'.
+        lv_bank = abap_true.
+      ENDIF.
+      IF ( ls_err-id = 'CVI_MAPPING' AND ls_err-number = '002' )
+      OR ( ls_err-message CS 'Industry' AND ls_err-message CS 'could not be assigned' ).
+        lv_indu = abap_true.
+      ENDIF.
+      IF ( ls_err-id = 'AM' AND ls_err-number = '605' )
+      OR ls_err-message CS 'Assignment of usage'.
+        lv_tel = abap_true.
+      ENDIF.
+    ENDLOOP.
+
+    IF lv_bank = abap_true.
+      SELECT bkvid, banks, bankl, bankn FROM but0bk
+        WHERE partner = @iv_bp ORDER BY bkvid INTO TABLE @DATA(lt_bk).
+      DATA(lv_txt) = VALUE string( ).
+      LOOP AT lt_bk INTO DATA(ls_bk).
+        lv_txt = |{ lv_txt }{ COND string( WHEN lv_txt IS NOT INITIAL THEN `; ` ) }| &&
+                 |{ ls_bk-bkvid } { ls_bk-banks }/{ ls_bk-bankl }/{ ls_bk-bankn }|.
+      ENDLOOP.
+      APPEND VALUE bapiret2( type = 'E'
+        message = |Bank details of business partner { iv_bp ALPHA = OUT } now: | &&
+                  |{ COND string( WHEN lv_txt IS INITIAL THEN `none` ELSE lv_txt ) } - an account that | &&
+                  |stands there twice has to be removed in BP (Payment Transactions) first| ) TO ct_error.
+    ENDIF.
+
+    IF lv_indu = abap_true.
+      SELECT istype, ind_sector, isdef FROM but0is
+        WHERE partner = @iv_bp ORDER BY istype, ind_sector INTO TABLE @DATA(lt_is).
+      DATA: lv_itxt TYPE string,
+            lv_std  TYPE string.
+      LOOP AT lt_is INTO DATA(ls_is).
+        lv_itxt = |{ lv_itxt }{ COND string( WHEN lv_itxt IS NOT INITIAL THEN `, ` ) }| &&
+                  |{ ls_is-istype }/{ ls_is-ind_sector }| &&
+                  |{ COND string( WHEN ls_is-isdef = abap_true THEN ` (standard)` ) }|.
+        IF ls_is-isdef = abap_true.
+          lv_std = ls_is-ind_sector.
+        ENDIF.
+      ENDLOOP.
+      DATA lv_brsch TYPE brsch.
+      SELECT SINGLE brsch FROM lfa1 WHERE lifnr = @iv_lifnr INTO @lv_brsch.
+      APPEND VALUE bapiret2( type = 'E'
+        message = |Business partner { iv_bp ALPHA = OUT } has the industries | &&
+                  |{ COND string( WHEN lv_itxt IS INITIAL THEN `none` ELSE lv_itxt ) }; its vendor | &&
+                  |has the industry key "{ lv_brsch }". SAP refused the save of the partner itself - | &&
+                  |no industry was sent| ) TO ct_error.
+      APPEND VALUE bapiret2( type = 'E'
+        message = |CVI Assign Industries: key to industry (TP038M1) | &&
+                  |{ rows_with( iv_tab = 'TP038M1' iv_v1 = lv_brsch iv_v2 = lv_std ) } / industry to key | &&
+                  |(TP038M2) { rows_with( iv_tab = 'TP038M2' iv_v1 = lv_brsch iv_v2 = lv_std ) } - the | &&
+                  |partner's standard industry needs an entry in both| ) TO ct_error.
+    ENDIF.
+
+    IF lv_tel = abap_true AND iv_adrnr IS NOT INITIAL.
+      SELECT consnumber, tel_number, r3_user, flgdefault FROM adr2
+        WHERE addrnumber = @iv_adrnr ORDER BY consnumber INTO TABLE @DATA(lt_tel).
+      DATA lv_ttxt TYPE string.
+      LOOP AT lt_tel INTO DATA(ls_tel).
+        lv_ttxt = |{ lv_ttxt }{ COND string( WHEN lv_ttxt IS NOT INITIAL THEN `; ` ) }| &&
+                  |{ ls_tel-consnumber } { ls_tel-tel_number } type "{ ls_tel-r3_user }"| &&
+                  |{ COND string( WHEN ls_tel-flgdefault = abap_true THEN ` default` ) }|.
+      ENDLOOP.
+      APPEND VALUE bapiret2( type = 'E'
+        message = |Telephone numbers of business partner { iv_bp ALPHA = OUT } now: | &&
+                  |{ COND string( WHEN lv_ttxt IS INITIAL THEN `none` ELSE lv_ttxt ) }| ) TO ct_error.
+    ENDIF.
+  ENDMETHOD.
 
   METHOD post.
     CLEAR: et_error, et_success.
@@ -585,7 +730,8 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " refuses the change: "An address with GUID ... does not exist for
     " business partner ...". The GUID is that of the partner's standard
     " address - the vendor's (LFA1-ADRNR), else the one with usage XXDEFAULT.
-    DATA lv_aguid TYPE bu_address_guid.
+    DATA: lv_aguid TYPE bu_address_guid,
+          lv_bpadr TYPE adrnr.
     IF iv_change = abap_true.
       ls_adr-data_key-operation = 'XXDFLT'.      " the standard address
       IF lv_bp IS NOT INITIAL AND lv_adrnr IS NOT INITIAL.
@@ -601,6 +747,9 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         ENDIF.
       ENDIF.
       ls_adr-data_key-guid = lv_aguid.
+      " The numbers and e-mails are read from that address - the partner's,
+      " not the supplier's copy of it (a person's supplier has one of its own).
+      lv_bpadr = COND #( WHEN lv_stdadr IS NOT INITIAL THEN lv_stdadr ELSE lv_adrnr ).
     ENDIF.
     copy( EXPORTING is_src  = is_postal-data
                     iv_only = `CITY,DISTRICT,POSTL_COD1,STREET,HOUSE_NO,STR_SUPPL1,` &&
@@ -615,10 +764,13 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " The standard entry comes first: with IV_COMM_REPLACE it is the one a new
     " value overwrites, as FK02 did.
     DATA lt_used TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
-    IF iv_change = abap_true AND lv_adrnr IS NOT INITIAL.
+    " No restriction to an empty person number: a partner that is a person has
+    " its numbers under its person number, and they were not seen - the mobile
+    " was inserted next to the one it has (AM 605, usage AD_MBDEFAU).
+    IF iv_change = abap_true AND lv_bpadr IS NOT INITIAL.
       " R_3_USER 3 is the default mobile, 1 the default landline (SAP Help).
       SELECT addrnumber, consnumber, tel_number, flgdefault, r3_user FROM adr2
-        WHERE addrnumber = @lv_adrnr AND persnumber = @space
+        WHERE addrnumber = @lv_bpadr
         ORDER BY flgdefault DESCENDING, r3_user DESCENDING, consnumber INTO TABLE @DATA(lt_a2).
       DATA lv_have TYPE string.
       LOOP AT lt_a2 INTO DATA(ls_a2).
@@ -626,14 +778,14 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         INSERT lv_have INTO TABLE lt_have_tel.
       ENDLOOP.
       SELECT addrnumber, consnumber, fax_number, flgdefault FROM adr3
-        WHERE addrnumber = @lv_adrnr AND persnumber = @space
+        WHERE addrnumber = @lv_bpadr
         ORDER BY flgdefault DESCENDING, consnumber INTO TABLE @DATA(lt_a3).
       LOOP AT lt_a3 INTO DATA(ls_a3).
         lv_have = condense( CONV string( ls_a3-fax_number ) ).
         INSERT lv_have INTO TABLE lt_have_fax.
       ENDLOOP.
       SELECT addrnumber, consnumber, smtp_addr, flgdefault FROM adr6
-        WHERE addrnumber = @lv_adrnr AND persnumber = @space
+        WHERE addrnumber = @lv_bpadr
         ORDER BY flgdefault DESCENDING, consnumber INTO TABLE @DATA(lt_a6).
       LOOP AT lt_a6 INTO DATA(ls_a6).
         lv_have = to_upper( condense( CONV string( ls_a6-smtp_addr ) ) ).
@@ -880,13 +1032,17 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " supplier's industry key 0009 to industry 92 and cannot put that next
     " to it - CVI_MAPPING 002 "Industry 92 for object Business Partner with
     " ID ... could not be assigned" (CRS, BP 100092735, 20.11.2026).
+    " More than that: a partner that has ANY industry keeps it on a change.
+    " In S/4HANA the supplier's industry key is derived from the partner's
+    " standard industry (CVI, Assign Industries); it cannot be set through the
+    " supplier (SAP KBA 3581473 - "Industry not updated with ...
+    " CL_MD_BP_MAINTAIN", CVI_MAPPING 002). Only a partner without any
+    " industry gets the file's one, as its standard industry.
+    DATA lv_bp_has_ind TYPE abap_bool.
+    CLEAR lv_bp_has_ind.
     IF lv_ind IS NOT INITIAL AND iv_change = abap_true AND lv_bp IS NOT INITIAL.
-      DATA lv_sec_have TYPE bu_indsect.
-      lv_sec_have = lv_ind.
-      DATA lv_bp_has_ind TYPE abap_bool.
-      CLEAR lv_bp_has_ind.
       SELECT SINGLE @abap_true FROM but0is
-        WHERE partner = @lv_bp AND ind_sector = @lv_sec_have INTO @lv_bp_has_ind.
+        WHERE partner = @lv_bp INTO @lv_bp_has_ind.
       IF lv_bp_has_ind = abap_true.
         CLEAR lv_ind.
       ENDIF.
@@ -897,7 +1053,7 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       DATA lv_t016 TYPE abap_bool.
       CLEAR lv_t016.
       SELECT SINGLE @abap_true FROM t016 WHERE brsch = @lv_brsch INTO @lv_t016.
-      IF lv_t016 = abap_true.
+      IF lv_t016 = abap_true AND iv_change = abap_false.
         set( EXPORTING iv_comp = 'BRSCH' iv_value = lv_brsch
              CHANGING  cs_data = ls_vc-data cs_datax = ls_vc-datax ).
       ENDIF.
@@ -920,10 +1076,9 @@ CLASS lcl_honc_bp IMPLEMENTATION.
           ls_is-task                = c_insert.
           ls_is-data_key-keysystem  = lv_istype.
           ls_is-data_key-ind_sector = lv_sec.
-          IF iv_change = abap_false.
-            ls_is-data-ind_default  = abap_true.
-            ls_is-datax-ind_default = abap_true.
-          ENDIF.
+          " The partner's first industry: its standard one.
+          ls_is-data-ind_default  = abap_true.
+          ls_is-datax-ind_default = abap_true.
           APPEND ls_is TO ls_data-partner-central_data-industry-industries.
         ENDIF.
       ELSEIF lv_t016 = abap_false.
@@ -1007,14 +1162,15 @@ CLASS lcl_honc_bp IMPLEMENTATION.
                banks TYPE banks,
                bankl TYPE bankk,
                bankn TYPE bankn,
+               koinh TYPE koinh_fi,
              END OF lty_bk.
       DATA: lt_bk_old TYPE STANDARD TABLE OF lty_bk WITH EMPTY KEY,
             lt_bk_new TYPE STANDARD TABLE OF lty_bk WITH EMPTY KEY,
             lv_bk_max TYPE i.
       IF lv_bp IS NOT INITIAL.
-        SELECT bkvid, banks, bankl, bankn FROM but0bk
+        SELECT bkvid, banks, bankl, bankn, koinh FROM but0bk
           WHERE partner = @lv_bp
-          ORDER BY banks, bankl, bankn
+          ORDER BY bkvid
           INTO CORRESPONDING FIELDS OF TABLE @lt_bk_old.
       ENDIF.
       LOOP AT lt_bk_old INTO DATA(ls_bk_old).
@@ -1043,12 +1199,20 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         READ TABLE lt_bk_old INTO DATA(ls_bk_same)
           WITH KEY banks = ls_bk_in-banks bankl = ls_bk_in-bankl bankn = ls_bk_in-bankn.
         IF sy-subrc = 0.
+          " The partner has this account: nothing is sent for it, unless the
+          " account holder differs. Sending it again only made SAP check the
+          " partner's bank details once more (R1 228).
           ls_bk-task     = c_update.
           ls_bk-data_key = ls_bk_same-bkvid.
+          DATA(lv_koinh_in) = comp( is_any = <ls_bank> iv_comp = 'KOINH' ).
+          IF lv_koinh_in IS INITIAL
+          OR to_upper( lv_koinh_in ) = to_upper( condense( CONV string( ls_bk_same-koinh ) ) ).
+            CONTINUE.
+          ENDIF.
         ELSEIF iv_change = abap_true AND iv_bank_replace = abap_true
            AND lt_bk_old IS NOT INITIAL AND lt_bk_new IS INITIAL.
           " FK02 typed the file's account over line 1 of the bank details: the
-          " vendor's first bank details ID (in key order) takes the new account
+          " vendor's first bank details ID takes the new account
           " in place. Inserting a new ID and deleting the old one left both on
           " the partner - bank details are time-dependent, the delete only ends
           " the old one - and the account showed twice (CRS, 20.11.2026).
@@ -1183,12 +1347,29 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " communication and tax numbers are saved once, and a refusal of the
     " supplier fields only leaves those unchanged, with a warning.
     DATA ls_vc_later TYPE vmds_ei_vmd_central.
-    IF iv_change = abap_true AND ls_data-vendor-central_data-central-datax IS NOT INITIAL.
-      ls_vc_later = ls_data-vendor-central_data-central.
+    IF iv_change = abap_true.
+      IF ls_data-vendor-central_data-central-datax IS NOT INITIAL.
+        ls_vc_later = ls_data-vendor-central_data-central.
+      ENDIF.
       CLEAR ls_data-vendor-central_data-central.
+      " The first step is the partner alone when nothing of the supplier's
+      " company code or purchasing data is in it: SAP then writes the
+      " supplier from the partner, as it does in transaction BP.
+      IF ls_data-vendor-company_data-company IS INITIAL
+      AND ls_data-vendor-purchasing_data-purchasing IS INITIAL.
+        CLEAR ls_data-vendor.
+      ENDIF.
     ENDIF.
 
-    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+    IF save( EXPORTING is_data     = ls_data
+                       iv_validate = xsdbool( iv_change = abap_false )
+             CHANGING  ct_error    = et_error ) = abap_false.
+      IF iv_change = abap_true.
+        diagnose( EXPORTING iv_bp    = lv_bp
+                            iv_lifnr = lv_lifnr
+                            iv_adrnr = lv_bpadr
+                  CHANGING  ct_error = et_error ).
+      ENDIF.
       RETURN.
     ENDIF.
 
@@ -1200,7 +1381,9 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       ls_data2-vendor-header-object_task                   = c_update.
       ls_data2-vendor-header-object_instance-lifnr         = lv_lifnr.
       ls_data2-vendor-central_data-central                 = ls_vc_later.
-      IF save( EXPORTING is_data = ls_data2 CHANGING ct_error = lt_err2 ) = abap_false.
+      IF save( EXPORTING is_data     = ls_data2
+                         iv_validate = abap_false
+               CHANGING  ct_error    = lt_err2 ) = abap_false.
         DATA(lv_err2) = VALUE string( ).
         LOOP AT lt_err2 INTO DATA(ls_e2).
           lv_err2 = COND #( WHEN lv_err2 IS INITIAL THEN CONV string( ls_e2-message )
@@ -1209,10 +1392,7 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         APPEND VALUE bapiret2(
           type    = 'W'
           message = |Bank, address and tax data saved; supplier control data (corporate group, | &&
-                    |GST class, industry key) not changed: { lv_err2 }| &&
-                    |{ COND string( WHEN line_exists( lt_err2[ id = 'CVI_MAPPING' number = '002' ] )
-                                    THEN ` - the CVI industry mapping (SPRO: Customer/Vendor Integration > ` &&
-                                         `Assign Industries) does not fit the industry of the business partner` ) }| )
+                    |GST class) not changed: { lv_err2 }| )
           TO lt_note.
       ENDIF.
     ENDIF.

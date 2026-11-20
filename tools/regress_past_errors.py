@@ -282,10 +282,10 @@ CASES = [
     ('HONC: request saved again after a failed save - bank details written twice (CRS, 20.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap',
-       "    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.\n      RETURN.\n    ENDIF.\n",
-       "    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.\n"
-       "      CLEAR et_error.\n      IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.\n"
-       "        RETURN.\n      ENDIF.\n    ENDIF.\n")]),
+       "             CHANGING  ct_error    = et_error ) = abap_false.\n      IF iv_change = abap_true.\n",
+       "             CHANGING  ct_error    = et_error ) = abap_false\n"
+       "    AND save( EXPORTING is_data     = ls_data\n                       iv_validate = abap_false\n"
+       "              CHANGING  ct_error    = et_error ) = abap_false.\n      IF iv_change = abap_true.\n")]),
     ('HONC: file without usable rows - only "Mail Successfully Sent", nothing logged (CRS, 19.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "        IF ta_data_tmp IS INITIAL.\n", "        IF ta_data_tmp IS INITIAL AND 1 = 2.\n")]),
@@ -298,6 +298,17 @@ CASES = [
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "            IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>.\n              CLEAR: <lv_vd>, <lv_vx>.\n",
        "            IF <lv_vx> = abap_true AND <lv_vd> = <lv_vo>.\n")]),
+    ('HONC change: validated before maintained - the insert met itself, R1 228 / AM 605 "not unique" (CRS, 20.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "                       iv_validate = xsdbool( iv_change = abap_false )\n",
+       "                       iv_validate = abap_true\n")]),
+    ('HONC change: a person partner\'s numbers not seen (person number) - mobile inserted again, AM 605',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "      SELECT addrnumber, consnumber, tel_number, flgdefault, r3_user FROM adr2\n        WHERE addrnumber = @lv_bpadr\n",
+       "      SELECT addrnumber, consnumber, tel_number, flgdefault, r3_user FROM adr2\n        WHERE addrnumber = @lv_bpadr AND persnumber = @space\n")]),
+    ('HONC change: bank account the partner already has sent again', 'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "          OR to_upper( lv_koinh_in ) = to_upper( condense( CONV string( ls_bk_same-koinh ) ) ).\n            CONTINUE.\n",
+       "          OR to_upper( lv_koinh_in ) = to_upper( condense( CONV string( ls_bk_same-koinh ) ) ).\n")]),
 ]
 
 
