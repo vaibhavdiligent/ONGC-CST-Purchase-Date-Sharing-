@@ -1035,6 +1035,7 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " has it, the partner's industry sector when exactly one industry system
     " holds it.
     DATA(lv_ind) = to_upper( condense( CONV string( iv_industry ) ) ).
+    DATA(lv_ind_file) = lv_ind.
     " A partner that already has the file's industry (BUT0IS, any industry
     " system) gets nothing sent: Cipla keeps the industry on the partner
     " (e.g. 0009 in Standard Industry System 0001), while CVI maps the
@@ -1366,8 +1367,102 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       CLEAR ls_data-vendor-central_data-central.
     ENDIF.
 
-    IF save( EXPORTING is_data  = ls_data
-             CHANGING  ct_error = et_error ) = abap_false.
+    DATA(lv_saved) = save( EXPORTING is_data  = ls_data
+                           CHANGING  ct_error = et_error ).
+
+    " ---- the partner's standard industry has no vendor industry key ------
+    " SAP derives the supplier's industry key from the partner's STANDARD
+    " industry at every save (CVI, Assign Industries). A partner whose
+    " standard industry has no key assigned - 92 "Pharmaceutical Trade" on
+    " Cipla's doctors, whose vendors have key 0009 - is refused whatever is
+    " sent: CVI_MAPPING 002 "Industry 92 for object Business Partner with ID
+    " ... could not be assigned" (CRS, BP 100113814, 20.11.2026). The file
+    " names the vendor's industry key; the request is then posted with that
+    " industry as the partner's standard one - what "industry key 0009" means
+    " in S/4HANA. The former industry stays on the partner, no longer as the
+    " standard one. SAP validates the request first, nothing is forced.
+    IF lv_saved = abap_false AND iv_change = abap_true
+    AND lv_ind_file IS NOT INITIAL AND lv_bp IS NOT INITIAL.
+      DATA(lv_only_ind) = abap_true.
+      LOOP AT et_error INTO DATA(ls_e1).
+        IF NOT ( ( ls_e1-id = 'CVI_MAPPING' AND ls_e1-number = '002' )
+              OR ( ls_e1-message CS 'Industry' AND ls_e1-message CS 'could not be assigned' ) ).
+          lv_only_ind = abap_false.
+        ENDIF.
+      ENDLOOP.
+      IF lv_only_ind = abap_true AND et_error IS NOT INITIAL.
+        DATA lv_fsec TYPE bu_indsect.
+        lv_fsec = lv_ind_file.
+        SELECT istype, ind_sector, isdef FROM but0is
+          WHERE partner = @lv_bp ORDER BY istype, ind_sector INTO TABLE @DATA(lt_bpis).
+        " The industry system: the one of the partner's standard industry
+        " when it holds the file's industry, else the only one that does.
+        DATA: lv_fsys   TYPE bu_istype,
+              lv_oldstd TYPE bu_indsect.
+        CLEAR: lv_fsys, lv_oldstd.
+        LOOP AT lt_bpis INTO DATA(ls_bpis) WHERE isdef = abap_true.
+          DATA lv_in_sys TYPE abap_bool.
+          CLEAR lv_in_sys.
+          SELECT SINGLE @abap_true FROM tb038a
+            WHERE istype = @ls_bpis-istype AND ind_sector = @lv_fsec INTO @lv_in_sys.
+          IF lv_in_sys = abap_true.
+            lv_fsys   = ls_bpis-istype.
+            lv_oldstd = ls_bpis-ind_sector.
+            EXIT.
+          ENDIF.
+        ENDLOOP.
+        IF lv_fsys IS INITIAL.
+          SELECT istype FROM tb038a WHERE ind_sector = @lv_fsec
+            ORDER BY istype INTO TABLE @DATA(lt_fsys).
+          IF lines( lt_fsys ) = 1.
+            lv_fsys = lt_fsys[ 1 ]-istype.
+            LOOP AT lt_bpis INTO ls_bpis WHERE istype = lv_fsys AND isdef = abap_true.
+              lv_oldstd = ls_bpis-ind_sector.
+            ENDLOOP.
+          ENDIF.
+        ENDIF.
+        IF lv_fsys IS NOT INITIAL AND lv_oldstd <> lv_fsec.
+          DATA ls_alt TYPE cvis_ei_extern.
+          ls_alt = ls_data.
+          CLEAR ls_alt-partner-central_data-industry-industries.
+          DATA ls_isx TYPE bus_ei_bupa_industrysector.
+          IF lv_oldstd IS NOT INITIAL.
+            CLEAR ls_isx.
+            ls_isx-task                = c_update.
+            ls_isx-data_key-keysystem  = lv_fsys.
+            ls_isx-data_key-ind_sector = lv_oldstd.
+            ls_isx-data-ind_default    = abap_false.
+            ls_isx-datax-ind_default   = abap_true.
+            APPEND ls_isx TO ls_alt-partner-central_data-industry-industries.
+          ENDIF.
+          CLEAR ls_isx.
+          ls_isx-task                = COND #( WHEN line_exists( lt_bpis[ istype     = lv_fsys
+                                                                          ind_sector = lv_fsec ] )
+                                               THEN c_update ELSE c_insert ).
+          ls_isx-data_key-keysystem  = lv_fsys.
+          ls_isx-data_key-ind_sector = lv_fsec.
+          ls_isx-data-ind_default    = abap_true.
+          ls_isx-datax-ind_default   = abap_true.
+          APPEND ls_isx TO ls_alt-partner-central_data-industry-industries.
+
+          DATA lt_err_alt TYPE bapiret2_t.
+          IF save( EXPORTING is_data  = ls_alt
+                   CHANGING  ct_error = lt_err_alt ) = abap_true.
+            lv_saved = abap_true.
+            CLEAR et_error.
+            APPEND VALUE bapiret2(
+              type    = 'W'
+              message = |Standard industry of business partner { lv_bp ALPHA = OUT } changed | &&
+                        |{ COND string( WHEN lv_oldstd IS NOT INITIAL THEN |from { lv_oldstd } | ) }| &&
+                        |to { lv_fsec }, the file's industry key: SAP has no vendor industry key | &&
+                        |assigned to the former one (CVI, Assign Industries) and refused the partner | &&
+                        |with it| ) TO lt_note.
+          ENDIF.
+        ENDIF.
+      ENDIF.
+    ENDIF.
+
+    IF lv_saved = abap_false.
       IF iv_change = abap_true.
         diagnose( EXPORTING iv_bp    = lv_bp
                             iv_lifnr = lv_lifnr

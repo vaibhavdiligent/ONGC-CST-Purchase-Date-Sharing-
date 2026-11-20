@@ -145,7 +145,12 @@ for what, pat in (
          r"ls_data2-vendor-central_data-central\s*= ls_vc_later\..*save\( EXPORTING is_data\s*= ls_data2"),
         ('keeps the supplier header in the first step of a change - without it SAP ran the partner-to-'
          'supplier synchronisation at COMMIT WORK, where an error is a short dump',
-         r"CLEAR ls_data-vendor-central_data-central\.\s*\n\s*ENDIF\.\s*\n\s*\n\s*IF save\( EXPORTING is_data\s*= ls_data\s*\n"),
+         r"CLEAR ls_data-vendor-central_data-central\.\s*\n\s*ENDIF\.\s*\n\s*\n\s*DATA\(lv_saved\) = save\( EXPORTING is_data\s*= ls_data\s*\n"),
+        ('posts a change with the file\'s industry as the partner\'s standard one when SAP refuses the partner '
+         'only for its standard industry having no vendor industry key (CVI_MAPPING 002, "Industry 92")',
+         r"ls_isx-data_key-ind_sector = lv_oldstd\.\s*\n\s*ls_isx-data-ind_default\s*= abap_false\..*"
+         r"ls_isx-data_key-ind_sector = lv_fsec\.\s*\n\s*ls_isx-data-ind_default\s*= abap_true\..*"
+         r"save\( EXPORTING is_data\s*= ls_alt"),
         ('validates every save before posting - an error found only at COMMIT WORK is a short dump '
          '(CX_FSBP_PARTNER_INCONSISTENT, CRS, 20.11.2026)',
          r"METHOD save\..*?cl_md_bp_maintain=>validate_single\(.*?cl_md_bp_maintain=>maintain\("),

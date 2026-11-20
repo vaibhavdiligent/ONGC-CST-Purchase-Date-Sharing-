@@ -282,10 +282,10 @@ CASES = [
     ('HONC: request saved again after a failed save - bank details written twice (CRS, 20.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap',
-       "             CHANGING  ct_error = et_error ) = abap_false.\n      IF iv_change = abap_true.\n",
-       "             CHANGING  ct_error = et_error ) = abap_false\n"
-       "    AND save( EXPORTING is_data  = ls_data\n"
-       "              CHANGING  ct_error = et_error ) = abap_false.\n      IF iv_change = abap_true.\n")]),
+       "    DATA(lv_saved) = save( EXPORTING is_data  = ls_data\n                           CHANGING  ct_error = et_error ).\n",
+       "    DATA(lv_saved) = save( EXPORTING is_data  = ls_data\n                           CHANGING  ct_error = et_error ).\n"
+       "    IF lv_saved = abap_false.\n      lv_saved = save( EXPORTING is_data  = ls_data\n"
+       "                       CHANGING  ct_error = et_error ).\n    ENDIF.\n")]),
     ('HONC: file without usable rows - only "Mail Successfully Sent", nothing logged (CRS, 19.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "        IF ta_data_tmp IS INITIAL.\n", "        IF ta_data_tmp IS INITIAL AND 1 = 2.\n")]),
@@ -315,6 +315,9 @@ CASES = [
     ('HONC change: bank account the partner already has sent again', 'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "          OR to_upper( lv_koinh_in ) = to_upper( condense( CONV string( ls_bk_same-koinh ) ) ).\n            CONTINUE.\n",
        "          OR to_upper( lv_koinh_in ) = to_upper( condense( CONV string( ls_bk_same-koinh ) ) ).\n")]),
+    ('HONC change refused for good: partner\'s standard industry 92 has no vendor industry key, vendor has 0009 (CRS, BP 100113814, 20.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "          IF save( EXPORTING is_data  = ls_alt\n", "          IF save( EXPORTING is_data  = ls_data2\n")]),
 ]
 
 
