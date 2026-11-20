@@ -166,8 +166,7 @@ CLASS lcl_honc_bp DEFINITION FINAL.
 
   PRIVATE SECTION.
     CONSTANTS: c_insert TYPE c LENGTH 1 VALUE 'I',
-               c_update TYPE c LENGTH 1 VALUE 'U',
-               c_delete TYPE c LENGTH 1 VALUE 'D'.
+               c_update TYPE c LENGTH 1 VALUE 'U'.
 
     CLASS-METHODS post
       IMPORTING iv_change  TYPE abap_bool
@@ -1046,6 +1045,22 @@ CLASS lcl_honc_bp IMPLEMENTATION.
         IF sy-subrc = 0.
           ls_bk-task     = c_update.
           ls_bk-data_key = ls_bk_same-bkvid.
+        ELSEIF iv_change = abap_true AND iv_bank_replace = abap_true
+           AND lt_bk_old IS NOT INITIAL AND lt_bk_new IS INITIAL.
+          " FK02 typed the file's account over line 1 of the bank details: the
+          " vendor's first bank details ID (in key order) takes the new account
+          " in place. Inserting a new ID and deleting the old one left both on
+          " the partner - bank details are time-dependent, the delete only ends
+          " the old one - and the account showed twice (CRS, 20.11.2026).
+          ls_bk-task     = c_update.
+          ls_bk-data_key = lt_bk_old[ 1 ]-bkvid.
+          set( EXPORTING iv_comp = 'BANK_CTRY' iv_value = ls_bk_in-banks
+               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+          set( EXPORTING iv_comp = 'BANK_KEY' iv_value = ls_bk_in-bankl
+               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+          set( EXPORTING iv_comp = 'BANK_ACCT' iv_value = ls_bk_in-bankn
+               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+          APPEND ls_bk_in TO lt_bk_new.
         ELSE.
           lv_bk_max += 1.
           ls_bk-task     = c_insert.
@@ -1067,18 +1082,6 @@ CLASS lcl_honc_bp IMPLEMENTATION.
           APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
         ENDIF.
       ENDLOOP.
-
-      " FK02 took the file's account into line 1 of the bank details: the
-      " vendor's first account (in key order) was replaced, the others stayed.
-      " Only when the file brings an account the vendor does not have yet.
-      IF iv_change = abap_true AND iv_bank_replace = abap_true
-      AND lt_bk_new IS NOT INITIAL AND lt_bk_old IS NOT INITIAL.
-        DATA ls_bkdel TYPE bus_ei_bupa_bankdetail.
-        CLEAR ls_bkdel.
-        ls_bkdel-task     = c_delete.
-        ls_bkdel-data_key = lt_bk_old[ 1 ]-bkvid.
-        APPEND ls_bkdel TO ls_data-partner-central_data-bankdetail-bankdetails.
-      ENDIF.
     ENDIF.
 
     " ---- supplier: company code and withholding tax ---------------------

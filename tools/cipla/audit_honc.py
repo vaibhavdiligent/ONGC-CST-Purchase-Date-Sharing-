@@ -126,7 +126,9 @@ for what, pat in (
         ('places the industry key by T016 and TB038A',
          r'FROM t016 WHERE brsch = @lv_brsch.*FROM tb038a WHERE ind_sector = @lv_sec'),
         ('sends the fields asked for even when blank', r'ASSIGN COMPONENT lv_kf OF STRUCTURE is_cin'),
-        ('replaces the first bank account on request', r'ls_bkdel-task\s*= c_delete\.'),
+        ('overwrites the first bank details ID in place on request, as FK02 typed over line 1 - an '
+         'insert plus delete left both accounts on the partner',
+         r'ls_bk-task\s*= c_update\.\s*\n\s*ls_bk-data_key = lt_bk_old\[ 1 \]-bkvid\.'),
         ('sends bank details on the business partner, where CVI takes them from',
          r'APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails\.'),
         ('overwrites the standard telephone / fax / e-mail by its CONSNUMBER on request',
@@ -161,6 +163,10 @@ n_save = len(re.findall(r'save\( EXPORTING is_data = ls_data CHANGING', INC))
 if n_save != 1:
     fail.append(f'LCL_HONC_BP saves the same request {n_save} times - after a failed save the partner\'s '
                 f'buffers still hold it, and a second save writes the bank details twice (CRS, 20.11.2026)')
+
+if re.search(r"task\s*= c_delete", INC):
+    fail.append('LCL_HONC_BP deletes a bank detail - with time-dependent bank details the old one stays '
+                'and the partner shows two accounts (CRS, 20.11.2026); overwrite line 1 instead')
 
 if fail:
     print(f'{len(fail)} problem(s):')
