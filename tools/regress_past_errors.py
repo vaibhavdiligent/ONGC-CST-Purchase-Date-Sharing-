@@ -284,6 +284,9 @@ CASES = [
      [('src/zfi_vend_honc.prog.abap', "        IF ta_data_tmp IS INITIAL.\n", "        IF ta_data_tmp IS INITIAL AND 1 = 2.\n")]),
     ('HONC: row with a flag other than A / U skipped silently', 'src/zfi_vend_honc_fd.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc_fd.prog.abap', "    IF wa_data-flag <> 'A' AND wa_data-flag <> 'U'.\n", "    IF 1 = 2.\n")]),
+    ('HONC change: industry sent although the BP has it - CVI maps 0009 to 92, "Industry 92 ... could not be assigned" (CRS, BP 100092735, 20.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "      IF lv_bp_has_ind = abap_true.\n        CLEAR lv_ind.\n", "      IF lv_bp_has_ind = abap_true.\n")]),
 ]
 
 

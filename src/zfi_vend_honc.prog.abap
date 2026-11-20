@@ -875,6 +875,23 @@ CLASS lcl_honc_bp IMPLEMENTATION.
     " has it, the partner's industry sector when exactly one industry system
     " holds it.
     DATA(lv_ind) = to_upper( condense( CONV string( iv_industry ) ) ).
+    " A partner that already has the file's industry (BUT0IS, any industry
+    " system) gets nothing sent: Cipla keeps the industry on the partner
+    " (e.g. 0009 in Standard Industry System 0001), while CVI maps the
+    " supplier's industry key 0009 to industry 92 and cannot put that next
+    " to it - CVI_MAPPING 002 "Industry 92 for object Business Partner with
+    " ID ... could not be assigned" (CRS, BP 100092735, 20.11.2026).
+    IF lv_ind IS NOT INITIAL AND iv_change = abap_true AND lv_bp IS NOT INITIAL.
+      DATA lv_sec_have TYPE bu_indsect.
+      lv_sec_have = lv_ind.
+      DATA lv_bp_has_ind TYPE abap_bool.
+      CLEAR lv_bp_has_ind.
+      SELECT SINGLE @abap_true FROM but0is
+        WHERE partner = @lv_bp AND ind_sector = @lv_sec_have INTO @lv_bp_has_ind.
+      IF lv_bp_has_ind = abap_true.
+        CLEAR lv_ind.
+      ENDIF.
+    ENDIF.
     IF lv_ind IS NOT INITIAL.
       DATA lv_brsch TYPE brsch.
       lv_brsch = lv_ind.

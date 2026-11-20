@@ -133,6 +133,10 @@ for what, pat in (
          r'ls_tel-contact-data-consnumber = ls_o2-consnumber\..*ls_fax-contact-data-consnumber = '
          r'ls_o3-consnumber\..*ls_smt-contact-data-consnumber = ls_o6-consnumber\.'),
         ('leaves the name of a person partner alone', r"IF lv_bptype = '1'\."),
+        ('sends no industry on a change when the partner already has it (BUT0IS) - CVI maps 0009 to 92 '
+         'and cannot assign it next to the partner\'s 0009 (CVI_MAPPING 002)',
+         r'FROM but0is\s*\n\s*WHERE partner = @lv_bp AND ind_sector = @lv_sec_have INTO @lv_bp_has_ind\.\s*\n'
+         r'\s*IF lv_bp_has_ind = abap_true\.\s*\n\s*CLEAR lv_ind\.'),
         ('saves again without the industry key when CVI cannot map it (CVI_MAPPING 002) and says so',
          r"ls_e1-id = 'CVI_MAPPING' AND ls_e1-number = '002'.*CLEAR ls_data-partner-central_data-industry-industries\..*"
          r"Saved without the industry key"),
