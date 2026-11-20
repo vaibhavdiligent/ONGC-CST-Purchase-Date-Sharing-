@@ -1257,7 +1257,19 @@ START-OF-SELECTION.
 *          PERFORM missing_ifsc_mail.
 *        ENDIF.
         PERFORM update_log.                                                     "added by Gauri Tandel - 8000003666 -17.06.2024
-        PERFORM send_det_mail.
+        " S/4HANA conversion: a file without vendor rows (only the header) gave
+        " no log line and still mailed the users an empty list - "Mail
+        " Successfully Sent" and nothing created (CRS, 19.11.2026). It is now
+        " named in the log and no mail goes out for it.
+        IF ta_data_tmp IS INITIAL.
+          CLEAR wa_log.
+          wa_log-file = gv_file.
+          wa_log-msg  = 'The file has no vendor rows - nothing created or changed, no mail sent'.
+          APPEND wa_log TO ta_log.
+          CLEAR wa_log.
+        ELSE.
+          PERFORM send_det_mail.
+        ENDIF.
         gv_source_file = gv_file.
         gv_target_path = gv_file.
         REPLACE 'INCOMING' WITH 'ARCHIVE' INTO gv_target_path.

@@ -290,6 +290,19 @@ FORM validate_data .
   SORT ta_lfb1 BY lifnr.
   " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 09.09.2026 FOR ATC
   LOOP AT ta_data INTO wa_data.
+    " S/4HANA conversion: a row that is neither A (create) nor U (change) was
+    " skipped without a word - the run then only sent an empty mail.
+    IF wa_data-flag <> 'A' AND wa_data-flag <> 'U'.
+      wa_data1-name1   = wa_data-name1.
+      wa_data1-pan     = wa_data-pan.
+      wa_data1-bankn   = wa_data-bankn.
+      wa_data1-bankl   = wa_data-bankl.
+      wa_data1-vendor  = wa_data-vendor.
+      wa_data1-remarks = |Flag "{ wa_data-flag }" - the flag must be A (create) or U (change)|.
+      APPEND wa_data1 TO ta_data1.
+      CLEAR wa_data1.
+      CONTINUE.
+    ENDIF.
     IF wa_data-flag = 'A'. "Added by Gajanan - 15.03.2024 - CR#8000003035
 
       "Bank Key doesnt exists
@@ -1856,6 +1869,12 @@ FORM get_file_data .
         READ DATASET gv_file INTO lwa_tab.
         IF sy-subrc <> 0.
           EXIT.
+        ENDIF.
+        " S/4HANA conversion: the server is Linux - a Windows file keeps its
+        " carriage return at the line end; empty lines are no records.
+        REPLACE ALL OCCURRENCES OF cl_abap_char_utilities=>cr_lf(1) IN lwa_tab WITH space.
+        IF lwa_tab IS INITIAL.
+          CONTINUE.
         ENDIF.
         wa_records-rec = lwa_tab.
         APPEND wa_records TO ta_records.

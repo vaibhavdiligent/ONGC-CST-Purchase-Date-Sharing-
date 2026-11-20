@@ -279,6 +279,11 @@ CASES = [
     ('HONC: CVI cannot map the industry key (CVI_MAPPING 002, "Industry 92") - whole record lost (CRS, 19.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "      CLEAR ls_data-partner-central_data-industry-industries.\n", "")]),
+    ('HONC: file without usable rows - only "Mail Successfully Sent", nothing logged (CRS, 19.11.2026)',
+     'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc.prog.abap', "        IF ta_data_tmp IS INITIAL.\n", "        IF ta_data_tmp IS INITIAL AND 1 = 2.\n")]),
+    ('HONC: row with a flag other than A / U skipped silently', 'src/zfi_vend_honc_fd.prog.abap', 'cipla/audit_honc.py',
+     [('src/zfi_vend_honc_fd.prog.abap', "    IF wa_data-flag <> 'A' AND wa_data-flag <> 'U'.\n", "    IF 1 = 2.\n")]),
 ]
 
 

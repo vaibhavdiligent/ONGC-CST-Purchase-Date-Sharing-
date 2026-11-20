@@ -113,6 +113,11 @@ if split != FIELDS:
 if len(CSV_HEADER.split('|')) != len(FIELDS):
     fail.append('the audit\'s own HONC layout is inconsistent')
 
+if not re.search(r"IF wa_data-flag <> 'A' AND wa_data-flag <> 'U'\.", FD):
+    fail.append('VALIDATE_DATA skips a row whose flag is neither A nor U without a word - the run then '
+                'only mails an empty list')
+if not re.search(r"IF ta_data_tmp IS INITIAL\..*no mail sent.*ELSE\.\s*\n\s*PERFORM send_det_mail\.", MAIN, re.S):
+    fail.append('ZFI_VEND_HONC mails the users even for a file without vendor rows, and logs nothing')
 if re.search(r'READ TABLE ta_data1 INTO wa_data1 WITH KEY pan = wa_data-pan BINARY SEARCH', FD, re.I):
     fail.append('VALIDATE_DATA looks up rejected records by PAN with BINARY SEARCH on TA_DATA1, '
                 'which is sorted by bank key - rejected new vendors slip through and are created')
