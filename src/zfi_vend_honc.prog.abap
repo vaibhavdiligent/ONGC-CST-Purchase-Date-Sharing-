@@ -230,9 +230,11 @@ CLASS lcl_honc_bp DEFINITION FINAL.
     "! reasons are in CT_ERROR.
     CLASS-METHODS save
       IMPORTING is_data     TYPE cvis_ei_extern
-                iv_validate TYPE abap_bool DEFAULT abap_true
       CHANGING  ct_error    TYPE bapiret2_t
       RETURNING VALUE(rv)   TYPE abap_bool.
+
+    "! Undo what is not committed and refresh the partner's buffers.
+    CLASS-METHODS discard.
 
     "! What the partner looks like where SAP refused the change: its bank
     "! details for R1 228, its industries and the CVI industry assignment
@@ -396,23 +398,24 @@ CLASS lcl_honc_bp IMPLEMENTATION.
   METHOD save.
     rv = abap_false.
     DATA lt_map TYPE mdg_bs_bp_msgmap_t.
-    " A change is not validated first: VALIDATE_SINGLE works on the partner's
-    " buffers, and what it put there - a new bank account, a new mobile
-    " number - met the same insert again in MAINTAIN: R1 228 "Bank details
-    " ... in the validity period are not unique", AM 605 "Assignment of usage
-    " AD_MBDEFAU to communication type TEL not unique" (CRS, 20.11.2026).
-    " MAINTAIN reports every error itself, and nothing is committed on one.
-    IF iv_validate = abap_true.
-      TRY.
-          cl_md_bp_maintain=>validate_single(
-            EXPORTING i_data        = is_data
-            IMPORTING et_return_map = lt_map ).
-        CATCH cx_root INTO DATA(lx_val).
-          add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
-               CHANGING  ct      = ct_error ).
-          RETURN.
-      ENDTRY.
-    ENDIF.
+    " Every save is validated first. An error SAP finds only at COMMIT WORK
+    " cannot come back as a message - the session ends in a short dump:
+    " UNCAUGHT_EXCEPTION CX_FSBP_PARTNER_INCONSISTENT "Data for business
+    " partner 100071023 contains errors" (CRS, 20.11.2026, when changes were
+    " posted without validation). VALIDATE_SINGLE finds it and returns it.
+    TRY.
+        cl_md_bp_maintain=>validate_single(
+          EXPORTING i_data        = is_data
+          IMPORTING et_return_map = lt_map ).
+      CATCH cx_root INTO DATA(lx_val).
+        discard( ).
+        add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
+             CHANGING  ct      = ct_error ).
+        RETURN.
+    ENDTRY.
+    " Whatever the validation left in the partner's buffers goes before the
+    " real posting, so that a new bank account or number does not meet itself.
+    discard( ).
     DATA(lv_bad) = abap_false.
     LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
       APPEND VALUE bapiret2( type = ls_map-type id = ls_map-id number = ls_map-number
@@ -431,8 +434,7 @@ CLASS lcl_honc_bp IMPLEMENTATION.
           EXPORTING i_data   = lt_in
           IMPORTING e_return = lt_ret ).
       CATCH cx_root INTO DATA(lx_mnt).
-        ROLLBACK WORK.
-        reset_bp( ).
+        discard( ).
         add( EXPORTING iv_text = |Maintain failed: { lx_mnt->get_text( ) }|
              CHANGING  ct      = ct_error ).
         RETURN.
@@ -457,8 +459,7 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       ENDLOOP.
     ENDLOOP.
     IF lv_bad = abap_true.
-      ROLLBACK WORK.
-      reset_bp( ).
+      discard( ).
       RETURN.
     ENDIF.
 
@@ -481,6 +482,14 @@ CLASS lcl_honc_bp IMPLEMENTATION.
 
 
 
+
+  METHOD discard.
+    " Roll back and refresh: BAPI_TRANSACTION_ROLLBACK also refreshes the
+    " buffers the business partner functions registered, a bare ROLLBACK WORK
+    " does not.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    reset_bp( ).
+  ENDMETHOD.
 
   METHOD rows_with.
     " Read without knowing the field names: every row with one of the two
@@ -1351,19 +1360,14 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       IF ls_data-vendor-central_data-central-datax IS NOT INITIAL.
         ls_vc_later = ls_data-vendor-central_data-central.
       ENDIF.
+      " The supplier header stays in the first step: with it SAP runs the
+      " partner-to-supplier synchronisation inside the call and reports what
+      " it refuses as a message - without it that happened at COMMIT WORK.
       CLEAR ls_data-vendor-central_data-central.
-      " The first step is the partner alone when nothing of the supplier's
-      " company code or purchasing data is in it: SAP then writes the
-      " supplier from the partner, as it does in transaction BP.
-      IF ls_data-vendor-company_data-company IS INITIAL
-      AND ls_data-vendor-purchasing_data-purchasing IS INITIAL.
-        CLEAR ls_data-vendor.
-      ENDIF.
     ENDIF.
 
-    IF save( EXPORTING is_data     = ls_data
-                       iv_validate = xsdbool( iv_change = abap_false )
-             CHANGING  ct_error    = et_error ) = abap_false.
+    IF save( EXPORTING is_data  = ls_data
+             CHANGING  ct_error = et_error ) = abap_false.
       IF iv_change = abap_true.
         diagnose( EXPORTING iv_bp    = lv_bp
                             iv_lifnr = lv_lifnr
@@ -1381,9 +1385,8 @@ CLASS lcl_honc_bp IMPLEMENTATION.
       ls_data2-vendor-header-object_task                   = c_update.
       ls_data2-vendor-header-object_instance-lifnr         = lv_lifnr.
       ls_data2-vendor-central_data-central                 = ls_vc_later.
-      IF save( EXPORTING is_data     = ls_data2
-                         iv_validate = abap_false
-               CHANGING  ct_error    = lt_err2 ) = abap_false.
+      IF save( EXPORTING is_data  = ls_data2
+               CHANGING  ct_error = lt_err2 ) = abap_false.
         DATA(lv_err2) = VALUE string( ).
         LOOP AT lt_err2 INTO DATA(ls_e2).
           lv_err2 = COND #( WHEN lv_err2 IS INITIAL THEN CONV string( ls_e2-message )

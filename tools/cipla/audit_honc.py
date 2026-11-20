@@ -143,13 +143,14 @@ for what, pat in (
          'it - so a CVI_MAPPING 002 refusal loses only those',
          r"ls_vc_later = ls_data-vendor-central_data-central\.\s*\n\s*ENDIF\.\s*\n\s*CLEAR ls_data-vendor-central_data-central\..*"
          r"ls_data2-vendor-central_data-central\s*= ls_vc_later\..*save\( EXPORTING is_data\s*= ls_data2"),
-        ('posts a change of the partner without the supplier part when only partner data changes, as BP does',
-         r"IF ls_data-vendor-company_data-company IS INITIAL\s*\n\s*AND ls_data-vendor-purchasing_data-purchasing "
-         r"IS INITIAL\.\s*\n\s*CLEAR ls_data-vendor\."),
-        ('posts a change without VALIDATE_SINGLE first - its buffer met the same insert again in MAINTAIN '
-         '(R1 228 bank not unique, AM 605 mobile usage not unique)',
-         r"IF iv_validate = abap_true\.\s*\n\s*TRY\.\s*\n\s*cl_md_bp_maintain=>validate_single\(.*"
-         r"iv_validate = xsdbool\( iv_change = abap_false \)"),
+        ('keeps the supplier header in the first step of a change - without it SAP ran the partner-to-'
+         'supplier synchronisation at COMMIT WORK, where an error is a short dump',
+         r"CLEAR ls_data-vendor-central_data-central\.\s*\n\s*ENDIF\.\s*\n\s*\n\s*IF save\( EXPORTING is_data\s*= ls_data\s*\n"),
+        ('validates every save before posting - an error found only at COMMIT WORK is a short dump '
+         '(CX_FSBP_PARTNER_INCONSISTENT, CRS, 20.11.2026)',
+         r"METHOD save\..*?cl_md_bp_maintain=>validate_single\(.*?cl_md_bp_maintain=>maintain\("),
+        ('discards what the validation left (BAPI_TRANSACTION_ROLLBACK and buffer reset) before posting',
+         r"ENDTRY\.\s*\n(?:\s*\n)*\s*discard\( \)\..*METHOD discard\.\s*\n(?:\s*\n)*\s*CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'\."),
         ('reads the partner\'s numbers and e-mails without restricting to an empty person number - a person\'s '
          'mobile was not seen and inserted again (AM 605)',
          r"FROM adr2\s*\n\s*WHERE addrnumber = @lv_bpadr\s*\n\s*ORDER BY"),
@@ -175,6 +176,13 @@ for what, pat in (
         ('passes the telephone extension', r'ls_tel-contact-data-extension = lv_ext\.')):
     if not re.search(pat, INC, re.I | re.S):
         fail.append(f'LCL_HONC_BP no longer {what}')
+
+if re.search(r'CLEAR ls_data-vendor\.', INC) or re.search(r'iv_validate', INC):
+    fail.append('LCL_HONC_BP posts a change without validation or without the supplier header - SAP then '
+                'finds the partner\'s error at COMMIT WORK and the run ends in a short dump (CRS, 20.11.2026)')
+if len(re.findall(r'MODIFY zfi_honc_vend FROM TABLE ta_honc\.\s*\n\s*COMMIT WORK\.', FD)) != 3:
+    fail.append('ZFI_HONC_VEND is not committed with each vendor - the rollback of the next vendor\'s '
+                'posting loses the log entry')
 
 n_save = len(re.findall(r'save\( EXPORTING is_data\s*= ls_data\s*\n', INC))
 if n_save != 1:

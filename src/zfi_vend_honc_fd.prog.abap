@@ -599,6 +599,9 @@ FORM validate_data .
       ENDLOOP.
 *      WAIT UP TO 2 SECONDS .
       MODIFY zfi_honc_vend FROM TABLE ta_honc.
+      " S/4HANA conversion: the log entry is committed with its vendor - the
+      " posting of the next vendor may roll back what is still open.
+      COMMIT WORK.
 
       CLEAR: wa_honc.
     ENDIF.
@@ -1106,6 +1109,9 @@ FORM change_vendor .
       APPEND wa_honc TO ta_honc.
       APPEND wa_honc TO ta_honc_tmp.          "added by Gauri Tandel - 8000003666 -17.06.2024
       MODIFY zfi_honc_vend FROM TABLE ta_honc.
+      " S/4HANA conversion: the log entry is committed with its vendor - the
+      " posting of the next vendor may roll back what is still open.
+      COMMIT WORK.
       CLEAR: wa_honc.
       REFRESH: ta_honc.
       CLEAR : wa_data, lv_stat, lv_vend, lt_error, lt_success.
@@ -1185,6 +1191,9 @@ FORM create_vendor .
     wa_honc-create_id = sy-uname.
     APPEND wa_honc TO ta_honc.
     MODIFY zfi_honc_vend FROM TABLE ta_honc.
+    " S/4HANA conversion: the log entry is committed with its vendor - the
+    " posting of the next vendor may roll back what is still open.
+    COMMIT WORK.
     CLEAR: wa_honc.
     REFRESH: ta_honc.
     CLEAR : wa_data, lv_stat, lv_vend, lt_error, lt_success.
