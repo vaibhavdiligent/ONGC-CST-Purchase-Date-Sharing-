@@ -325,6 +325,12 @@ CASES = [
     ('HONC change: 0009 also filed under a blank industry system (TB038A) - industry not set, BP 100154602 (CRS, 20.11.2026)',
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "      DELETE lt_istype WHERE istype IS INITIAL.\n", "")]),
+    ('Employee upload: new bank account added and the old one deleted - both stay on the partner', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "      ls_bk-task     = c_update.\n      ls_bk-data_key = lt_old[ 1 ]-bkvid.\n",
+       "      ls_bk-task     = c_insert.\n      ls_bk-data_key = '0002'.\n")]),
+    ('Employee upload: validation leftovers / failed employee not discarded from the partner buffers', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "    \" WORK and ended the job in a short dump (CRS, 20.11.2026).\n    discard( ).\n",
+       "    \" WORK and ended the job in a short dump (CRS, 20.11.2026).\n")]),
 ]
 
 

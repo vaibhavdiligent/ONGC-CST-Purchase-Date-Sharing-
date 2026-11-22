@@ -47,6 +47,14 @@
 *                   layout is still read. Files, DPR / tax invoice
 *                   check, archive and mails are unchanged.
 *----------------------------------------------------------------------*
+* Modification Information
+* Date            : 22.11.2026
+* Description     : From the HONC test in CRS: a changed bank account
+*                   overwrites the first bank details ID (no second
+*                   account left on the partner), and SAP's partner
+*                   buffers are discarded after the validation and after
+*                   a failed employee.
+*----------------------------------------------------------------------*
 
 
 REPORT zfi_emp_upld NO STANDARD PAGE HEADING LINE-SIZE 255.
@@ -375,8 +383,7 @@ CLASS lcl_emp_bp DEFINITION FINAL.
                 et_ok    TYPE bapiret2_t.
   PRIVATE SECTION.
     CONSTANTS: c_insert TYPE c LENGTH 1 VALUE 'I',
-               c_update TYPE c LENGTH 1 VALUE 'U',
-               c_delete TYPE c LENGTH 1 VALUE 'D'.
+               c_update TYPE c LENGTH 1 VALUE 'U'.
     CLASS-METHODS set
       IMPORTING iv_comp  TYPE clike
                 iv_value TYPE any
@@ -397,6 +404,8 @@ CLASS lcl_emp_bp DEFINITION FINAL.
       IMPORTING iv_text TYPE clike
       CHANGING  ct      TYPE bapiret2_t.
     CLASS-METHODS reset_bp.
+    "! Undo what is not committed and refresh the partner's buffers.
+    CLASS-METHODS discard.
 ENDCLASS.
 
 
@@ -451,6 +460,13 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     APPEND VALUE bapiret2( type = 'E' message = iv_text ) TO ct.
   ENDMETHOD.
 
+  METHOD discard.
+    " BAPI_TRANSACTION_ROLLBACK also refreshes the buffers the business
+    " partner functions registered; a bare ROLLBACK WORK does not.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    reset_bp( ).
+  ENDMETHOD.
+
   METHOD reset_bp.
     TRY.
         CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
@@ -467,10 +483,16 @@ CLASS lcl_emp_bp IMPLEMENTATION.
           EXPORTING i_data        = is_data
           IMPORTING et_return_map = lt_map ).
       CATCH cx_root INTO DATA(lx_val).
+        discard( ).
         add( EXPORTING iv_text = |Validation failed: { lx_val->get_text( ) }|
              CHANGING  ct      = ct_error ).
         RETURN.
     ENDTRY.
+    " What the validation left in the partner's buffers goes before the real
+    " posting, and a failed employee leaves nothing behind for the next one -
+    " in the HONC run a failed row's partner came up at a later row's COMMIT
+    " WORK and ended the job in a short dump (CRS, 20.11.2026).
+    discard( ).
     DATA(lv_bad) = abap_false.
     LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
       APPEND VALUE bapiret2( type = ls_map-type id = ls_map-id number = ls_map-number
@@ -489,8 +511,7 @@ CLASS lcl_emp_bp IMPLEMENTATION.
           EXPORTING i_data   = lt_in
           IMPORTING e_return = lt_ret ).
       CATCH cx_root INTO DATA(lx_mnt).
-        ROLLBACK WORK.
-        reset_bp( ).
+        discard( ).
         add( EXPORTING iv_text = |Maintain failed: { lx_mnt->get_text( ) }|
              CHANGING  ct      = ct_error ).
         RETURN.
@@ -513,8 +534,7 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       ENDLOOP.
     ENDLOOP.
     IF lv_bad = abap_true.
-      ROLLBACK WORK.
-      reset_bp( ).
+      discard( ).
       RETURN.
     ENDIF.
     " BAPI_TRANSACTION_COMMIT with WAIT: RETURN says whether the update ran.
@@ -842,28 +862,27 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " The partner's bank details, in key order - line 1 is the one FK02
-    " typed over.
+    " The partner's bank details - line 1 (the lowest bank details ID) is the
+    " one FK02 typed over. It takes the HRMS account in place: adding a new
+    " ID and deleting the old one left both accounts on the partner (bank
+    " details are time-dependent, the delete only ends the old one) - seen
+    " with the HONC vendors in CRS, 20.11.2026.
     SELECT bkvid, banks, bankl, bankn FROM but0bk
       WHERE partner = @lv_bp
-      ORDER BY banks, bankl, bankn INTO TABLE @DATA(lt_old).
+      ORDER BY bkvid INTO TABLE @DATA(lt_old).
     IF line_exists( lt_old[ banks = lv_banks bankl = lv_bankl bankn = lv_bankn ] ).
       APPEND VALUE bapiret2( type = 'I' message = 'The bank account is already maintained' ) TO et_ok.
       RETURN.
     ENDIF.
-    DATA lv_max TYPE i.
-    LOOP AT lt_old INTO DATA(ls_old).
-      IF ls_old-bkvid CO '0123456789'.
-        IF CONV i( ls_old-bkvid ) > lv_max.
-          lv_max = CONV i( ls_old-bkvid ).
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-    lv_max += 1.
 
     DATA ls_bk TYPE bus_ei_bupa_bankdetail.
-    ls_bk-task     = c_insert.
-    ls_bk-data_key = |{ lv_max WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
+    IF lt_old IS NOT INITIAL.
+      ls_bk-task     = c_update.
+      ls_bk-data_key = lt_old[ 1 ]-bkvid.
+    ELSE.
+      ls_bk-task     = c_insert.
+      ls_bk-data_key = '0001'.
+    ENDIF.
     set( EXPORTING iv_comp = 'BANK_CTRY' iv_value = lv_banks
          CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
     set( EXPORTING iv_comp = 'BANK_KEY' iv_value = lv_bankl
@@ -875,12 +894,6 @@ CLASS lcl_emp_bp IMPLEMENTATION.
            CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
     ENDIF.
     APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
-    IF lt_old IS NOT INITIAL.
-      DATA ls_del TYPE bus_ei_bupa_bankdetail.
-      ls_del-task     = c_delete.
-      ls_del-data_key = lt_old[ 1 ]-bkvid.
-      APPEND ls_del TO ls_data-partner-central_data-bankdetail-bankdetails.
-    ENDIF.
 
     IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
       RETURN.

@@ -54,8 +54,15 @@ need('the save is not validated first', r'cl_md_bp_maintain=>validate_single\(')
 need('the save does not go through the BP API', r'cl_md_bp_maintain=>maintain\(')
 need('the commit\'s verdict is not read',
      r"CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'\s*\n\s*EXPORTING wait\s*=\s*abap_true\s*\n\s*IMPORTING return = ls_cret\.")
-need('the bank change does not replace the first account, as FK02 did',
-     r'ls_del-task\s*= c_delete\.\s*\n\s*ls_del-data_key = lt_old\[ 1 \]-bkvid\.')
+need('the bank change does not overwrite the first bank details ID in place, as FK02 typed over line 1',
+     r'ls_bk-task\s*= c_update\.\s*\n\s*ls_bk-data_key = lt_old\[ 1 \]-bkvid\.')
+if re.search(r'task\s*= c_delete', SRC):
+    fail.append('a bank detail is deleted - with time-dependent bank details the old account stays and the '
+                'partner shows two (HONC, CRS, 20.11.2026); overwrite line 1 instead')
+need('what the validation left in the buffers is not discarded before posting (BAPI_TRANSACTION_ROLLBACK)',
+     r"ENDTRY\.\s*\n(?:\s*\n)*\s*discard\( \)\.")
+need('DISCARD does not roll back through BAPI_TRANSACTION_ROLLBACK (which refreshes the registered buffers)',
+     r"METHOD discard\.\s*\n(?:\s*\n)*\s*CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'\.")
 need('XK01 is not replaced by LCL_EMP_BP=>CREATE', r'lcl_emp_bp=>create\(')
 need('FK02 is not replaced by LCL_EMP_BP=>CHANGE_BANK', r'lcl_emp_bp=>change_bank\(')
 
