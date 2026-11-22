@@ -1,0 +1,2554 @@
+*&---------------------------------------------------------------------*
+*& Report  ZSD_ROR0010
+*&
+*&---------------------------------------------------------------------*
+*&
+*&
+*&---------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* Program
+* Title           : Pending Order Status Report
+* Author          : <ROHIT POYAREKAR>
+* Program Type    : <Report>
+* Creation Date   : <08-11-2013>
+* Transaction     : <>
+* Functional design: <>
+* Technical design: <>
+* Change request :<change request number>
+* Transport request: <>
+* Description     : <description of the function of the
+*                                                        program>
+*----------------------------------------------------------------------*
+* Modification Information
+* Date            : <02-2-2014>
+* Version       : <”000 followed by running number> e.g. “v0001, “v0002
+* Author          : <BRAJABANSHI SAHU>
+*Transaction     : <ZSD_ROR001>
+* Change request  : <change request number>
+* Transport request: <CRDK908149>
+* Description     :  CRDK908001 ISSUE WITH OIH RATE
+*                    CRDK907989 ISSUE WITH OIH VALUE, NEW LOGIC FOR RATE CALCULATION
+*                    CRDK907759 ADDTION OF Material description,Material Division ,Material Division description. BONUS LOGIC IMPPLEMENTED
+*                    CRDK907228 ADDITION OF NEW FIELD AND CHANGES IN LOGIC
+*                    CRDK906930 CHANGE IN LOGIC FOR OPEN ORDER VALUE AND OPEN ORDER QUANTITY
+*----------------------------------------------------------------------
+*----------------------------------------------------------------------*
+* * Modification Information
+* Date            : <17-07-2014>
+* Author          : <vishal jagtap>
+* Change request  : <change request number>
+* Transport number:   CRDK910348
+* Description     : IF QUANTITY VALUE IS IN NEGATIVE THEN CLEAR THE QUANTITY VALUE AND AMOUNT VALUE
+*                    OF THE SAME
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* * Modification Information
+* Date            : <18-11-2014>
+* Author          : Payal Shetye
+* Change request  :
+* Transport number: CRDK914154
+* Description     : Not yet processed orders qty is added in open qty and future qty
+*    credit block qty changes
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* * Modification Information
+* Date            : <19-11-2014>
+* Author          :monali sankhe
+* Change request  :
+* Transport number: CRDK914225
+* Description     : plant is chnged from parameter to select option
+*----------------------------------------------------------------------*
+*----------------------------------------------------------------------*
+* * Modification Information
+* Date            : <25-02-2015>
+* Author          : Sagar Gujar
+* Change request  :
+* Transport number: TOC:CRDK918310   MAN:CRDK908149
+* Description     : Performance optimization - completed order should not
+*                   fetch from vbak and vbap table using inner join
+*----------------------------------------------------------------------*
+* * Modification Information
+* Date            : 11.09.2017
+* Author          : Payal Shetye
+* Change request  : CRDK947984
+* Transport number: #8000003606
+* Description     : 1. added and commented(New Pending Order Qty and New Pending Value columns addition )
+*----------------------------------------------------------------------*
+
+*REPORT  zsd_ror0010.
+REPORT zsd_ror0010.
+TABLES : t001w.
+* Sales Document: Header Data table VBAK
+TYPES : BEGIN OF ty_vbak,
+          vbeln TYPE vbak-vbeln,
+          erdat TYPE vbak-erdat,
+          vkorg TYPE vbak-vkorg,
+          vtweg TYPE vbak-vtweg,
+          spart TYPE vbak-spart,
+          vkgrp TYPE vbak-vkgrp,
+          vkbur TYPE vbak-vkbur,
+          auart TYPE vbak-auart,
+          kunnr TYPE vbak-kunnr,
+          audat TYPE vbak-audat,
+          netwr TYPE vbak-netwr,
+          vbtyp TYPE vbak-vbtyp,
+        END OF ty_vbak.
+
+* Sales Document: Item Data table VBAP
+
+
+TYPES: BEGIN OF ty_vbap,
+         vbeln  TYPE vbap-vbeln,
+         posnr  TYPE vbap-posnr,
+         matnr  TYPE vbap-matnr,
+         arktx  TYPE vbap-arktx,
+         abgru  TYPE vbap-abgru,
+         spart  TYPE vbap-spart,
+         netwr  TYPE vbap-netwr,
+         pstyv  TYPE vbap-pstyv,
+         kwmeng TYPE vbap-kwmeng,
+         vrkme  TYPE vbap-vrkme,
+         werks  TYPE vbap-werks,
+       END OF ty_vbap.
+
+*Communication Item for Pricing
+
+TYPES: BEGIN OF ty_vbup,
+         vbeln TYPE vbup-vbeln,
+         posnr TYPE vbup-posnr,
+         gbsta TYPE vbup-gbsta,
+       END OF ty_vbup.
+
+
+* Sales Document: Schedule Line Data table VBEP
+TYPES : BEGIN OF ty_vbep,
+          edatu TYPE vbep-edatu,
+*        wmeng TYPE vbep-wmeng,
+          vbeln TYPE vbep-vbeln,
+          posnr TYPE vbap-posnr,
+          etenr TYPE vbep-etenr,
+*        odqty TYPE vbep-wmeng,
+        END OF ty_vbep.
+* General Data in Customer Master table KNA1
+TYPES : BEGIN OF ty_kna1,
+          kunnr TYPE kunnr,
+          name1 TYPE name1_gp,
+        END OF ty_kna1.
+
+* Sales Document Flow table VBFA
+
+TYPES : BEGIN OF ty_vbfa,
+          vbeln   TYPE vbep-vbeln,
+          posnr   TYPE vbap-posnr,
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*          vbtyp_n TYPE vbtyp_n,
+          vbtyp_n TYPE vbtypl,
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+          rfmng   TYPE rfmng,
+          bwart   TYPE bwart,
+        END OF ty_vbfa.
+
+*Sales Document Flow
+TYPES : BEGIN OF ty_vbfa1,
+          vbeln   TYPE vbep-vbeln,
+          posnr   TYPE vbap-posnr,
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*          vbtyp_n TYPE vbtyp_n,
+          vbtyp_n TYPE vbtypl,
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+          rfmng   TYPE rfmng,
+          bwart   TYPE bwart,
+        END OF ty_vbfa1.
+
+*Sales Requirements: Individual Records
+TYPES: BEGIN OF ty_vbbe,
+         vbeln TYPE vbbe-vbeln,
+         werks TYPE vbbe-werks,
+         posnr TYPE vbbe-posnr,
+         matnr TYPE vbbe-matnr,
+         omeng TYPE vbbe-omeng,
+       END OF ty_vbbe.
+
+*SD document: Delivery: Item data ADDED ON 14/4/2014 CRDK906927
+TYPES:BEGIN OF ty_lips,
+        vbeln TYPE vbeln_vl,
+        posnr TYPE posnr_vl,
+        matnr TYPE matnr,
+        werks TYPE werks_d,
+        lfimg TYPE lfimg,
+      END OF ty_lips.
+* Final Output table
+
+TYPES : BEGIN OF ty_final,              "FINAL  TABLE
+          erdat          TYPE vbak-erdat,
+          vkorg          TYPE vbak-vkorg,
+          vtweg          TYPE vbak-vtweg,
+          kspart         TYPE vbak-spart,
+          pspart         TYPE vbak-spart,
+          vkgrp          TYPE vbak-vkgrp,
+          vkbur          TYPE vbak-vkbur,
+          vbeln          TYPE vbak-vbeln,
+          kunnr          TYPE vbak-kunnr,
+          auart          TYPE vbak-auart,
+          posnr          TYPE vbap-posnr,
+          matnr          TYPE vbap-matnr,
+          arktx          TYPE vbap-arktx,
+          edatu          TYPE vbep-edatu,
+          abgru          TYPE vbap-abgru,
+          gbstk          TYPE gbstk,
+          gbsta          TYPE gbsta,
+          kwmeng         TYPE vbap-kwmeng,
+          werks          TYPE vbap-werks,
+          name1          TYPE name1_gp,
+          odqty          TYPE vbap-kwmeng,
+          odqty1         TYPE vbap-kwmeng,
+          cbqty          TYPE vbap-kwmeng,
+          cbval          TYPE vbak-netwr,
+          delqty         TYPE vbap-kwmeng,
+          penqty         TYPE vbap-kwmeng,
+          pgiqty         TYPE vbap-kwmeng,
+          odhqty         TYPE vbap-kwmeng,
+          openodqty      TYPE vbap-kwmeng,
+          futurodhqty    TYPE vbap-kwmeng,
+          futureodhval   TYPE vbak-netwr,
+          pendqty        TYPE vbap-kwmeng,
+          pendval        TYPE vbak-netwr,
+          ordih          TYPE vbap-kwmeng,
+          ordihval       TYPE vbak-netwr,
+          pstyv          TYPE vbap-pstyv,
+          odval          TYPE vbak-netwr,
+          odval2         TYPE vbak-netwr,
+          rate           TYPE vbak-netwr,
+          openodval      TYPE vbak-netwr,
+          inetval        TYPE vbak-netwr,
+          audat          TYPE vbak-audat,
+          vrkme          TYPE vbap-vrkme,
+          vbtyp_n        TYPE vbfa-vbtyp_n,
+          lfstk          TYPE vbuk-lfstk,
+          cmgst          TYPE vbuk-cmgst,
+          cmpsb          TYPE vbuk-cmpsb,
+          sl_vtext       TYPE tvkot-vtext,
+          dc_vtext       TYPE tvkot-vtext,
+          dv_vtext       TYPE tvkot-vtext,
+          idv_vtext      TYPE tvkot-vtext,
+          pl_vtext       TYPE tvkot-vtext,
+          prinetval      TYPE p DECIMALS 3,
+          prinetqty      TYPE vbap-kwmeng,
+          netorderval    TYPE vbak-netwr,
+          sumnetorderval TYPE vbak-netwr,
+          clabs          TYPE labst,
+          unrest         TYPE labst,
+          stock          TYPE labst,
+          saleoff        TYPE tvkbt-bezei,
+          salegrp        TYPE tvkbt-bezei,
+        END OF ty_final.
+
+TYPES : BEGIN OF ty_final1,
+          f1_erdat TYPE vbak-erdat,
+          f1_vkorg TYPE vbak-vkorg,
+          f1_vtweg TYPE vbak-vtweg,
+          f1_spart TYPE vbak-spart,
+          f1_auart TYPE vbak-auart,
+          f1_vbeln TYPE vbak-vbeln,
+          f1_kunnr TYPE vbak-kunnr,
+          f1_name1 TYPE name1_gp,
+          f1_audat TYPE vbak-audat,
+          f1_netwr TYPE vbak-netwr,
+          f1_abgru TYPE vbap-abgru,
+        END OF ty_final1.
+
+
+TYPES : BEGIN OF ty_kunnr,
+          se_kunnr LIKE vbak-kunnr,
+        END OF ty_kunnr.
+
+TYPES : BEGIN OF ty_matnr,
+          se_matnr LIKE vbap-matnr,
+        END OF ty_matnr.
+
+TYPES : BEGIN OF ty_tvkot,
+          vkorg TYPE tvkot-vkorg,
+          vtext TYPE tvkot-vtext,
+        END OF ty_tvkot.
+
+TYPES : BEGIN OF ty_tvtwt,
+          vtweg TYPE tvtwt-vtweg,
+          vtext TYPE tvtwt-vtext,
+        END OF ty_tvtwt.
+
+TYPES : BEGIN OF ty_tspat,
+          spart TYPE tspat-spart,
+          vtext TYPE tspat-vtext,
+        END OF ty_tspat.
+TYPES : BEGIN OF ty_tspat1,
+          spart TYPE tspat-spart,
+          vtext TYPE tspat-vtext,
+        END OF ty_tspat1.
+
+TYPES : BEGIN OF ty_t001w,
+          werks TYPE t001w-werks,
+          vtext TYPE t001w-name1,
+        END OF ty_t001w.
+
+TYPES : BEGIN OF lty_mchb,                    "BATCH STOCK
+          matnr TYPE matnr,
+          werks TYPE werks_d,
+          clabs TYPE labst,
+        END OF lty_mchb.
+
+TYPES: BEGIN OF ty_tvkbt,                      "Organizational Unit: Sales Offices: Texts
+         spras TYPE tvkbt-spras,
+         vkbur TYPE tvkbt-vkbur,
+         bezei TYPE tvkbt-bezei,
+       END OF ty_tvkbt.
+
+
+TYPES: BEGIN OF ty_tvgrt,                       "Organizational Unit: Sales Groups: Texts
+         spras TYPE tvgrt-spras,
+         vkgrp TYPE tvgrt-vkgrp,
+         bezei TYPE tvgrt-bezei,
+       END OF ty_tvgrt.
+
+
+TYPES: BEGIN OF ty_vbuk,                        "Sales Document: Header Status and Administrative Data
+         vbeln TYPE vbeln,
+         lfstk TYPE lfstk,
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*         vbtyp TYPE vbtyp,
+         vbtyp TYPE vbtypl,
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+         cmgst TYPE cmgst,
+         cmpsb TYPE cmpsb,
+         gbstk TYPE gbstk,
+       END OF ty_vbuk.
+
+*to store summrazied data on the bais of material and plant
+TYPES: BEGIN OF ty_smfinal,
+         matnr           TYPE vbap-matnr,
+         arktx           TYPE vbap-arktx,                     "ADDED ON 07-05-2014 CRDK907759
+         werks           TYPE t001w-werks,
+         odqty           TYPE vbap-kwmeng,
+         openodqty       TYPE vbap-kwmeng,
+         futurodhqty     TYPE vbap-kwmeng,
+         futurodhval     TYPE vbak-netwr,
+         pendqty         TYPE vbap-kwmeng,
+         pendval         TYPE vbak-netwr,
+         cbqty           TYPE vbap-kwmeng,
+         cbval           TYPE vbak-netwr,
+         ordih           TYPE vbap-kwmeng,
+         orderihval      TYPE vbak-netwr,
+         gbstk           TYPE gbstk,
+         gbsta           TYPE gbsta,
+         stock           TYPE labst,
+         odval           TYPE vbak-netwr,
+         odval2          TYPE vbak-netwr,
+         openodval       TYPE vbak-netwr,
+         pspart          TYPE vbak-spart,                      " ADDED ON 07-05-2014 CRDK907759
+         idv_vtext       TYPE tvkot-vtext,                  " ADDED ON 07-05-2014 CRDK907759
+*         pendqty_ex  TYPE vbap-kwmeng, "added by payal on 11.09.2017 #8000003606
+*         pendval_ex  TYPE vbak-netwr, "added by payal on 11.09.2017 #8000003606
+         pending_ind TYPE c, "added by payal on 11.09.2017 #8000003606
+*         pendqty_sub     TYPE vbap-kwmeng, "added by payal on 11.09.2017 #8000003606
+       END OF ty_smfinal.
+
+
+
+*-------------------------------------------------------------------
+*   declare work area                                        *
+*-------------------------------------------------------------------
+
+DATA :   wa_kunnr    TYPE ty_kunnr,
+         wa_matnr    TYPE ty_matnr,
+         wa_vbak     TYPE ty_vbak,
+         wa_vbap     TYPE ty_vbap,
+         wa_vbap2    TYPE ty_vbap,
+         wa_vbep     TYPE ty_vbep,
+         wa_kna1     TYPE ty_kna1,
+         wa_vbfa     TYPE ty_vbfa,
+*         wa_vbfa1 TYPE ty_vbfa1,
+         wa_final    TYPE ty_final,
+         wa_final2   TYPE ty_final,
+*         wa_final3 TYPE ty_final,
+*         wa_final1 TYPE ty_final1,
+         wa_tvkot    TYPE ty_tvkot,
+         wa_tvtwt    TYPE ty_tvtwt,
+         wa_tspat    TYPE ty_tspat,
+         wa_tspat1   TYPE ty_tspat1,
+         wa_t001w    TYPE ty_t001w,
+         wa_tvkbt    TYPE ty_tvkbt,
+         wa_tvgrt    TYPE ty_tvgrt,
+         wa_vbuk     TYPE ty_vbuk,
+         wa_vbup     TYPE ty_vbup,
+*         WA_VBBE TYPE TY_VBBE,
+*         wa_lips type ty_lips,
+         wa_smfinal  TYPE ty_smfinal,
+         wa_smfinal2 TYPE ty_smfinal.
+*-------------------------------------------------------------------
+*   declare  internal table                                     *
+*-------------------------------------------------------------------
+
+DATA : ta_kunnr      TYPE STANDARD TABLE OF ty_kunnr,
+       ta_matnr      TYPE STANDARD TABLE OF ty_matnr,
+       ta_vbak       TYPE STANDARD TABLE OF ty_vbak,
+       ta_vbap       TYPE STANDARD TABLE OF ty_vbap,
+       ta_vbup       TYPE STANDARD TABLE OF ty_vbup,
+       ta_vbep       TYPE STANDARD TABLE OF ty_vbep,
+       ta_final2     TYPE STANDARD TABLE OF ty_final,
+       ta_kna1       TYPE STANDARD TABLE OF ty_kna1,
+       ta_vbfa       TYPE STANDARD TABLE OF ty_vbfa,
+*       ta_vbfa1 TYPE STANDARD TABLE OF ty_vbfa1,
+       ta_final      TYPE STANDARD TABLE OF ty_final,
+*       ta_final1 TYPE STANDARD TABLE OF ty_final1,
+*       ta_final3 TYPE STANDARD TABLE OF ty_final,
+       ta_tvkot      TYPE STANDARD TABLE OF ty_tvkot,
+       ta_tvtwt      TYPE STANDARD TABLE OF ty_tvtwt,
+       ta_tspat      TYPE STANDARD TABLE OF ty_tspat,
+       ta_tspat1     TYPE STANDARD TABLE OF ty_tspat1,
+       ta_t001w      TYPE STANDARD TABLE OF ty_t001w,
+       ta_tvkbt      TYPE STANDARD TABLE OF ty_tvkbt,
+       ta_tvgrt      TYPE STANDARD TABLE OF ty_tvgrt,
+       ta_vbuk       TYPE STANDARD TABLE OF ty_vbuk,
+       ta_vbbe       TYPE STANDARD TABLE OF ty_vbbe,
+       ta_lips       TYPE STANDARD TABLE OF ty_lips,
+       ta_smfinal    TYPE STANDARD TABLE OF ty_smfinal,
+       ta_smfinal2   TYPE STANDARD TABLE OF ty_smfinal,
+       ta_ex_pending TYPE TABLE OF zsd_ex_pending, ""added by payal on 11.09.2017 #8000003606
+       wa_ex_pending TYPE zsd_ex_pending, ""added by payal on 11.09.2017 #8000003606
+       lv_vbak       TYPE STANDARD TABLE OF ty_vbak.
+
+DATA : lta_mchb TYPE TABLE OF lty_mchb,
+       lwa_mchb LIKE LINE OF lta_mchb.
+DATA : lta_mchb1 TYPE TABLE OF lty_mchb,
+       lwa_mchb1 LIKE LINE OF lta_mchb.
+DATA : ita_vbbe TYPE TABLE OF ty_vbbe,
+       iwa_vbbe LIKE LINE OF ita_vbbe.
+
+DATA : ita_vbbe1 TYPE TABLE OF ty_vbbe,
+       iwa_vbbe1 LIKE LINE OF ita_vbbe.
+
+*&--------------------------------------------------------------------
+*&             veraible  Declaration
+*&--------------------------------------------------------------------
+
+DATA: g_erdat     TYPE vbak-erdat,
+      g_kunnr     TYPE vbak-kunnr,
+      g_matnr     TYPE vbap-matnr,
+      g_delqty    TYPE vbfa-rfmng,
+      g_penqty    TYPE vbfa-rfmng,
+      g_pgiqty    TYPE vbfa-rfmng,
+      g_odhqty    TYPE vbep-wmeng,
+      g_odqty     TYPE vbfa-rfmng,
+      g_odval     TYPE vbak-netwr,
+      g_inetval   TYPE vbap-netwr,
+      l_clabs     TYPE mchb-clabs,
+      l_sch       TYPE mchb-clabs,
+      l_clabs1    TYPE mchb-clabs,
+      l_clabs2    TYPE mchb-clabs,
+      l_scd       LIKE vbbe-omeng,
+      l_scd1      LIKE vbbe-omeng,
+      g_auart     LIKE vbak-auart,
+      i_openodqty TYPE vbfa-rfmng, "for calculatio of the summary
+      i_futureodh TYPE vbfa-rfmng,
+      i_cbqty     TYPE vbfa-rfmng,
+      i_cbval     TYPE vbak-netwr,
+      i_futurodh  TYPE vbfa-rfmng,
+      i_futureval TYPE vbak-netwr,
+      i_pendqty   TYPE vbfa-rfmng,
+      i_pendval   TYPE vbak-netwr,
+      i_odh       TYPE vbfa-rfmng,
+      i_odhval    TYPE vbak-netwr,
+      i_odval     TYPE vbak-netwr,
+      p_date      TYPE sy-datum,
+      i_rate      TYPE  p DECIMALS 8,                       "CRDK908001
+      i_openodval TYPE vbak-netwr,
+      lv_val(18)  TYPE c.
+
+
+
+DATA: BEGIN OF lty_ztab4 OCCURS 100,
+        matnr LIKE vbbe-matnr,
+        werks LIKE vbbe-werks,
+        lgort LIKE vbbe-lgort,
+        charg LIKE vbbe-charg,
+        vbmna LIKE vbbe-omeng,        "offene Anfragemenge
+        vbmnb LIKE vbbe-omeng,        "offene Angebotsmenge
+        vbmnc LIKE vbbe-omeng,        "offene Auftragsmenge
+        vbmne LIKE vbbe-omeng,        "offene Lieferplanmenge
+        vbmng LIKE vbbe-omeng,        "offene Kontraktmenge
+        vbmni LIKE vbbe-omeng,        "offene Menge kostenloser Liefer.
+        vbmnj LIKE vbbe-omeng,        "offene Liefermenge
+        vrkme LIKE vbep-vrkme,        "VerkaufsME     ALRK014884 SW
+        wmeng LIKE vbep-wmeng,        "Erfmg im Beleg ALRK014884 SW
+      END OF lty_ztab4.
+
+
+
+DATA: fieldcatalog TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+*      fieldcatalog1 TYPE slis_t_fieldcat_alv WITH HEADER LINE,
+      gd_layout1   TYPE slis_layout_alv,
+      gd_layout    TYPE slis_layout_alv,
+*      i_events     TYPE slis_t_event, "added by payal on 11.09.2017 #8000003606.
+*      i_event      TYPE slis_t_event, "added by payal on 11.09.2017 #8000003606.
+      gt_sort      TYPE slis_t_sortinfo_alv,  "added by payal on 11.09.2017 #8000003606
+      wa_sort      TYPE slis_sortinfo_alv.    "added by payal on 11.09.2017 #8000003606.
+
+DATA: p_det TYPE c VALUE 'X'.
+
+"soc by monali on 19.11.2014
+TYPES: BEGIN OF ty_werks,
+         werks TYPE t001w-werks,
+       END OF ty_werks.
+
+DATA: ta_werks TYPE TABLE OF ty_werks,
+      wa_werks TYPE ty_werks.
+RANGES: r_werks FOR t001w-werks.
+*eoc by monali on 19.11.2014
+
+*&--------------------------------------------------------------------
+*&             Selection Screen Declaration
+*&--------------------------------------------------------------------
+*SELECTION SCREEN
+
+
+SELECTION-SCREEN : BEGIN OF BLOCK b1 WITH FRAME TITLE text-002.
+
+*  soc by monali on 19.11.2014
+*PARAMETERS:
+*            p_werks LIKE vbap-werks OBLIGATORY. " Plant
+*  eoc by monali on 19.11.2014
+SELECT-OPTIONS: s_werks FOR t001w-werks OBLIGATORY. " Plant "added by monali on 19.11.2014
+SELECT-OPTIONS: s_matnr FOR g_matnr. " Material Code.
+
+*SELECTION-SCREEN SKIP 1.
+SELECTION-SCREEN END OF BLOCK b1.
+
+SELECTION-SCREEN:BEGIN OF BLOCK b2 WITH FRAME TITLE text-003.
+
+SELECT-OPTIONS : s_auart FOR g_auart DEFAULT 'zdep' ,  " Sales Doc. Type
+                 s_kunnr FOR g_kunnr. " Customer Code.
+SELECT-OPTIONS : s_erdat FOR g_erdat OBLIGATORY . " Date on Which Order is Created
+
+SELECTION-SCREEN END OF BLOCK b2.
+
+SELECTION-SCREEN : BEGIN OF BLOCK a1 WITH FRAME TITLE text-001.
+
+
+PARAMETERS :
+  p_vkorg LIKE vbak-vkorg OBLIGATORY DEFAULT '1000' , " Sales Org     CRDK907228(SET DEFAULT)
+  p_vtweg LIKE vbak-vtweg OBLIGATORY DEFAULT '10', " Distribution Channel   CRDK907228
+  p_spart LIKE vbak-spart OBLIGATORY DEFAULT '11'. " Division
+*  p_auart LIKE vbak-auart OBLIGATORY. " Sales Doc. Type
+*SELECT-OPTIONS : s_werks FOR g_werks, " Plant
+*                 s_vkorg FOR g_vkorg, " Sales Org
+
+*SELECTION-SCREEN SKIP 1.
+*PARAMETERS :
+*    p_det RADIOBUTTON GROUP r1,
+*    p_sum RADIOBUTTON GROUP r1.
+
+SELECTION-SCREEN END OF BLOCK a1.
+
+
+
+INITIALIZATION.
+
+  s_erdat-sign = 'I'.
+  s_erdat-option = 'EQ'.
+  s_erdat-low = sy-datum - 90.
+  s_erdat-high = sy-datum.
+  APPEND s_erdat.                                           "CRDK907759
+
+  CLEAR: wa_kunnr,
+          wa_matnr,
+          wa_vbak,
+          wa_vbap,
+          wa_vbep,
+          wa_kna1,
+          wa_vbfa,
+          wa_final.
+
+  REFRESH :  ta_kunnr,
+             ta_matnr,
+             ta_vbak,
+             ta_vbap,
+             ta_vbep,
+             ta_kna1,
+             ta_vbfa,
+             ta_final.
+
+
+
+**&--------------------------------------------------------------------
+**&             Validations on Selection Screen fields
+**&-------------------------------------------------------------------*
+** Input Validation for Selectio Screen Fields
+
+AT SELECTION-SCREEN.
+** Validation on Input Parameters
+  PERFORM sap_sd_date.
+  PERFORM sap_sd_sorg.
+  PERFORM sap_sd_disch.
+  PERFORM sap_sd_div.
+  PERFORM sap_sd_sadocty.
+  PERFORM sap_sd_custcode.
+  PERFORM sap_sd_matcode.
+*  PERFORM sap_sd_desc.
+*&---------------------------------------------------------------------*
+*&             START OF SELECTION EVENT : FILLING the Internal table
+*&---------------------------------------------------------------------*
+*
+
+START-OF-SELECTION.
+
+  "soc by monali on 19.11.2014
+  "collect authorized plant range
+  SELECT werks FROM  t001w CLIENT SPECIFIED
+    INTO TABLE ta_werks
+         WHERE  mandt  = sy-mandt
+         AND    werks  IN s_werks.
+
+  CLEAR r_werks.
+  REFRESH r_werks[].
+  "eoc by monali on 19.11.2014
+  LOOP AT ta_werks INTO wa_werks.   "added by monali on 19.11.2014
+    AUTHORITY-CHECK OBJECT 'M_MATE_WRK'
+*              ID 'WERKS' FIELD p_werks  "comment by monali
+                 ID 'WERKS' FIELD wa_werks  "added by monali
+              ID 'ACTVT' FIELD '03'.
+
+*    ***    added by monali on 19.11.2014
+    IF sy-subrc = 0 .
+      r_werks-low = wa_werks.
+      r_werks-high = wa_werks.
+      r_werks-sign = 'I'.
+      r_werks-option = 'EQ'.
+      APPEND r_werks.
+    ENDIF.
+***end added by monali on 19.11.2014
+  ENDLOOP.
+*  IF sy-subrc NE 0.    "commented by monali
+  IF r_werks[] IS INITIAL.     "added by monali 19.11.2014
+    MESSAGE e061(zsd)."'You are not authorised for this plant' TYPE 'E'.
+
+  ELSE.
+    PERFORM sapr_sd_vbak.
+    PERFORM sapr_sd_vabp.
+    PERFORM sapr_sd_lips.
+    PERFORM sapr_sd_vbep.
+    PERFORM sapr_sd_vbfa.
+    PERFORM sapr_sd_vbuk.
+    PERFORM sapr_sd_vbup.                                   "CRDK906930
+
+    PERFORM sapr_sd_zsd_ex_pending.  "added by payal on 11.09.2017 #8000003606
+*  PERFORM sapr_sd_vbfa1.
+*  PERFORM sapr_sd_fcal.
+*  PERFORM sapr_sd_final.
+
+*  PERFORM sapr_sd_fieldcatalog.
+    IF p_det = 'X'.
+      PERFORM sapr_sd_mchb.
+*    PERFORM sapr_sd_mchb1.
+      PERFORM sapr_sd_final.
+      PERFORM sapr_sd_fieldcatalog.
+      PERFORM sapr_sd_avlgrid.
+      PERFORM sapr_sd_layout.
+    ELSE.
+      PERFORM sapr_sd_mchb.
+      PERFORM sapr_sd_final.
+*    PERFORM sapr_sd_fin1.
+      PERFORM sapr_sd_fieldcatalog.
+      PERFORM sapr_sd_avlgrid1.
+      PERFORM sapr_sd_layout.
+    ENDIF.
+*  PERFORM sapr_sd_layout1.
+
+  ENDIF.
+
+END-OF-SELECTION.
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_DATE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_date .
+  DATA : l_erdat TYPE vbak-erdat.
+  SELECT SINGLE erdat
+          FROM vbak CLIENT SPECIFIED
+         INTO  l_erdat
+       WHERE mandt = sy-mandt
+  AND erdat IN s_erdat.
+
+  IF sy-subrc <> 0.
+    MESSAGE i013(zsd).
+  ENDIF.
+ENDFORM.                    " SAP_SD_DATE
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_SORG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_sorg .
+  DATA : l_vkorg TYPE vbak-vkorg.
+  SELECT SINGLE
+          vkorg
+          FROM tvko
+         INTO l_vkorg
+  WHERE vkorg = p_vkorg.
+
+  IF sy-subrc <> 0.
+    MESSAGE i025(zsd).
+  ENDIF.
+ENDFORM.                    " SAP_SD_SORG
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_DISCH
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_disch .
+  DATA : l_vtweg TYPE vbak-vtweg.
+  SELECT SINGLE
+          vtweg
+          FROM tvkov
+         INTO l_vtweg
+  WHERE vtweg = p_vtweg.
+
+  IF sy-subrc <> 0.
+    MESSAGE 'INVALID DISTRIBUTION CHENNEL' TYPE 'I'.
+  ENDIF.
+ENDFORM.                    " SAP_SD_DISCH
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_DIV
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_div .
+  DATA : l_spart TYPE vbak-spart.
+  SELECT SINGLE
+          spart
+          FROM tvta
+         INTO l_spart
+  WHERE spart = p_spart.
+
+  IF sy-subrc <> 0.
+    MESSAGE 'INVALID DIVISION' TYPE 'I'.
+  ENDIF.
+ENDFORM.                    " SAP_SD_DIV
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_SADOCTY
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_sadocty .
+  DATA : l_auart TYPE vbak-auart.
+  SELECT SINGLE
+          auart
+          FROM tvak
+         INTO l_auart
+  WHERE auart IN s_auart.
+
+* if sy-subrc <> 0.
+* message e001(zsd).
+* ENDIF.
+ENDFORM.                    " SAP_SD_SADOCTY
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_CUSTCODE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_custcode .
+  DATA : l_kunnr TYPE vbak-kunnr.
+  SELECT SINGLE
+          kunnr
+          FROM kna1
+         INTO l_kunnr
+  WHERE kunnr IN s_kunnr.
+
+  IF sy-subrc <> 0.
+    MESSAGE i040(zsd).
+  ENDIF.
+ENDFORM.                    " SAPli_SD_CUSTCODE
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_MATCODE
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sap_sd_matcode .
+  DATA : l_matnr TYPE vbap-matnr.
+  SELECT SINGLE
+          matnr
+          FROM mara
+         INTO l_matnr
+  WHERE matnr IN s_matnr.
+
+* if sy-subrc <> 0.
+* message e001(zsd).
+* ENDIF.
+ENDFORM.                    " SAP_SD_MATCODE
+
+*&---------------------------------------------------------------------*
+*&             START OF SELECTION EVENT : BEGINNING OF EXECUTION
+*&---------------------------------------------------------------------*
+*
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_VBAK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+
+FORM sapr_sd_vbak .
+  IF s_auart IS NOT INITIAL.      "ADDED ON 28-04-2014 TO RETRIVE SALES DOC OF TYPE (ZDEP ) AND (ZDSR) ONLY
+****Commented By Sagar Gujar on 16.02.2015 for performance optimization
+*    SELECT
+*     vbeln
+*     erdat
+*     vkorg
+*     vtweg
+*     spart
+*     vkgrp
+*     vkbur
+*     auart
+*     kunnr
+*     audat
+*     netwr
+*     vbtyp
+*
+*     FROM vbak CLIENT SPECIFIED
+*     INTO TABLE ta_vbak
+*     WHERE mandt = sy-mandt
+*     AND erdat IN s_erdat
+*     AND kunnr IN s_kunnr
+*     AND   vkorg = p_vkorg
+*     AND   vtweg = p_vtweg
+*     AND   spart = p_spart
+*    AND   auart IN s_auart.
+*  ELSE.
+*    SELECT
+*         vbeln
+*         erdat
+*         vkorg
+*         vtweg
+*         spart
+*         vkgrp
+*         vkbur
+*         auart
+*         kunnr
+*         audat
+*         netwr
+*         vbtyp
+*
+*   FROM vbak CLIENT SPECIFIED
+*   INTO TABLE ta_vbak
+*   WHERE mandt = sy-mandt
+*   AND erdat IN s_erdat
+*   AND kunnr IN s_kunnr
+*   AND   vkorg = p_vkorg
+*   AND   vtweg = p_vtweg
+*   AND   spart = p_spart
+*    AND   auart IN ('ZDEP','ZDSR').            " ADDED ON 07-05-2014 CHANGE IN LOGIC  CRDK907759
+****Commented By Sagar Gujar on 16.02.2015 for performance optimization
+
+****Beging of insertion by Sagar Gujar on 16.02.2015 for performance optimization
+
+    SELECT
+     a~vbeln,
+     a~erdat,
+     a~vkorg,
+     a~vtweg,
+     a~spart,
+     a~vkgrp,
+     a~vkbur,
+     a~auart,
+     a~kunnr,
+     a~audat,
+     a~netwr,
+     a~vbtyp
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*     FROM vbak AS a INNER JOIN vbup AS b
+     FROM vbak AS a INNER JOIN v_vbup_s4 AS b
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+     ON a~vbeln EQ b~vbeln
+     WHERE  a~erdat IN @s_erdat
+     AND   a~kunnr IN @s_kunnr
+     AND   a~vkorg = @p_vkorg
+     AND   a~vtweg = @p_vtweg
+     AND   a~spart = @p_spart
+     AND   a~auart IN @s_auart
+     AND   b~lfgsa NE 'C'
+     INTO TABLE @ta_vbak.
+  ELSE.
+    SELECT
+         a~vbeln,
+         a~erdat,
+         a~vkorg,
+         a~vtweg,
+         a~spart,
+         a~vkgrp,
+         a~vkbur,
+         a~auart,
+         a~kunnr,
+         a~audat,
+         a~netwr,
+         a~vbtyp
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*   FROM vbak AS a INNER JOIN vbup AS b
+   FROM vbak AS a INNER JOIN v_vbup_s4 AS b
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+   ON a~vbeln EQ b~vbeln
+   WHERE  a~erdat IN @s_erdat
+   AND   a~kunnr IN @s_kunnr
+   AND   a~vkorg = @p_vkorg
+   AND   a~vtweg = @p_vtweg
+   AND   a~spart = @p_spart
+   AND   a~auart IN ('ZDEP','ZDSR')
+   AND   b~lfgsa NE 'C'
+   INTO TABLE @ta_vbak.
+
+**End of insertion by Sagar Gujar on 16.02.2015
+  ENDIF.
+*   and vbeln = '0000001568'."= p_auart.
+
+
+*  LOOP AT ta_vbak INTO wa_vbak.
+** select DISTINCT wa_vbak-audat from ta_vbak.
+*  ENDLOOP.
+
+  IF sy-subrc = 0 .
+
+    SELECT
+      kunnr
+      name1
+      FROM kna1
+      INTO TABLE ta_kna1
+      FOR ALL ENTRIES IN ta_vbak
+    WHERE kunnr = ta_vbak-kunnr.
+*      and   werks = p_werks.
+
+
+
+    SELECT
+      vkorg
+      vtext
+      FROM tvkot
+      INTO TABLE ta_tvkot
+      FOR ALL ENTRIES IN ta_vbak
+    WHERE vkorg = ta_vbak-vkorg.
+
+    SELECT
+    vtweg
+    vtext
+    FROM tvtwt
+    INTO TABLE  ta_tvtwt
+    FOR ALL ENTRIES IN ta_vbak
+    WHERE vtweg = ta_vbak-vtweg.
+
+    SELECT
+        spart
+        vtext
+        FROM tspat
+        INTO TABLE ta_tspat
+        FOR ALL ENTRIES IN ta_vbak
+    WHERE spart = ta_vbak-spart.
+
+
+  ENDIF.
+
+  SELECT
+    spras
+    vkbur
+    bezei
+
+    FROM tvkbt
+    INTO TABLE ta_tvkbt
+    FOR ALL ENTRIES IN ta_vbak
+    WHERE vkbur = ta_vbak-vkbur
+  AND spras = 'E'.
+
+
+  SELECT
+    spras
+    vkgrp
+    bezei
+
+    FROM tvgrt
+    INTO TABLE ta_tvgrt
+    FOR ALL ENTRIES IN ta_vbak
+    WHERE spras = 'E' AND
+  vkgrp = ta_vbak-vkgrp.
+
+*LOOP AT ta_vbak INTO wa_vbak.
+*DELETE ta_vbak WHERE vbtyp = 'K' or vbtyp = 'L' .
+*DELETE ta_vbak WHERE vbtyp = 'L'.
+
+*ENDLOOP.
+
+ENDFORM.                    " SAPR_SD_VBAK
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_VABP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_vabp .
+
+  IF ta_vbak IS NOT INITIAL.
+***Commented by sagar gujar on 16.02.2015 for performance tuning
+*    SELECT
+*    VBELN
+*    POSNR
+*    MATNR
+*    ARKTX
+*    ABGRU
+*    SPART
+*    NETWR
+*    PSTYV
+*    KWMENG
+*    VRKME
+*    WERKS
+*
+*
+*      FROM VBAP
+*      INTO TABLE TA_VBAP
+*      FOR ALL ENTRIES IN TA_VBAK
+*      WHERE VBELN = TA_VBAK-VBELN
+*      AND   MATNR IN S_MATNR
+**      AND   spart = ta_vbak-spart
+**    AND   werks = p_werks. " commented by monali
+*    AND   WERKS IN  R_WERKS." added by monali
+**      and abgru = ''.
+****End of commented by Sagar Gujar on 16.02.2015
+
+***Begining of insertion by Sagar Gujar on 16.02.2015 for performance tuning
+
+    SELECT
+       a~vbeln,
+       a~posnr,
+       a~matnr,
+       a~arktx,
+       a~abgru,
+       a~spart,
+       a~netwr,
+       a~pstyv,
+       a~kwmeng,
+       a~vrkme,
+       a~werks
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*       FROM vbap AS a INNER JOIN vbup AS b
+       FROM vbap AS a INNER JOIN v_vbup_s4 AS b
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+       ON a~vbeln EQ b~vbeln AND a~posnr EQ b~posnr
+       FOR ALL ENTRIES IN @ta_vbak
+       WHERE a~vbeln = @ta_vbak-vbeln
+       AND   a~matnr IN @s_matnr
+       AND   a~werks IN @r_werks  " added by monali
+       AND   b~lfgsa NE 'C'
+       INTO TABLE @ta_vbap.
+
+***End of insertion by Sagar Gujar on 16.02.2015
+
+  ENDIF.
+
+  IF ta_vbap IS NOT INITIAL .
+
+    SELECT
+        spart
+        vtext
+        FROM tspat
+        INTO TABLE ta_tspat1
+        FOR ALL ENTRIES IN ta_vbap
+    WHERE spart = ta_vbap-spart.
+
+    SELECT
+    werks
+    name1
+    FROM t001w
+    INTO TABLE ta_t001w
+    FOR ALL ENTRIES IN ta_vbap
+    WHERE werks = ta_vbap-werks.
+
+  ENDIF.
+
+
+ENDFORM.                    " SAPR_SD_VABP
+*&---------------------------------------------------------------------*
+*&      Form  SAP_SD_DESC
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM sap_sd_desc .
+*  IF ta_vbap IS NOT INITIAL.             " COMMENTED DUE TO CHANGE  IN LOGIC
+*
+*  SELECT
+*      SPART
+*      vtext
+*      FROM TSPAt
+*      INTO TABLE ta_TSPAt1
+*      FOR ALL ENTRIES IN ta_vbap
+*      WHERE SPART = ta_vbap-SPART.
+*
+*      SELECT
+*      WERKS
+*      name1
+*      FROM T001W
+*      INTO TABLE ta_T001W
+*      FOR ALL ENTRIES IN ta_vbap
+*      WHERE WERKS = ta_vbap-WERKS.
+*
+*
+*    ENDIF.
+*ENDFORM.                    " SAP_SD_DESC
+
+
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_VBEP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_vbep .
+
+  IF ta_vbap IS NOT INITIAL.
+
+    SELECT
+      edatu
+*      wmeng
+      vbeln
+      posnr
+      etenr
+      FROM vbep
+      INTO TABLE ta_vbep
+      FOR ALL ENTRIES IN ta_vbap
+      WHERE   vbeln = ta_vbap-vbeln
+    AND posnr = ta_vbap-posnr.
+
+
+
+
+
+  ENDIF.
+ENDFORM.                    " SAPR_SD_VBEP
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_VBFA
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_vbfa .
+
+  IF ta_vbep IS NOT INITIAL.
+    SELECT
+      vbelv
+      posnv
+      vbtyp_n
+      rfmng
+      bwart
+      FROM vbfa
+      INTO TABLE ta_vbfa
+      FOR ALL ENTRIES IN ta_vbap
+      WHERE vbtyp_n IN ('J','R')
+      AND   vbelv   = ta_vbap-vbeln
+    AND   posnv   = ta_vbap-posnr.
+*      AND   bwart   = 601.
+
+  ENDIF.
+
+
+ENDFORM.                    " SAPR_SD_VBFA
+
+FORM sapr_sd_vbuk .
+  SELECT
+    vbeln,
+    lfstk,
+    vbtyp,
+    cmgst,
+    cmpsb,
+    gbstk
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*    FROM vbuk
+    FROM v_vbuk_s4
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+    FOR ALL ENTRIES IN @ta_vbap
+  WHERE   vbeln = @ta_vbap-vbeln
+         INTO TABLE @ta_vbuk.
+
+ENDFORM.                    " SAPR_SD_VBUK
+
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_MCHB
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_mchb .
+  "soc by monali on 19.11.2014(no use of l_xwerks in the code)
+*  RANGES : l_xwerks FOR t001w-werks OCCURS 1.
+*  l_xwerks-low  = p_werks.
+*  l_xwerks-high = p_werks.
+*  IF l_xwerks-low NE '' OR l_xwerks-high NE ''.
+*    l_xwerks-option = 'EQ'.
+*    l_xwerks-sign = 'I'.
+*  ENDIF.
+*  APPEND l_xwerks.
+  "eoc by monali on 19.11.2014
+
+  CLEAR wa_vbap2.
+  LOOP AT ta_vbap INTO wa_vbap2 .               "for the calculation of unrestricted value
+    SELECT  matnr
+             werks
+             clabs
+        FROM mchb
+        INTO TABLE lta_mchb1
+*  FOR ALL ENTRIES IN ta_vbap
+        WHERE matnr = wa_vbap2-matnr
+          AND   werks = wa_vbap2-werks
+    AND  lgort IN ('FGS1','FGS2') .
+
+    IF sy-subrc = 0.
+      LOOP AT lta_mchb1 INTO lwa_mchb1.
+        l_clabs = l_clabs + lwa_mchb1-clabs.
+      ENDLOOP.
+    ENDIF.
+
+*    CALL FUNCTION 'MB_SELECT_SD_SCHEDULED_STOCK'
+*      EXPORTING
+*        x_matnr = wa_vbap2-matnr
+*      TABLES
+*        xtab4   = lty_ztab4
+*        xwerks  = l_xwerks.
+*
+*    IF sy-subrc = 0.
+*      LOOP AT lty_ztab4 WHERE lgort ='FGS1'  OR lgort = 'STR2'.
+*        l_sch = l_sch + lty_ztab4-vbmnj.
+*      ENDLOOP.
+*    ENDIF.
+
+    l_clabs = l_clabs - l_sch.
+    l_clabs2 = l_clabs.
+    lwa_mchb-clabs = l_clabs.
+    lwa_mchb-matnr = lwa_mchb1-matnr.
+    lwa_mchb-werks = lwa_mchb1-werks.
+    APPEND lwa_mchb TO lta_mchb.
+    CLEAR lwa_mchb.
+    CLEAR l_clabs.
+    CLEAR l_sch.
+    CLEAR lwa_mchb1.
+
+
+    SELECT  vbeln
+            werks
+            posnr
+            matnr
+            omeng
+        FROM vbbe
+        INTO TABLE ita_vbbe
+*  FOR ALL ENTRIES IN ta_vbap
+        WHERE matnr = wa_vbap2-matnr
+          AND   werks = wa_vbap2-werks
+    AND  lgort IN ('FGS1','STR2') .
+
+    IF sy-subrc = 0.                                      "for the calculation of schd for delivery
+      LOOP AT ita_vbbe INTO iwa_vbbe.
+        l_scd = l_scd + iwa_vbbe-omeng.
+      ENDLOOP.
+    ENDIF.
+
+    l_scd1 = l_scd.
+    iwa_vbbe1-omeng = l_scd1.
+    iwa_vbbe1-matnr = iwa_vbbe-matnr.
+    iwa_vbbe1-werks = iwa_vbbe-werks.
+    APPEND iwa_vbbe1 TO ita_vbbe1.
+    CLEAR iwa_vbbe.
+    CLEAR l_scd.
+    CLEAR iwa_vbbe1.
+
+  ENDLOOP.
+ENDFORM.                    " SAPR_SD_MCHB
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_FINAL
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_final .
+*&---------------------------------------------------------------------*
+*&      VARIABLE FOR FUNCTION MODUL
+*&---------------------------------------------------------------------*
+  DATA : l_fname TYPE rs38l_fnam,
+         lv_sum  TYPE vbak-netwr.
+  DATA: l_mat_ex TYPE matnr. "added by payal on 11.09.2017 #8000003606
+
+*&---------------------------------------------------------------------*
+*&      SORTING THE INTERNAL TABLE
+*&---------------------------------------------------------------------*
+
+
+  SORT ta_vbak    BY vbeln.
+  SORT ta_vbuk    BY vbeln.  "bbs
+  SORT ta_vbap    BY vbeln posnr abgru.
+  SORT ta_vbep    BY vbeln posnr etenr.
+  SORT ta_vbfa    BY vbeln posnr vbtyp_n.
+  SORT ta_kna1    BY kunnr.
+  SORT ta_tvkot   BY vkorg.
+  SORT ta_tvtwt   BY vtweg.
+  SORT ta_tspat   BY spart.
+  SORT ta_tspat1  BY spart.
+  SORT ta_t001w   BY werks.
+  SORT ta_tvkbt   BY vkbur.
+  SORT ta_tvgrt   BY vkgrp.
+
+
+
+  CLEAR ta_final[].
+
+
+
+  LOOP AT ta_vbap INTO wa_vbap2 WHERE abgru = ''.
+
+
+*    IF wa_vbap2-abgru IS INITIAL. "AND p_det = 'X'.
+*      CLEAR wa_final.
+*      CONTINUE.
+*    ENDIF.
+
+    wa_vbap = wa_vbap2.
+*    CLEAR wa_final-odval.
+    wa_final-vbeln  = wa_vbap-vbeln.
+    wa_final-pspart = wa_vbap-spart.
+    wa_final-posnr  = wa_vbap-posnr.
+    wa_final-matnr  = wa_vbap-matnr.
+    wa_final-arktx  = wa_vbap-arktx.
+    wa_final-inetval = wa_vbap-netwr.
+    wa_final-vrkme  = wa_vbap-vrkme.
+    wa_final-werks  = wa_vbap-werks.
+    wa_final-kwmeng = wa_vbap-kwmeng.
+    wa_final-abgru  = wa_vbap-abgru.
+    wa_final-pstyv  = wa_vbap-pstyv.
+*    wa_final-LFSTK = wa_vbuk-LFSTK.
+
+    READ TABLE ta_vbuk INTO wa_vbuk WITH KEY vbeln = wa_vbap-vbeln.
+    IF sy-subrc = 0.
+      wa_final-lfstk = wa_vbuk-lfstk.
+      wa_final-cmgst = wa_vbuk-cmgst.
+      wa_final-cmpsb = wa_vbuk-cmpsb.
+      wa_final-gbstk = wa_vbuk-gbstk.
+    ENDIF.
+    READ TABLE ta_vbup INTO wa_vbup WITH KEY vbeln = wa_vbap-vbeln
+                                             posnr = wa_vbap-posnr.
+    wa_final-gbsta = wa_vbup-gbsta.
+
+    READ TABLE lta_mchb INTO lwa_mchb WITH KEY matnr = wa_vbap-matnr
+                                               werks = wa_vbap-werks.
+    IF sy-subrc = 0.
+      wa_final-clabs = lwa_mchb-clabs.
+    ENDIF.
+
+*    CLEAR wa_vbap.
+    READ TABLE ta_vbak INTO wa_vbak WITH KEY vbeln  = wa_vbap-vbeln    BINARY SEARCH.
+
+*    AT END OF vbeln.                             "by bbs on 04-02-2014
+*      wa_final-odval  = wa_vbak-netwr.
+*      wa_final-sumnetorderval =   lv_sum + wa_final-netorderval .
+*      CLEAR lv_sum.bbs
+**       wa_final-vbeln  = wa_vbak-vbeln.
+*    ENDAT.
+
+
+    IF sy-subrc = 0.
+      wa_final-erdat  = wa_vbak-erdat.
+      wa_final-vkorg  = wa_vbak-vkorg.
+      wa_final-vtweg  = wa_vbak-vtweg.
+      wa_final-kspart = wa_vbak-spart.
+      wa_final-vbeln  = wa_vbak-vbeln.
+      wa_final-kunnr  = wa_vbak-kunnr.
+      wa_final-auart  = wa_vbak-auart.
+*        wa_final-odval  = wa_vbak-netwr.
+      wa_final-audat  = wa_vbak-audat.
+      wa_final-vkbur  = wa_vbak-vkbur.
+      wa_final-vkgrp  = wa_vbak-vkgrp.
+*      wa_final-vbtyp_n = wa_vbfa-vbtyp_n.
+      wa_final-lfstk  = wa_vbuk-lfstk.
+    ENDIF.
+    READ TABLE ta_vbfa INTO wa_vbfa WITH KEY vbeln = wa_vbap-vbeln BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-vbtyp_n = wa_vbfa-vbtyp_n.
+    ENDIF.
+    READ TABLE ta_tvkot INTO wa_tvkot WITH KEY vkorg = wa_final-vkorg BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-sl_vtext = wa_tvkot-vtext.
+    ENDIF.
+
+    READ TABLE ta_tvtwt INTO wa_tvtwt WITH KEY vtweg = wa_final-vtweg BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-dc_vtext = wa_tvtwt-vtext.
+    ENDIF.
+
+    READ TABLE ta_tspat INTO wa_tspat WITH KEY spart = wa_vbak-spart BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-dv_vtext = wa_tspat-vtext.
+    ENDIF.
+
+    READ TABLE ta_tspat1 INTO wa_tspat1 WITH KEY spart = wa_vbap-spart BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-idv_vtext = wa_tspat1-vtext.
+    ENDIF.
+    READ TABLE ta_t001w INTO wa_t001w WITH KEY werks = wa_final-werks BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-pl_vtext = wa_t001w-vtext.
+    ENDIF.
+
+    READ TABLE ta_tvkbt INTO wa_tvkbt WITH KEY vkbur = wa_final-vkbur BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-saleoff = wa_tvkbt-bezei.
+    ENDIF.
+    READ TABLE ta_tvgrt INTO wa_tvgrt WITH KEY vkgrp = wa_final-vkgrp BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-salegrp = wa_tvgrt-bezei.
+    ENDIF.
+
+
+
+*    ENDAT.
+*    CLEAR wa_vbak.
+    CLEAR wa_tvkot.
+    CLEAR wa_tvtwt.
+    CLEAR wa_tspat.
+    CLEAR wa_tspat1.
+    CLEAR wa_t001w.
+    CLEAR wa_tvkbt.
+    CLEAR wa_tvgrt.
+
+    READ TABLE ta_kna1 INTO wa_kna1 WITH KEY kunnr = wa_final-kunnr BINARY SEARCH.
+
+    wa_final-name1 = wa_kna1-name1.
+*    CLEAR wa_kna1.
+
+
+    READ TABLE ta_vbep INTO wa_vbep WITH KEY  vbeln = wa_vbap-vbeln  posnr = wa_vbap-posnr BINARY SEARCH.
+    IF sy-subrc = 0.
+      wa_final-edatu = wa_vbep-edatu.
+    ENDIF.
+
+    LOOP AT ta_vbap INTO wa_vbap WHERE vbeln = wa_vbap-vbeln AND posnr = wa_vbap-posnr .
+      wa_final-odqty = wa_final-odqty + wa_vbap-kwmeng.
+***      soc bya payal on 18.11.2014
+*      IF wa_final-cmpsb = 'B' .                     "for the calculation of credit block
+*        IF wa_final-cmgst = 'B'.
+*          wa_final-cbqty = wa_final-cbqty + wa_vbap-kwmeng.
+*        ENDIF.
+*      ENDIF .
+
+      IF wa_final-cmpsb = 'B' AND wa_final-cmgst = 'B' AND wa_final-edatu LE sy-datum.
+        wa_final-cbqty = wa_final-cbqty + wa_vbap-kwmeng.
+      ENDIF .
+***      eoc bya payal on 18.11.2014
+*      CLEAR wa_vbep.
+    ENDLOOP.
+
+
+    IF wa_final-audat < wa_final-edatu.                 " calculation for order in hand
+      wa_final-odhqty = wa_final-odqty.
+
+    ENDIF.
+
+
+*    IF wa_VBUK-LFSTK = 'A'.
+*
+**        wa_final-penqty = '0'.
+*    ENDIF.
+
+*    READ TABLE ta_vbfa INTO wa_vbfa  WITH KEY vbeln = wa_vbap-vbeln posnr = wa_vbap-posnr.
+*    wa_final-vbtyp_n = wa_vbfa-vbtyp_n.
+
+    IF sy-subrc = 0.
+
+      LOOP AT ta_vbfa INTO wa_vbfa WHERE vbeln = wa_vbap-vbeln AND posnr = wa_vbap-posnr." AND vbtyp_n = 'J'.
+
+*      wa_final-penqty = wa_final-odqty - wa_final-delqty.
+
+*        if wa_vbfa-vbtyp_n = 'M'.        " for invoiced delivery
+*        DELETE ta_final where vbtyp_n = wa_vbfa-vbtyp_n.
+*        ENDIF.
+
+        IF wa_vbfa-vbtyp_n = 'J'.           "delevery qty
+
+          wa_final-delqty = wa_final-delqty + wa_vbfa-rfmng.
+          wa_final-penqty = wa_final-odqty - wa_final-delqty.
+          CONTINUE.
+
+
+
+
+        ELSEIF wa_vbfa-vbtyp_n = 'R'.     " order delivered and pgi done
+** start of comment by bbs
+**          IF wa_final-odqty IS NOT INITIAL.
+**        wa_final-penqty = wa_final-odqty - wa_final-delqty.
+**      ENDIF.
+** end of comment by bbs
+
+          IF wa_vbfa-bwart = 601 OR wa_vbfa-bwart = 905 .
+            wa_final-pgiqty = wa_final-pgiqty + wa_vbfa-rfmng.
+            wa_final-delqty =   wa_final-pgiqty - wa_final-delqty.
+            IF wa_final-delqty < 0.
+              wa_final-delqty = wa_final-delqty * -1.
+
+            ENDIF.
+
+*            wa_final-penqty = wa_final-odqty - ( wa_final-delqty + wa_final-pgiqty ).
+          ENDIF.
+          CONTINUE.
+
+        ENDIF.
+
+
+
+**** start of commenting by brajabanshi S
+*      IF wa_final-odqty IS NOT INITIAL.
+*        wa_final-penqty = wa_final-odqty - wa_final-delqty.
+*      ENDIF.
+**** end of uncommenting by brajabanshi S
+        CLEAR wa_vbfa.
+
+      ENDLOOP.
+    ELSEIF sy-subrc <> 0.
+      wa_final-penqty = wa_final-odqty - wa_final-delqty.
+
+*    ENDIF.
+    ENDIF.
+*****bb
+    IF wa_vbuk-lfstk = 'A'.           "no delivery
+      wa_final-odhqty = wa_final-odqty.
+      wa_final-penqty = 0.
+    ELSEIF wa_vbuk-lfstk = 'B' .      " partial delivery
+      wa_final-odhqty = 0.
+      IF wa_final-penqty EQ 0 AND wa_final-pgiqty EQ 0.
+        wa_final-penqty = wa_final-odqty - ( wa_final-delqty + wa_final-pgiqty ) .
+      ENDIF.
+    ELSEIF wa_vbuk-lfstk = 'C'.         "fully delivered
+      wa_final-odhqty = 0.
+      wa_final-penqty = wa_final-odqty - ( wa_final-delqty + wa_final-pgiqty ) .
+    ENDIF.
+****BB
+    READ TABLE lta_mchb INTO lwa_mchb WITH KEY matnr = wa_vbap-matnr
+                                               werks = wa_vbap-werks.
+
+    READ TABLE ita_vbbe1 INTO iwa_vbbe1 WITH KEY matnr = wa_vbap-matnr
+                                                werks = wa_vbap-werks.
+    IF sy-subrc = 0.
+      wa_final-stock = lwa_mchb-clabs - iwa_vbbe1-omeng.     "stock = unrestricted value - schd line delivery
+    ELSE.
+      wa_final-stock = lwa_mchb-clabs.
+    ENDIF.
+*
+    IF wa_final-stock < 0.                          " if schd line is more than unrestricted
+      wa_final-stock = 0.
+
+    ENDIF.
+    wa_final-prinetqty  = wa_final-penqty."wa_final-odqty - wa_final-delqty - wa_final-pgiqty.
+
+***socomment by payal on 18.11.2014
+*    IF wa_final-gbstk EQ 'B'.
+***eocomment by payal on 18.11.2014                   "open order qty
+
+    IF  wa_final-gbsta EQ 'A' OR wa_final-gbsta EQ 'B'.         " FOR CHECKING Overall processing status of the SD document item
+      wa_final-odqty1 = wa_final-odqty.
+      wa_final-openodqty =  wa_final-odqty  - wa_final-pgiqty.
+    ENDIF.
+*    ENDIF.
+    IF sy-datum < wa_final-edatu.                  "future order qty
+      wa_final-futurodhqty = wa_final-futurodhqty + wa_final-openodqty.
+    ENDIF.
+
+
+*    wa_final-openodqty = wa_final-odqty - - wa_final-pgiqty.
+    IF wa_final-odqty NE 0 .
+      wa_final-prinetval  = wa_final-inetval / wa_final-odqty  .
+    ENDIF.
+
+    wa_final-netorderval = wa_final-prinetqty * wa_final-prinetval.
+    lv_sum  =  lv_sum +  wa_final-netorderval.
+
+    wa_final-pendqty = wa_final-openodqty -  wa_final-cbqty - wa_final-stock .       " FOR CALCUALTION OF PENDING QTY
+    wa_final-ordih = wa_final-openodqty -  wa_final-cbqty - wa_final-pendqty.        " FOR CALCULATION OF ORDER IN HAND
+    IF  wa_final-pendqty < 0.
+      wa_final-pendqty = 0.
+      wa_final-ordih = wa_final-openodqty -  wa_final-cbqty - wa_final-pendqty.
+    ENDIF.
+    wa_final-sumnetorderval = wa_final-sumnetorderval +  wa_final-netorderval .
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = wa_final-vbeln
+      IMPORTING
+        output = wa_final-vbeln.
+
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = wa_final-kunnr
+      IMPORTING
+        output = wa_final-kunnr.
+    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_OUTPUT'
+      EXPORTING
+        input  = wa_final-matnr
+      IMPORTING
+        output = wa_final-matnr.
+
+
+
+*    AT END OF VBELN.                      "total order value
+*      wa_final-odval  = wa_final-odval + wa_vbap-netwr.
+*      wa_final-sumnetorderval =   lv_sum.
+*      CLEAR lv_sum.
+**       wa_final-vbeln  = wa_vbak-vbeln.
+*
+*    ENDAT.
+
+    READ TABLE ta_vbap INTO wa_vbap WITH KEY  vbeln = wa_final-vbeln
+                                              matnr = wa_final-matnr
+                                              posnr = wa_final-posnr.
+    wa_final-odval2 =  wa_vbap-netwr.
+    IF wa_final-odqty <> 0.                                           "CRDK907228 ADDED ON 28-04-2014 FOR RATE CALCULATION
+      wa_final-rate = wa_final-odval2 / wa_final-odqty.
+    ELSE.
+      wa_final-rate = 1.
+    ENDIF.
+
+    IF wa_final-rate EQ 0.
+      wa_final-rate = 1.
+    ENDIF.
+
+*CRDK906930  ADDED ON 19/04/2014
+    IF wa_final-gbstk EQ 'B' ."or  WA_FINAL-GBSTA EQ 'A'.
+      IF  wa_final-gbsta EQ 'A' OR wa_final-gbsta EQ 'B'.
+        IF wa_final-odqty <> 0.
+          IF wa_final-pstyv NE 'TANN'.                      "CRDK907759
+            wa_final-openodval = wa_final-openodval + ( wa_final-odval2 / wa_final-odqty ) * wa_final-openodqty.   " OPEND ORDER VALUE  "
+          ELSE.
+            wa_final-openodval = wa_final-openodval.
+          ENDIF.
+        ENDIF.
+
+      ENDIF.
+    ENDIF.
+    APPEND wa_final TO ta_final.
+
+    CLEAR : wa_final, wa_vbak,lwa_mchb. "wa_vbap.
+
+  ENDLOOP.
+  SORT ta_final BY werks matnr.
+  ta_final2 = ta_final.
+
+
+* DELETE ta_final2 WHERE odval = 0.
+  SORT ta_final2 BY werks matnr.
+  DELETE ta_final WHERE matnr = 0.
+  DELETE ADJACENT DUPLICATES FROM ta_final COMPARING werks matnr.
+
+  LOOP AT ta_final INTO wa_final.                             "SUMMRIZING ON THE BASIS OF MATERIAL AND PLANT
+    LOOP AT ta_final2 INTO wa_final2 WHERE matnr = wa_final-matnr AND werks = wa_final-werks .
+      g_odqty     = g_odqty + wa_final2-odqty1.
+      i_openodqty = i_openodqty + wa_final2-openodqty.
+      i_futureodh = i_futureodh + wa_final2-futurodhqty.
+      i_futureval = i_futureval + wa_final2-futurodhqty * wa_final2-rate.       ""CRDK907228 ADDED ON 28-04-2014 FOR FUTURE VALUE
+      i_cbqty     = i_cbqty + wa_final2-cbqty.
+      i_cbval     = i_cbval + wa_final2-cbqty * wa_final2-rate.                   "CRDK907228 ADDED ON 28-04-2014 FOR CREDIT BLOCK VALUE CALULATION
+      i_pendqty   = i_pendqty + wa_final2-pendqty.
+      i_pendval   = i_pendval + wa_final2-pendqty * wa_final2-rate.
+      i_odh       = i_odh + wa_final2-ordih.
+      i_odhval    = i_odhval + wa_final2-ordih * wa_final2-rate.
+      i_odval     = i_odval + wa_final2-odval.
+      i_openodval = i_openodval + wa_final2-openodval.
+    ENDLOOP.
+    wa_smfinal-matnr       = wa_final-matnr.
+    wa_smfinal-arktx       = wa_final-arktx.                "CRDK907759
+    wa_smfinal-werks       = wa_final-werks.                "CRDK907759
+    wa_smfinal-odqty       = g_odqty.
+    wa_smfinal-openodqty   = i_openodqty.
+    wa_smfinal-futurodhqty = i_futureodh.
+    wa_smfinal-futurodhval = i_futureval.
+    wa_smfinal-pendqty     = i_pendqty.
+*    *WA_SMFINAL-PENDVAL    = I_PENDVAL.
+    wa_smfinal-cbqty       = i_cbqty.
+    wa_smfinal-cbval       = i_cbval.
+    wa_smfinal-ordih       = i_odh.
+*    *WA_SMFINAL-ORDERIHVAL = I_ODHVAL.
+    wa_smfinal-odval       = i_odval.
+    wa_smfinal-stock       = wa_final-stock.
+    wa_smfinal-openodval   = i_openodval.
+    wa_smfinal-pspart      =  wa_final-pspart.
+    wa_smfinal-idv_vtext   = wa_final-idv_vtext.
+
+    "so added by payal on 11.09.2017 #8000003606
+    CLEAR l_mat_ex.
+"ATC FIX START-05.08.2026
+***    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+***      EXPORTING
+***        input  = wa_smfinal-matnr
+***      IMPORTING
+***        output = l_mat_ex.
+CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
+  EXPORTING
+    INPUT              =  wa_smfinal-matnr
+ IMPORTING
+   OUTPUT             = l_mat_ex.
+"ATC FIX END-05.08.2026
+
+    CLEAR wa_ex_pending.
+    READ TABLE ta_ex_pending INTO wa_ex_pending WITH KEY matnr = l_mat_ex.
+**      IF wa_ex_pending-fdate LE sy-datum AND wa_ex_pending-tdate GE sy-datum .
+    IF sy-subrc = 0.
+      wa_smfinal-pending_ind = 'B'.
+*      CLEAR: wa_smfinal-pendqty_ex, wa_smfinal-pendval_ex .
+    ELSE.
+      wa_smfinal-pending_ind = ''.
+*      wa_smfinal-pendqty_ex = wa_smfinal-pendqty.
+*      wa_smfinal-pendval_ex = wa_smfinal-pendval.
+    ENDIF.
+**    ENDLOOP.
+
+    "eo added by payal on 11.09.2017 #8000003606
+    APPEND wa_smfinal TO ta_smfinal.
+
+
+    wa_smfinal2-stock     = wa_smfinal-stock.
+    wa_smfinal2-openodval = wa_smfinal-openodval.
+    wa_smfinal2-matnr     = wa_smfinal-matnr.
+    wa_smfinal2-arktx     = wa_smfinal-arktx.               "CRDK907759
+    wa_smfinal2-werks     = wa_smfinal-werks.
+    wa_smfinal2-openodqty = wa_smfinal-openodqty.
+    IF wa_smfinal2-openodqty NE 0 .                                    "added on 27-05-2014 CRDK907989
+      i_rate = wa_smfinal2-openodval / wa_smfinal2-openodqty.
+    ENDIF.
+*IF I_RATE = 0 .
+*I_RATE = 1.
+*ELSEIF WA_SMFINAL2-OPENODVAL = 0.
+*  I_RATE = 0.
+*ENDIF.
+
+    wa_smfinal2-futurodhqty = wa_smfinal-futurodhqty.
+    wa_smfinal2-futurodhval = wa_smfinal-futurodhval.
+    wa_smfinal2-cbqty       = wa_smfinal-cbqty.
+    wa_smfinal2-cbval       = wa_smfinal2-cbqty * i_rate.
+    wa_smfinal2-pendqty     = wa_smfinal2-openodqty - wa_smfinal2-cbqty - wa_smfinal-stock - wa_smfinal2-futurodhqty.
+    wa_smfinal2-pendval     = wa_smfinal2-pendqty * i_rate.               "CRDK907228 ADDED ON 28-04-2014 FOR PENDING VALUE CALCULATION
+    wa_smfinal2-odqty       = wa_smfinal-odqty.
+    IF wa_smfinal2-pendqty < 0.
+      wa_smfinal2-pendqty = 0.
+      wa_smfinal2-pendval = 0.
+    ENDIF.
+
+    wa_smfinal2-ordih      = wa_smfinal2-openodqty - wa_smfinal2-cbqty - wa_smfinal2-pendqty - wa_smfinal2-futurodhqty.
+    wa_smfinal2-orderihval = wa_smfinal2-ordih * i_rate.
+    wa_smfinal2-odval      = wa_smfinal-odval.
+    wa_smfinal2-pspart     = wa_smfinal-pspart.
+    wa_smfinal2-idv_vtext  = wa_smfinal-idv_vtext.
+********* code added by vishal on 17-07-2014.
+    CLEAR lv_val.
+    lv_val = wa_smfinal2-ordih.
+    IF lv_val CA '-'.
+      CLEAR: wa_smfinal2-ordih,
+             wa_smfinal2-orderihval.
+    ENDIF.
+**********  end of code.
+    "so added by payal on 11.09.2017 #8000003606
+    CLEAR l_mat_ex.
+"ATC FIX START-05.08.2026
+***    CALL FUNCTION 'CONVERSION_EXIT_ALPHA_INPUT'
+***      EXPORTING
+***        input  = wa_smfinal2-matnr
+***      IMPORTING
+***        output = l_mat_ex.
+CALL FUNCTION 'CONVERSION_EXIT_MATN1_INPUT'
+  EXPORTING
+    INPUT              = wa_smfinal2-matnr
+ IMPORTING
+   OUTPUT             = l_mat_ex.
+"ATC FIX END-05.08.2026
+
+    CLEAR wa_ex_pending.
+    READ TABLE ta_ex_pending INTO wa_ex_pending WITH KEY matnr = l_mat_ex.
+    IF sy-subrc = 0.
+      wa_smfinal2-pending_ind = 'B'.
+*      CLEAR: wa_smfinal2-pendqty_ex, wa_smfinal2-pendval_ex .
+    ELSE.
+      wa_smfinal2-pending_ind = ''.
+*      wa_smfinal2-pendqty_ex = wa_smfinal2-pendqty.
+*      wa_smfinal2-pendval_ex = wa_smfinal2-pendval.
+    ENDIF.
+    "eo added by payal on 11.09.2017 #8000003606
+
+    APPEND wa_smfinal2 TO ta_smfinal2.
+
+
+    CLEAR wa_smfinal.
+    CLEAR wa_smfinal2.
+    CLEAR i_openodqty.
+    CLEAR i_futureodh.
+    CLEAR i_cbqty.
+    CLEAR i_pendqty.
+    CLEAR i_odh.
+    CLEAR i_odval.
+    CLEAR i_openodval.
+    CLEAR g_odqty.
+    CLEAR i_rate.
+    CLEAR i_cbval.
+    CLEAR i_pendval.
+    CLEAR i_odhval.
+    CLEAR i_futureval.
+  ENDLOOP.
+  DELETE ta_smfinal2 WHERE openodqty = 0.
+ENDFORM.                    " SAPR_SD_FINAL
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_FIN1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM sapr_sd_fin1 .
+
+*ENDFORM.                    " SAPR_SD_FIN1
+
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_fieldcatalog .
+  IF p_det = 'X'.
+*
+    fieldcatalog-col_pos = 1.
+    fieldcatalog-fieldname = 'WERKS'.
+    fieldcatalog-seltext_m = 'PLANT'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 2.
+    fieldcatalog-fieldname = 'MATNR'.
+    fieldcatalog-seltext_m = 'Product Code'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 3.
+    fieldcatalog-fieldname = 'ARKTX'.
+    fieldcatalog-seltext_m = 'Product Description'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.                                    "CRDK907759
+
+
+    fieldcatalog-col_pos = 4.
+    fieldcatalog-fieldname = 'STOCK'.
+    fieldcatalog-seltext_m = 'STOCK'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+*    fieldcatalog-col_pos = 4.
+*    fieldcatalog-fieldname = 'ODQTY'.
+*    fieldcatalog-seltext_m = 'ORDER QTY'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 5.
+    fieldcatalog-fieldname = 'openodqty'.
+    fieldcatalog-seltext_m = 'Opend Order Qty'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 7.
+    fieldcatalog-fieldname = 'OPENODVAL'.
+    fieldcatalog-seltext_m = 'Open Order Value'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 8.
+    fieldcatalog-fieldname = 'futurodhqty'.
+    fieldcatalog-seltext_m = 'Future order in hand'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 9.
+    fieldcatalog-fieldname = 'futurodhVAL'.
+    fieldcatalog-seltext_m = 'Future OIH Value'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 10.
+    fieldcatalog-fieldname = 'cbqty'.
+    fieldcatalog-seltext_m = 'Credit block'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 11.
+    fieldcatalog-fieldname = 'CBVAL'.
+    fieldcatalog-seltext_m = 'Credit block Value'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 12.
+    fieldcatalog-fieldname = 'pendqty'.
+    fieldcatalog-seltext_m = 'Pending QTY'.
+    fieldcatalog-do_sum = 'X'.   "soa on 11.09.2017 by payal for #8000003606
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 13.
+    fieldcatalog-fieldname = 'PENDVAL'.
+    fieldcatalog-seltext_m = 'Pending QTY Value'.
+    fieldcatalog-do_sum = 'X'.   "soa on 11.09.2017 by payal for #8000003606
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 14.
+    fieldcatalog-fieldname = 'ORDIH'.
+    fieldcatalog-seltext_m = 'Order In Hand Qty '.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 15.
+    fieldcatalog-fieldname = 'ORDERIHVAL'.
+    fieldcatalog-seltext_m = 'Order In Hand Value'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 16.
+    fieldcatalog-fieldname = 'PSPART'.
+    fieldcatalog-seltext_m = 'Product Division'.
+    APPEND fieldcatalog TO fieldcatalog.                    "CRDK907759
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 17.
+    fieldcatalog-fieldname = 'IDV_VTEXT'.
+    fieldcatalog-seltext_m = 'Product Division Description'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.                                    "CRDK907759
+
+***    soa on 11.09.2017 by payal for #8000003606
+*    fieldcatalog-col_pos = 18.
+*    fieldcatalog-fieldname = 'PENDQTY_EX'.
+*    fieldcatalog-seltext_m = 'New Pending QTY'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 19.
+*    fieldcatalog-fieldname = 'PENDVAL_EX'.
+*    fieldcatalog-seltext_m = 'New Pending QTY Value'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 18.
+    fieldcatalog-fieldname = 'PENDING_IND'.
+    fieldcatalog-seltext_m = 'Pending Ind'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+*    fieldcatalog-col_pos = 18.
+*    fieldcatalog-fieldname = 'PENDQTY_SUB'.
+*    fieldcatalog-seltext_m = 'New Pending QTY'.
+*    fieldcatalog-no_out = 'X'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+***    eoa on 11.09.2017 by payal for #8000003606
+
+  ELSE.
+
+    fieldcatalog-col_pos = 1.
+    fieldcatalog-fieldname = 'WERKS'.
+    fieldcatalog-seltext_m = 'PLANT'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 2.
+    fieldcatalog-fieldname = 'MATNR'.
+    fieldcatalog-seltext_m = 'Product Code'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 3.
+    fieldcatalog-fieldname = 'STOCK'.
+    fieldcatalog-seltext_m = 'STOCK'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 5.
+    fieldcatalog-fieldname = 'openodqty'.
+    fieldcatalog-seltext_m = 'OPEN ORDER QTY'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+*
+    fieldcatalog-col_pos = 6.
+    fieldcatalog-fieldname = 'ODVAL'.
+    fieldcatalog-seltext_m = 'ORDER VALUE'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 7.
+    fieldcatalog-fieldname = 'OPENODVAL'.
+    fieldcatalog-seltext_m = 'OPEN ORDER VALUE'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 8.
+    fieldcatalog-fieldname = 'futurodhqty'.
+    fieldcatalog-seltext_m = 'Future order in hand'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 9.
+    fieldcatalog-fieldname = 'cbqty'.
+    fieldcatalog-seltext_m = 'Credit block'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+*    fieldcatalog-col_pos = 9.
+*    fieldcatalog-fieldname = 'cbqty'.
+*    fieldcatalog-seltext_m = 'Credit block'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+
+
+    fieldcatalog-col_pos = 10.
+    fieldcatalog-fieldname = 'pendqty'.
+    fieldcatalog-seltext_m = 'PENDING QTY'.
+    fieldcatalog-do_sum = 'X'.   "soa on 11.09.2017 by payal for #8000003606
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+
+
+    fieldcatalog-col_pos = 11.
+    fieldcatalog-fieldname = 'ordih'.
+    fieldcatalog-seltext_m = 'ORDER IN HAND Qty'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+
+***    soa on 11.09.2017 by payal for #8000003606
+*    fieldcatalog-col_pos = 12.
+*    fieldcatalog-fieldname = 'PENDQTY_EX'.
+*    fieldcatalog-seltext_m = 'New Pending QTY'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 13.
+*    fieldcatalog-fieldname = 'PENDVAL_EX'.
+*    fieldcatalog-seltext_m = 'New Pending QTY Value'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+
+    fieldcatalog-col_pos = 18.
+    fieldcatalog-fieldname = 'PENDING_IND'.
+    fieldcatalog-seltext_m = 'Pending Ind'.
+    APPEND fieldcatalog TO fieldcatalog.
+    CLEAR  fieldcatalog.
+
+*    fieldcatalog-col_pos = 18.
+*    fieldcatalog-fieldname = 'PENDQTY_SUB'.
+*    fieldcatalog-seltext_m = 'New Pending QTY'.
+*    fieldcatalog-no_out = 'X'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+***    eoa on 11.09.2017 by payal for #8000003606
+
+*    fieldcatalog-col_pos = 1.                "COMMENTED DUE TO SUMMARIZATION ON PLANT AND MATERIAL
+*    fieldcatalog-fieldname = 'ERDAT'.
+*    fieldcatalog-seltext_m = 'ORDER DATE'.
+**    fieldcatalog-tabname   = 'ta_final1'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*
+*
+*    fieldcatalog-col_pos = 2.
+*    fieldcatalog-fieldname = 'AUART'.
+*    fieldcatalog-seltext_m = 'DOC. TYPE'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*
+*    fieldcatalog-col_pos = 3.
+*    fieldcatalog-fieldname = 'VBELN'.
+*    fieldcatalog-seltext_m = 'Sales Order No'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 4.
+*    fieldcatalog-fieldname = 'KUNNR'.
+*    fieldcatalog-seltext_m = 'CUSTOMER'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 5.
+*    fieldcatalog-fieldname = 'NAME1'.
+*    fieldcatalog-seltext_m = 'CUSTOMER NAME'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 6.
+*    fieldcatalog-fieldname = 'ODVAL'.
+*    fieldcatalog-seltext_m = 'ORDER VALUE'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 7.
+*    fieldcatalog-fieldname = 'SUMNETORDERVAL'.
+*    fieldcatalog-seltext_m = 'Pending Order Value'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*    fieldcatalog-col_pos = 8.
+*    fieldcatalog-fieldname = 'VKORG'.
+*    fieldcatalog-seltext_m = 'SALE ORG.'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*
+*    fieldcatalog-col_pos = 9.
+*    fieldcatalog-fieldname = 'VTWEG'.
+*    fieldcatalog-seltext_m = 'Dist. Channel'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+*
+*
+*    fieldcatalog-col_pos = 10.
+*    fieldcatalog-fieldname = 'KSPART'.
+*    fieldcatalog-seltext_m = 'Sales Division'.
+*    APPEND fieldcatalog TO fieldcatalog.
+*    CLEAR  fieldcatalog.
+
+
+
+  ENDIF.
+
+
+
+
+ENDFORM.                    " SAPR_SD_FIELDCATALOG
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_LAYOUT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_layout .
+  gd_layout-zebra = 'X'.
+*  gd_layout-no_input = 'X'.
+  gd_layout-colwidth_optimize = 'X'.
+ENDFORM.                    " SAPR_SD_LAYOUT
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_AVLGRID
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_avlgrid .
+*soa on 11.09.2017 by payal for #8000003606
+  SORT ta_smfinal2 BY matnr werks.
+  REFRESH gt_sort.
+  CLEAR wa_sort.
+  wa_sort-spos = '01' .
+  wa_sort-fieldname = 'PENDING_IND'.  "'PENDQTY_SUB'.
+  wa_sort-up = 'X'.
+  wa_sort-subtot = 'X'.
+  wa_sort-tabname = 'TA_SMFINAL2'.
+  APPEND wa_sort TO gt_sort.
+
+* Perform to populate ALV event
+*  PERFORM sub_get_event.
+*eoa on 11.09.2017 by payal for #8000003606
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_INTERFACE_CHECK  = ' '
+*     I_BYPASSING_BUFFER = ' '
+*     I_BUFFER_ACTIVE    = ' '
+      i_callback_program = sy-repid
+*     I_CALLBACK_PF_STATUS_SET          = ' '
+*     I_CALLBACK_USER_COMMAND           = ' '
+*     I_CALLBACK_TOP_OF_PAGE            = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*     I_CALLBACK_HTML_END_OF_LIST       = ' '
+*     I_STRUCTURE_NAME   =
+*     I_BACKGROUND_ID    = ' '
+*     I_GRID_TITLE       =
+*     I_GRID_SETTINGS    =
+      is_layout          = gd_layout
+      it_fieldcat        = fieldcatalog[]
+*     IT_EXCLUDING       =
+*     IT_SPECIAL_GROUPS  =
+      it_sort            = gt_sort[] "added on 11.09.2017 by payal for #8000003606
+*     IT_FILTER          =
+*     IS_SEL_HIDE        =
+*     I_DEFAULT          = 'X'
+      i_save             = 'A'
+*     IS_VARIANT         =k
+*     it_events          = i_event   "added on 11.09.2017 by payal for #8000003606
+*     IT_EVENT_EXIT      =
+*     IS_PRINT           =
+*     IS_REPREP_ID       =
+*     I_SCREEN_START_COLUMN             = 0
+*     I_SCREEN_START_LINE               = 0
+*     I_SCREEN_END_COLUMN               = 0
+*     I_SCREEN_END_LINE  = 0
+*     I_HTML_HEIGHT_TOP  = 0
+*     I_HTML_HEIGHT_END  = 0
+*     IT_ALV_GRAPHICS    =
+*     IT_HYPERLINK       =
+*     IT_ADD_FIELDCAT    =
+*     IT_EXCEPT_QINFO    =
+*     IR_SALV_FULLSCREEN_ADAPTER        =
+* IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER           =
+*     ES_EXIT_CAUSED_BY_USER            =
+    TABLES
+      t_outtab           = ta_smfinal2
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM.                    " SAPR_SD_AVLGRID
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_FIELDCATALOG1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM sapr_sd_fieldcatalog1 .
+*
+*
+*    fieldcatalog1-col_pos = 1.
+*    fieldcatalog1-fieldname = 'F1_ERDAT'.
+*    fieldcatalog1-seltext_m = 'ORDER DATE'.
+*    fieldcatalog1-tabname   = 'ta_final1'.
+*    APPEND fieldcatalog1 TO fieldcatalog1.
+*    CLEAR  fieldcatalog1.
+**
+**    fieldcatalog1-col_pos = 2.
+**    fieldcatalog1-fieldname = 'F1_VKORG'.
+**    fieldcatalog1-seltext_m = 'SALE ORG.'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**
+**    fieldcatalog1-col_pos = 3.
+**    fieldcatalog1-fieldname = 'F1_VTWEG'.
+**    fieldcatalog1-seltext_m = 'D. CHNNL'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**
+**    fieldcatalog1-col_pos = 4.
+**    fieldcatalog1-fieldname = 'F1_SPART'.
+**    fieldcatalog1-seltext_m = 'DIVISION'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**
+**    fieldcatalog1-col_pos = 5.
+**    fieldcatalog1-fieldname = 'F1_AUART'.
+**    fieldcatalog1-seltext_m = 'DOC. TYPE'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**
+**    fieldcatalog1-col_pos = 6.
+**    fieldcatalog1-fieldname = 'F1_VBELN'.
+**    fieldcatalog1-seltext_m = 'Sales Order No'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**    fieldcatalog1-col_pos = 7.
+**    fieldcatalog1-fieldname = 'F1_KUNNR'.
+**    fieldcatalog1-seltext_m = 'CUSTOMER'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**
+**    fieldcatalog1-col_pos = 8.
+**    fieldcatalog1-fieldname = 'F1_ODVAL'.
+**    fieldcatalog1-seltext_m = 'ORDER VALUE'.
+**    APPEND fieldcatalog1 TO fieldcatalog1.
+**    CLEAR  fieldcatalog1.
+**
+**
+*
+*
+*ENDFORM.                    " SAPR_SD_FIELDCATALOG1
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_AVLGRID1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_avlgrid1 .
+  SORT ta_smfinal BY matnr werks.
+*soa on 11.09.2017 by payal for #8000003606
+  REFRESH gt_sort.
+  CLEAR wa_sort.
+  wa_sort-spos = '01' .
+  wa_sort-fieldname = 'PENDQTY_SUB'.  "'PENDING_IND'.
+  wa_sort-up = 'X'.
+  wa_sort-subtot = 'X'.
+  wa_sort-tabname = 'TA_SMFINAL'.
+  APPEND wa_sort TO gt_sort.
+*eoa on 11.09.2017 by payal for #8000003606
+
+  CALL FUNCTION 'REUSE_ALV_GRID_DISPLAY'
+    EXPORTING
+*     I_INTERFACE_CHECK  = ' '
+*     I_BYPASSING_BUFFER = ' '
+*     I_BUFFER_ACTIVE    = ' '
+      i_callback_program = sy-repid
+*     I_CALLBACK_PF_STATUS_SET          = ' '
+*     I_CALLBACK_USER_COMMAND           = ' '
+*     I_CALLBACK_TOP_OF_PAGE            = ' '
+*     I_CALLBACK_HTML_TOP_OF_PAGE       = ' '
+*     I_CALLBACK_HTML_END_OF_LIST       = ' '
+*     I_STRUCTURE_NAME   =
+*     I_BACKGROUND_ID    = ' '
+*     I_GRID_TITLE       =
+*     I_GRID_SETTINGS    =
+      is_layout          = gd_layout
+      it_fieldcat        = fieldcatalog[]
+*     IT_EXCLUDING       =
+*     IT_SPECIAL_GROUPS  =
+      it_sort            = gt_sort[] "added on 11.09.2017 by payal for #8000003606
+*     IT_FILTER          =
+*     IS_SEL_HIDE        =
+*     I_DEFAULT          = 'X'
+      i_save             = 'A'
+*     IS_VARIANT         =
+*      it_events          = i_event   "added on 11.09.2017 by payal for #8000003606
+*     IT_EVENT_EXIT      =
+*     IS_PRINT           =
+*     IS_REPREP_ID       =
+*     I_SCREEN_START_COLUMN             = 0
+*     I_SCREEN_START_LINE               = 0
+*     I_SCREEN_END_COLUMN               = 0
+*     I_SCREEN_END_LINE  = 0
+*     I_HTML_HEIGHT_TOP  = 0
+*     I_HTML_HEIGHT_END  = 0
+*     IT_ALV_GRAPHICS    =
+*     IT_HYPERLINK       =
+*     IT_ADD_FIELDCAT    =
+*     IT_EXCEPT_QINFO    =
+*     IR_SALV_FULLSCREEN_ADAPTER        =
+* IMPORTING
+*     E_EXIT_CAUSED_BY_CALLER           =
+*     ES_EXIT_CAUSED_BY_USER            =
+    TABLES
+      t_outtab           = ta_smfinal
+    EXCEPTIONS
+      program_error      = 1
+      OTHERS             = 2.
+  IF sy-subrc <> 0.
+* Implement suitable error handling here
+  ENDIF.
+
+ENDFORM.                    " SAPR_SD_AVLGRID1
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_LAYOUT1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_layout1 .
+  gd_layout-zebra = 'X'.
+*  gd_layout-no_input = 'X'.
+  gd_layout-colwidth_optimize = 'X'.
+ENDFORM.                    " SAPR_SD_LAYOUT1
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_VBUK
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_MCHB1
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+***ENDFORM.                    " SAPR_SD_MCHB1
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_VBUP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_vbup .
+  IF ta_vbap IS NOT INITIAL.
+    SELECT vbeln ,posnr, gbsta
+    INTO TABLE @ta_vbup
+" Code Remediation changes S4 2025_A Conversion **BEGIN OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+*    FROM vbup
+    FROM v_vbup_s4
+" Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
+    FOR ALL ENTRIES IN @ta_vbap
+    WHERE vbeln = @ta_vbap-vbeln
+    AND posnr = @ta_vbap-posnr.
+
+  ENDIF.
+ENDFORM.                    " SAPR_SD_VBUP
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_KOMP
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_LIPS
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_lips .
+  IF ta_vbap IS NOT INITIAL .
+    SELECT vbeln posnr matnr werks lfimg
+     FROM lips
+     INTO TABLE ta_lips
+     FOR ALL ENTRIES IN ta_vbap
+     WHERE vbeln = ta_vbap-vbeln
+    AND   matnr = ta_vbap-matnr.
+*    and   posnr = ta_vbap-posnr.
+*    and   werks = ta_vbap-werks.
+  ENDIF.
+ENDFORM.                    " SAPR_SD_LIPS
+*&---------------------------------------------------------------------*
+*&      Form  SAPR_SD_ZSD_EX_PENDING
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+FORM sapr_sd_zsd_ex_pending . "added by payal on 11.09.2017 #8000003606
+  SELECT * FROM  zsd_ex_pending CLIENT SPECIFIED
+    INTO TABLE ta_ex_pending
+*    FOR ALL ENTRIES IN ta_vbap
+         WHERE  mandt    = sy-mandt
+*         AND    matnr    = ta_vbap-matnr.
+         AND fdate  LE sy-datum
+         AND    tdate    GE sy-datum.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  SUB_GET_EVENT
+*&---------------------------------------------------------------------*
+*       text
+*----------------------------------------------------------------------*
+*  -->  p1        text
+*  <--  p2        text
+*----------------------------------------------------------------------*
+*FORM sub_get_event .
+*  CONSTANTS : c_formname_subtotal_text TYPE slis_formname VALUE
+*'SUBTOTAL_TEXT'.
+*  DATA: l_s_event TYPE slis_alv_event.
+*  CALL FUNCTION 'REUSE_ALV_EVENTS_GET'
+*    EXPORTING
+*      i_list_type     = 4
+*    IMPORTING
+*      et_events       = i_event
+*    EXCEPTIONS
+*      list_type_wrong = 0
+*      OTHERS          = 0.
+** Subtotal
+*  READ TABLE i_event  INTO l_s_event
+*                    WITH KEY name = slis_ev_subtotal_text.
+*  IF sy-subrc = 0.
+*    MOVE c_formname_subtotal_text TO l_s_event-form.
+*    MODIFY i_event FROM l_s_event INDEX sy-tabix.
+*  ENDIF.
+*ENDFORM.
+**&---------------------------------------------------------------------*
+**&      Form  subtotal_text
+**&---------------------------------------------------------------------*
+**       Build subtotal text
+**----------------------------------------------------------------------*
+**       P_total  Total
+**       p_subtot_text Subtotal text info
+**----------------------------------------------------------------------*
+*FORM subtotal_text CHANGING
+*               p_total TYPE any
+*               p_subtot_text TYPE slis_subtot_text.
+** Material level sub total
+*  break abap4.
+*  IF p_subtot_text-criteria = 'PENDQTY_SUB'.
+*    p_subtot_text-display_text_for_subtotal
+*    = 'Bonus/Non Bonus'.
+*  ENDIF.
+** Plant level sub total
+**  IF p_subtot_text-criteria = 'WERKS'.
+**    p_subtot_text-display_text_for_subtotal = 'Plant level total'(010).
+**  ENDIF.
+*ENDFORM.                    "subtotal_text
