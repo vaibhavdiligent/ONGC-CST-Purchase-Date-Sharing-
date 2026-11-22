@@ -227,6 +227,7 @@ TYPES : BEGIN OF ty_final,              "FINAL  TABLE
           lfstk          TYPE vbuk-lfstk,
           cmgst          TYPE vbuk-cmgst,
           cmpsb          TYPE vbuk-cmpsb,
+          cmps_cm        TYPE vbak-cmps_cm,   "S/4HANA: credit check status of SAP Credit Management
           sl_vtext       TYPE tvkot-vtext,
           dc_vtext       TYPE tvkot-vtext,
           dv_vtext       TYPE tvkot-vtext,
@@ -320,6 +321,7 @@ TYPES: BEGIN OF ty_vbuk,                        "Sales Document: Header Status a
          cmgst TYPE cmgst,
          cmpsb TYPE cmpsb,
          gbstk TYPE gbstk,
+         cmps_cm TYPE vbak-cmps_cm,   "S/4HANA: credit check status of SAP Credit Management
        END OF ty_vbuk.
 
 *to store summrazied data on the bais of material and plant
@@ -1201,7 +1203,26 @@ FORM sapr_sd_vbuk .
 " Code Remediation changes S4 2025_A Conversion **END OF CHANGE BY ABAP7 29.06.2026 FOR ATC
     FOR ALL ENTRIES IN @ta_vbap
   WHERE   vbeln = @ta_vbap-vbeln
-         INTO TABLE @ta_vbuk.
+         INTO CORRESPONDING FIELDS OF TABLE @ta_vbuk.
+
+* S/4HANA: the credit check runs in SAP Credit Management (FSCM). Its result is
+* the status CMPS_CM of the sales order header - read it for the credit block
+* quantity and value of the report.
+  IF ta_vbuk IS NOT INITIAL.
+    SELECT vbeln, cmps_cm
+      FROM vbak
+      FOR ALL ENTRIES IN @ta_vbuk
+      WHERE vbeln = @ta_vbuk-vbeln
+      INTO TABLE @DATA(lt_cmps_cm).
+    SORT lt_cmps_cm BY vbeln.
+    LOOP AT ta_vbuk ASSIGNING FIELD-SYMBOL(<lfs_vbuk>).
+      READ TABLE lt_cmps_cm INTO DATA(lwa_cmps_cm)
+           WITH KEY vbeln = <lfs_vbuk>-vbeln BINARY SEARCH.
+      IF sy-subrc = 0.
+        <lfs_vbuk>-cmps_cm = lwa_cmps_cm-cmps_cm.
+      ENDIF.
+    ENDLOOP.
+  ENDIF.
 
 ENDFORM.                    " SAPR_SD_VBUK
 
@@ -1366,6 +1387,7 @@ FORM sapr_sd_final .
       wa_final-lfstk = wa_vbuk-lfstk.
       wa_final-cmgst = wa_vbuk-cmgst.
       wa_final-cmpsb = wa_vbuk-cmpsb.
+      wa_final-cmps_cm = wa_vbuk-cmps_cm.
       wa_final-gbstk = wa_vbuk-gbstk.
     ENDIF.
     READ TABLE ta_vbup INTO wa_vbup WITH KEY vbeln = wa_vbap-vbeln
@@ -1473,7 +1495,12 @@ FORM sapr_sd_final .
 *        ENDIF.
 *      ENDIF .
 
-      IF wa_final-cmpsb = 'B' AND wa_final-cmgst = 'B' AND wa_final-edatu LE sy-datum.
+* S/4HANA: the credit check runs in SAP Credit Management (FSCM). Its verdict is
+* written to CMPS_CM; the status of the old dynamic check (CMPSB) stays empty, so
+* with CMPSB alone no order was ever counted as credit blocked.
+*      IF wa_final-cmpsb = 'B' AND wa_final-cmgst = 'B' AND wa_final-edatu LE sy-datum.
+      IF ( wa_final-cmpsb = 'B' OR wa_final-cmps_cm = 'B' )
+         AND wa_final-cmgst = 'B' AND wa_final-edatu LE sy-datum.
         wa_final-cbqty = wa_final-cbqty + wa_vbap-kwmeng.
       ENDIF .
 ***      eoc bya payal on 18.11.2014
