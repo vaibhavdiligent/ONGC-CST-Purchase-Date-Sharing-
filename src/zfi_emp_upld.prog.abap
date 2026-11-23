@@ -270,6 +270,8 @@ DATA: ta_msg            TYPE TABLE OF ty_msg,
 " the mail can fail to go out (SOST status red, message 826, 23.11.2026).
 DATA: gt_log       TYPE TABLE OF ty_msg,
       gt_run       TYPE string_table,
+      gt_tried     TYPE SORTED TABLE OF lifnr WITH UNIQUE KEY table_line,
+      gv_ran       TYPE abap_bool,
       gv_to_create TYPE i,
       gv_to_update TYPE i.
 DATA: gs_col    TYPE ty_hrms_col,
@@ -1154,12 +1156,16 @@ ENDFORM.
 *----------------------------------------------------------------------*
 FORM f_runbdc.
   DATA lv_key TYPE lifnr.
+  gv_ran = abap_true.
   LOOP AT ta_file INTO wa_file.
     " S/4HANA conversion: the DPR / tax invoice vendors in TA_CREATE and
     " TA_UPDATE have no leading zeros; HRMS writes some employee codes with
     " them (01047) - compare without, or such an employee is never found.
     lv_key = wa_file-lifnr.
     SHIFT lv_key LEFT DELETING LEADING '0'.
+    IF lv_key IS INITIAL.
+      CONTINUE.               " a row without employee code is no vendor
+    ENDIF.
 
 *   BOC BY Aishwarya - 8000003767 - 07.04.2025
     " S/4HANA conversion: no batch input tables to refresh any more.
@@ -1168,6 +1174,7 @@ FORM f_runbdc.
       READ TABLE ta_create INTO wa_create WITH KEY lifnr = lv_key BINARY SEARCH.
       IF sy-subrc = 0.
         gv_to_create = gv_to_create + 1.
+        INSERT lv_key INTO TABLE gt_tried.
         wa_file-lifnr = wa_create-lifnr.
         lv_status = co_create.
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
@@ -2840,29 +2847,72 @@ ENDFORM.
 * it can be read when the log mail does not go out.
 *----------------------------------------------------------------------*
 FORM f_write_log.
-  DATA lv_text TYPE string.
+  DATA: lv_text TYPE string,
+        lv_n    TYPE i.
   WRITE: / 'Employee vendor upload - log'.
   ULINE.
   lv_text = |Vendors of the DPR / tax invoice files: { lines( ta_create ) } not yet in company code 1000, | &&
             |{ lines( ta_update ) } already there|.
-  WRITE: / lv_text.
+  PERFORM f_write_line USING lv_text.
   LOOP AT gt_run INTO lv_text.
-    WRITE: / lv_text.
+    PERFORM f_write_line USING lv_text.
   ENDLOOP.
-  lv_text = |Employee rows found among them: { gv_to_create } to create, { gv_to_update } to check / change bank|.
-  WRITE: / lv_text.
-  IF gv_to_create = 0.
-    WRITE: / 'No employee vendor to create - every employee of the files is already a vendor in 1000,',
-           / 'or is not in the DPR / tax invoice files.'.
+  IF gv_ran = abap_false.
+    WRITE: / 'The employee file was not processed - no employee vendor was created or changed.'.
+  ELSE.
+    lv_text = |Employee rows found among them: { gv_to_create } to create, { gv_to_update } to check / change bank|.
+    PERFORM f_write_line USING lv_text.
+    IF gv_to_create = 0.
+      WRITE: / 'No employee vendor to create: no employee of the file is a DPR / tax invoice vendor that is',
+             / 'still missing in company code 1000.'.
+    ENDIF.
+    " Why a vendor of the DPR / tax invoice files was not created: it is
+    " not in the employee file.
+    LOOP AT ta_create INTO DATA(ls_cre) WHERE lifnr IS NOT INITIAL.
+      READ TABLE gt_tried TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_cre-lifnr.
+      IF sy-subrc <> 0.
+        lv_n = lv_n + 1.
+        IF lv_n <= 200.
+          lv_text = |Vendor { ls_cre-lifnr } of the DPR / tax invoice files is not in company code 1000 | &&
+                    |and not in the employee file - not created|.
+          PERFORM f_write_line USING lv_text.
+        ENDIF.
+      ENDIF.
+    ENDLOOP.
+    IF lv_n > 200.
+      lv_text = |... and { lv_n - 200 } more vendors not in the employee file|.
+      PERFORM f_write_line USING lv_text.
+    ENDIF.
   ENDIF.
   ULINE.
   SORT gt_log BY emp_no status remarks.
   DELETE ADJACENT DUPLICATES FROM gt_log COMPARING emp_no status remarks.
   LOOP AT gt_log INTO DATA(ls_log).
     lv_text = |{ ls_log-emp_no } { ls_log-status } { ls_log-emp_name }: { ls_log-remarks }|.
-    WRITE: / lv_text.
+    PERFORM f_write_line USING lv_text.
   ENDLOOP.
   IF gt_log IS INITIAL.
     WRITE: / 'No messages.'.
   ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_WRITE_LINE
+*&---------------------------------------------------------------------*
+* One log text into the list, wrapped at 250 characters - a longer SAP
+* message would be cut at the list width.
+*----------------------------------------------------------------------*
+FORM f_write_line USING uv_text TYPE string.
+  DATA: lv_rest TYPE string,
+        lv_part TYPE c LENGTH 250.
+  lv_rest = uv_text.
+  IF lv_rest IS INITIAL.
+    RETURN.
+  ENDIF.
+  WHILE strlen( lv_rest ) > 250.
+    lv_part = substring( val = lv_rest len = 250 ).
+    WRITE: / lv_part.
+    lv_rest = substring( val = lv_rest off = 250 ).
+  ENDWHILE.
+  lv_part = lv_rest.
+  WRITE: / lv_part.
 ENDFORM.
