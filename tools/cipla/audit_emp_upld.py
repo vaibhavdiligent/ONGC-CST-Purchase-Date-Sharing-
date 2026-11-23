@@ -73,10 +73,18 @@ need('an existing vendor whose bank account was updated is not logged as Modifie
 if re.search(r'METHOD extend\.', SRC, re.I):
     fail.append('an existing vendor is added to the company code - the rule is: update its bank account and IFSC only')
 need('a business partner number that is already taken is not explained (whose it is)',
-     r"SELECT SINGLE partner FROM but000 WHERE partner = @lv_bpno INTO @DATA\(lv_taken\)\..*who_is\( lv_bpno \)")
+     r"FROM but000\s*\n\s*WHERE partner = @lv_bpno INTO @DATA\(ls_taken\)\..*?who_is\( lv_bpno \)")
 need('a business partner saved without a supplier is not diagnosed - the log must show the system\'s customer / '
      'vendor integration settings (production, BP 141883: supplier created in quality, not in production)',
      r"gv_cvi_checked = abap_true\.\s*\n\s*cvi_check\(.*METHOD cvi_check\..*MDSC_CTRL_OPT_A.*TBC002.*TB003.*TBC001.*MDS_PPO2")
+need('a business partner this report saved without its supplier is not completed on the next run - it is '
+     'refused as "number already used" and its supplier is never created (production: 13 partners, 23.11.2026)',
+     r"IF ls_taken-type = '1' AND lv_tk_cust IS INITIAL AND lv_tk_vend IS INITIAL\.\s*\n\s*lv_complete = abap_true\.")
+need('a partner is completed without checking that it is the employee (same last name)',
+     r"IF lv_complete = abap_true\s*\n\s*AND to_upper\( condense\( CONV string\( ls_taken-name_last \) \) \) <> to_upper\( lv_last \)\.")
+need('completing a partner sends its name, address or bank details again',
+     r"IF lv_complete = abap_false\.\s*\n\s*set\( EXPORTING iv_comp = 'FIRSTNAME'.*"
+     r"APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails\.\s*\n\s*ENDIF\.\s*\n\s*ENDIF\.")
 need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
      'why no vendor was created (CRQ, 23.11.2026)',
      r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')

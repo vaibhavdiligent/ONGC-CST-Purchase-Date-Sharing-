@@ -627,14 +627,28 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     ENDIF.
     " The business partner takes the employee code as its number. When that
     " number belongs to another partner, say whose it is.
-    DATA lv_bpno TYPE bu_partner.
+    " A person with the employee's number and last name that is neither
+    " customer nor supplier is the partner this report saved without its
+    " supplier (production, 23.11.2026: 13 partners). It is completed: the
+    " supplier is added to it, nothing of the partner itself is sent again.
+    DATA: lv_bpno     TYPE bu_partner,
+          lv_complete TYPE abap_bool.
     lv_bpno = iv_lifnr.
-    SELECT SINGLE partner FROM but000 WHERE partner = @lv_bpno INTO @DATA(lv_taken).
-    IF lv_taken IS NOT INITIAL.
-      add( EXPORTING iv_text = |Not created: number { iv_lifnr ALPHA = OUT } is already used by | &&
-                               |{ who_is( lv_bpno ) }, which is not supplier { iv_lifnr ALPHA = OUT }|
-           CHANGING  ct      = et_error ).
-      RETURN.
+    SELECT SINGLE partner, type, name_last, partner_guid FROM but000
+      WHERE partner = @lv_bpno INTO @DATA(ls_taken).
+    IF ls_taken-partner IS NOT INITIAL.
+      SELECT SINGLE customer FROM cvi_cust_link
+        WHERE partner_guid = @ls_taken-partner_guid INTO @DATA(lv_tk_cust).
+      SELECT SINGLE vendor FROM cvi_vend_link
+        WHERE partner_guid = @ls_taken-partner_guid INTO @DATA(lv_tk_vend).
+      IF ls_taken-type = '1' AND lv_tk_cust IS INITIAL AND lv_tk_vend IS INITIAL.
+        lv_complete = abap_true.
+      ELSE.
+        add( EXPORTING iv_text = |Not created: number { iv_lifnr ALPHA = OUT } is already used by | &&
+                                 |{ who_is( lv_bpno ) }, which is not supplier { iv_lifnr ALPHA = OUT }|
+             CHANGING  ct      = et_error ).
+        RETURN.
+      ENDIF.
     ENDIF.
 
     " ---- BP grouping and supplier roles of the account group -------------
@@ -653,23 +667,35 @@ CLASS lcl_emp_bp IMPLEMENTATION.
            CHANGING  ct      = et_error ).
       RETURN.
     ENDIF.
-    TRY.
-        lv_guid = cl_system_uuid=>if_system_uuid_static~create_uuid_x16( ).
-      CATCH cx_uuid_error.
-        add( EXPORTING iv_text = 'No GUID could be generated for the new business partner'
-             CHANGING  ct      = et_error ).
-        RETURN.
-    ENDTRY.
+    IF lv_complete = abap_true.
+      lv_guid = ls_taken-partner_guid.
+    ELSE.
+      TRY.
+          lv_guid = cl_system_uuid=>if_system_uuid_static~create_uuid_x16( ).
+        CATCH cx_uuid_error.
+          add( EXPORTING iv_text = 'No GUID could be generated for the new business partner'
+               CHANGING  ct      = et_error ).
+          RETURN.
+      ENDTRY.
+    ENDIF.
 
-    ls_data-partner-header-object_task                  = c_insert.
+    ls_data-partner-header-object_task                  = COND #( WHEN lv_complete = abap_true
+                                                                  THEN c_update ELSE c_insert ).
     ls_data-partner-header-object_instance-bpartnerguid = lv_guid.
     ls_data-partner-header-object_instance-bpartner     = iv_lifnr.  " the employee code
     ls_data-vendor-header-object_task                   = c_insert.
     ls_data-vendor-header-object_instance-lifnr         = iv_lifnr.
 
-    ls_data-partner-central_data-common-data-bp_control-category = '1'.  " person
-    ls_data-partner-central_data-common-data-bp_control-grouping = lv_grp.
+    IF lv_complete = abap_false.
+      ls_data-partner-central_data-common-data-bp_control-category = '1'.  " person
+      ls_data-partner-central_data-common-data-bp_control-grouping = lv_grp.
+    ELSE.
+      SELECT DISTINCT rltyp FROM but100 WHERE partner = @lv_bpno INTO TABLE @DATA(lt_tk_role).
+    ENDIF.
     LOOP AT lt_role INTO DATA(ls_role_db).
+      IF line_exists( lt_tk_role[ rltyp = ls_role_db-role ] ).
+        CONTINUE.                    " the existing partner has this role
+      ENDIF.
       DATA ls_role TYPE bus_ei_bupa_roles.
       CLEAR ls_role.
       ls_role-task     = c_insert.
@@ -702,6 +728,16 @@ CLASS lcl_emp_bp IMPLEMENTATION.
         CLEAR lv_mid.
       ENDIF.
     ENDIF.
+    IF lv_complete = abap_true
+       AND to_upper( condense( CONV string( ls_taken-name_last ) ) ) <> to_upper( lv_last ).
+      add( EXPORTING iv_text = |Not created: number { iv_lifnr ALPHA = OUT } is already used by | &&
+                               |{ who_is( lv_bpno ) } - another name than the employee's|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    " Name, address and bank details are saved with a new partner only; the
+    " partner that is completed has them from its first save.
+    IF lv_complete = abap_false.
     set( EXPORTING iv_comp = 'FIRSTNAME' iv_value = lv_first
          CHANGING  cs_data  = ls_data-partner-central_data-common-data-bp_person
                    cs_datax = ls_data-partner-central_data-common-datax-bp_person ).
@@ -821,6 +857,8 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
     ENDIF.
 
+    ENDIF.                           " lv_complete = abap_false
+
     " ---- supplier: control data (XK01 screen 0120 / 0130) -------------
     DATA ls_vc TYPE vmds_ei_vmd_central.
     set( EXPORTING iv_comp = 'KTOKK' iv_value = is_file-ktokk
@@ -900,8 +938,12 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       RETURN.
     ENDIF.
     APPEND VALUE bapiret2( type = 'S'
-                           message = |Employee vendor { lv_new ALPHA = OUT } created as business | &&
-                                     |partner { lv_bp ALPHA = OUT } (person)| ) TO et_ok.
+                           message = COND string(
+                             WHEN lv_complete = abap_true
+                             THEN |Employee vendor { lv_new ALPHA = OUT } created for business partner | &&
+                                  |{ lv_bp ALPHA = OUT }, which had been saved without a supplier|
+                             ELSE |Employee vendor { lv_new ALPHA = OUT } created as business | &&
+                                  |partner { lv_bp ALPHA = OUT } (person)| ) ) TO et_ok.
   ENDMETHOD.
 
   METHOD rows_of.
