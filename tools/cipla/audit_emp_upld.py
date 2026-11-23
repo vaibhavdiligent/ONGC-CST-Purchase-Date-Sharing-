@@ -85,6 +85,12 @@ need('a partner is completed without checking that it is the employee (same last
 need('completing a partner sends its name, address or bank details again',
      r"IF lv_complete = abap_false\.\s*\n\s*set\( EXPORTING iv_comp = 'FIRSTNAME'.*"
      r"APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails\.\s*\n\s*ENDIF\.\s*\n\s*ENDIF\.")
+need('an employee without mobile number is not refused before the save - SAP saves the partner and parks '
+     'the supplier (MDS_PPO2)',
+     r"IF is_file-mob_number IS INITIAL\.\s*\n\s*add\( EXPORTING iv_text = \|Not created: the employee has no mobile number")
+need('the partner that is completed does not get its mobile number - its supplier is parked again',
+     r"IF lv_tk_mob IS INITIAL AND lv_tk_aguid IS NOT INITIAL\..*?ls_adr-data_key-guid\s+= lv_tk_aguid\..*?"
+     r"ls_tel-contact-data-r_3_user\s+= '3'\.")
 need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
      'why no vendor was created (CRQ, 23.11.2026)',
      r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')
@@ -130,8 +136,10 @@ for what, pat in (('company code 1000', r"co_hrms_bukrs TYPE bukrs\s+VALUE '1000
                   ('double-invoice check', r'cwa_file-reprf\s*= abap_true\.'),
                   ('account holder = employee name', r'cwa_file-koinh\s*= cwa_file-name1\.'),
                   ('search term = employee name', r'cwa_file-sort1\s*= cwa_file-name1\.'),
-                  ('mobile into the telephone (LFA1-TELF1)',
-                   r'gs_col-mob\s+CHANGING cwa_file-tel_number\.'),
+                  ('the mobile number as a mobile number - as a telephone the supplier of Z008 is not '
+                   'created, the partner is saved without it (MDS_PPO2: MOB_NUMBER is a required entry '
+                   'field; production, 13 partners, 23.11.2026)',
+                   r'gs_col-mob\s+CHANGING cwa_file-mob_number\.'),
                   ('function into the corporate group (LFA1-KONZS)',
                    r'gs_col-func\s+CHANGING cwa_file-konzs\.')):
     if not re.search(pat, SRC):

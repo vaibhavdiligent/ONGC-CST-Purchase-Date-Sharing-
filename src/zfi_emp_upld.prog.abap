@@ -667,6 +667,15 @@ CLASS lcl_emp_bp IMPLEMENTATION.
            CHANGING  ct      = et_error ).
       RETURN.
     ENDIF.
+    " The supplier of the account group needs a mobile number. Without it SAP
+    " saves the business partner all the same and parks the supplier error
+    " (MDS_PPO2), so the employee is refused here, before anything is saved.
+    IF is_file-mob_number IS INITIAL.
+      add( EXPORTING iv_text = |Not created: the employee has no mobile number - the supplier of account | &&
+                               |group { is_file-ktokk } needs one|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
     IF lv_complete = abap_true.
       lv_guid = ls_taken-partner_guid.
     ELSE.
@@ -858,6 +867,32 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     ENDIF.
 
     ENDIF.                           " lv_complete = abap_false
+
+    " The partner that is completed has its mobile number as a telephone
+    " only. The supplier needs a mobile number: it is added to the partner's
+    " standard address, which is addressed by its GUID.
+    IF lv_complete = abap_true.
+      SELECT SINGLE addrnumber FROM but021_fs
+        WHERE partner = @lv_bpno AND adr_kind = 'XXDEFAULT' INTO @DATA(lv_tk_adrnr).
+      IF lv_tk_adrnr IS INITIAL.
+        SELECT SINGLE addrnumber FROM but020 WHERE partner = @lv_bpno INTO @lv_tk_adrnr.
+      ENDIF.
+      SELECT SINGLE address_guid FROM but020
+        WHERE partner = @lv_bpno AND addrnumber = @lv_tk_adrnr INTO @DATA(lv_tk_aguid).
+      SELECT SINGLE consnumber FROM adr2
+        WHERE addrnumber = @lv_tk_adrnr AND r3_user IN ( '2', '3' ) INTO @DATA(lv_tk_mob).
+      IF lv_tk_mob IS INITIAL AND lv_tk_aguid IS NOT INITIAL.
+        CLEAR: ls_adr, ls_tel.
+        ls_adr-task                   = c_update.
+        ls_adr-data_key-operation     = 'XXDFLT'.      " the standard address
+        ls_adr-data_key-guid          = lv_tk_aguid.
+        ls_tel-contact-task           = c_insert.
+        ls_tel-contact-data-telephone = is_file-mob_number.
+        ls_tel-contact-data-r_3_user  = '3'.
+        APPEND ls_tel TO ls_adr-data-communication-phone-phone.
+        APPEND ls_adr TO ls_data-partner-central_data-address-addresses.
+      ENDIF.
+    ENDIF.
 
     " ---- supplier: control data (XK01 screen 0120 / 0130) -------------
     DATA ls_vc TYPE vmds_ei_vmd_central.
@@ -3004,7 +3039,12 @@ FORM f_convert_hrms USING uv_line TYPE string CHANGING cwa_file LIKE wa_file.
   cwa_file-ktokk      = co_hrms_ktokk.                                  " LFA1 - KTOKK
   cwa_file-country    = co_hrms_land.                                   " LFA1 - LAND1
   cwa_file-langu      = co_hrms_langu.                                  " LFA1 - SPRAS
-  PERFORM f_col USING lt_col gs_col-mob   CHANGING cwa_file-tel_number. " LFA1 - TELF1
+  " The mobile number as a mobile number, as the 50-column file has it.
+  " It went into the telephone: the supplier of account group Z008 needs a
+  " mobile number, SAP saved the business partner and parked the supplier
+  " (MDS_PPO2: "...ADTEL-MOB_NUMBER is a required entry field") - 13
+  " partners without supplier in production, 23.11.2026.
+  PERFORM f_col USING lt_col gs_col-mob   CHANGING cwa_file-mob_number. " ADR2 - mobile
   PERFORM f_col USING lt_col gs_col-func  CHANGING cwa_file-konzs.      " LFA1 - KONZS
   cwa_file-konzs      = to_upper( cwa_file-konzs ).
   cwa_file-akont      = co_hrms_akont.                                  " LFB1 - AKONT
