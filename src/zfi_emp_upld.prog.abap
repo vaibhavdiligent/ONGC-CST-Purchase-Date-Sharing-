@@ -414,6 +414,21 @@ CLASS lcl_emp_bp DEFINITION FINAL.
     CLASS-METHODS reset_bp.
     "! Undo what is not committed and refresh the partner's buffers.
     CLASS-METHODS discard.
+    "! The vendor exists but not in the file's company code: add the company
+    "! code data, as XK01 did for an existing vendor.
+    CLASS-METHODS extend
+      IMPORTING is_file  TYPE ty_file
+                iv_lifnr TYPE lifnr
+      EXPORTING et_error TYPE bapiret2_t
+                et_ok    TYPE bapiret2_t.
+    "! The company code data of the file (XK01 screens 0210 / 0215).
+    CLASS-METHODS company
+      IMPORTING is_file   TYPE ty_file
+      RETURNING VALUE(rs) TYPE vmds_ei_company.
+    "! Who a business partner is: name, category, customer / supplier, roles.
+    CLASS-METHODS who_is
+      IMPORTING iv_partner TYPE bu_partner
+      RETURNING VALUE(rv)  TYPE string.
 ENDCLASS.
 
 
@@ -563,6 +578,31 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     CLEAR: et_error, et_ok.
     DATA: ls_data TYPE cvis_ei_extern,
           lv_guid TYPE bu_partner_guid.
+
+    " The employee is "new" when the vendor is not in company code 1000
+    " (FETCH_FILES reads LFB1). The vendor itself can exist all the same:
+    " XK01 then added the company code to it - so does EXTEND. Without this
+    " the save was refused with "Business partner 123518 already exists"
+    " (CRQ, 23.11.2026).
+    SELECT SINGLE lifnr FROM lfa1 WHERE lifnr = @iv_lifnr INTO @DATA(lv_is_vendor).
+    IF lv_is_vendor IS NOT INITIAL.
+      extend( EXPORTING is_file  = is_file
+                        iv_lifnr = iv_lifnr
+              IMPORTING et_error = et_error
+                        et_ok    = et_ok ).
+      RETURN.
+    ENDIF.
+    " The business partner takes the employee code as its number. When that
+    " number belongs to another partner, say whose it is.
+    DATA lv_bpno TYPE bu_partner.
+    lv_bpno = iv_lifnr.
+    SELECT SINGLE partner FROM but000 WHERE partner = @lv_bpno INTO @DATA(lv_taken).
+    IF lv_taken IS NOT INITIAL.
+      add( EXPORTING iv_text = |Not created: number { iv_lifnr ALPHA = OUT } is already used by | &&
+                               |{ who_is( lv_bpno ) }, which is not supplier { iv_lifnr ALPHA = OUT }|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
 
     " ---- BP grouping and supplier roles of the account group -------------
     DATA lv_grp TYPE bu_group.
@@ -776,24 +816,7 @@ CLASS lcl_emp_bp IMPLEMENTATION.
 
     " ---- supplier: company code (XK01 screens 0210 / 0215) -------------
     IF is_file-bukrs IS NOT INITIAL.
-      DATA ls_cc TYPE vmds_ei_company.
-      ls_cc-task           = c_insert.
-      ls_cc-data_key-bukrs = is_file-bukrs.
-      DATA(lt_cf) = VALUE string_table(
-        ( |AKONT;{ alpha( iv_in = is_file-akont iv_width = 10 ) }| )
-        ( |FDGRV;{ alpha( iv_in = is_file-fdgrv iv_width = 10 ) }| )
-        ( |ALTKN;{ is_file-altkn }| ) ( |PERNR;{ is_file-pernr }| ) ( |ZTERM;{ is_file-zterm }| )
-        ( |REPRF;{ is_file-reprf }| ) ( |ZWELS;{ is_file-zwels }| ) ( |ZAHLS;{ is_file-zahls }| )
-        ( |HBKID;{ is_file-hbkid }| ) ( |ZGRUP;{ is_file-zgrup }| ) ).
-      LOOP AT lt_cf INTO DATA(lv_cf).
-        SPLIT lv_cf AT ';' INTO DATA(lv_cname) DATA(lv_cval).
-        CONDENSE lv_cval.
-        IF lv_cval IS NOT INITIAL AND NOT ( lv_cname = 'PERNR' AND lv_cval CO '0' ).
-          set( EXPORTING iv_comp = lv_cname iv_value = lv_cval
-               CHANGING  cs_data = ls_cc-data cs_datax = ls_cc-datax ).
-        ENDIF.
-      ENDLOOP.
-      APPEND ls_cc TO ls_data-vendor-company_data-company.
+      APPEND company( is_file ) TO ls_data-vendor-company_data-company.
     ENDIF.
 
     " ---- supplier: purchasing organisation (XK01 screen 0310) ----------
@@ -836,6 +859,143 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     APPEND VALUE bapiret2( type = 'S'
                            message = |Employee vendor { lv_new ALPHA = OUT } created as business | &&
                                      |partner { lv_bp ALPHA = OUT } (person)| ) TO et_ok.
+  ENDMETHOD.
+
+  METHOD company.
+    rs-task           = c_insert.
+    rs-data_key-bukrs = is_file-bukrs.
+    DATA(lt_cf) = VALUE string_table(
+      ( |AKONT;{ alpha( iv_in = is_file-akont iv_width = 10 ) }| )
+      ( |FDGRV;{ alpha( iv_in = is_file-fdgrv iv_width = 10 ) }| )
+      ( |ALTKN;{ is_file-altkn }| ) ( |PERNR;{ is_file-pernr }| ) ( |ZTERM;{ is_file-zterm }| )
+      ( |REPRF;{ is_file-reprf }| ) ( |ZWELS;{ is_file-zwels }| ) ( |ZAHLS;{ is_file-zahls }| )
+      ( |HBKID;{ is_file-hbkid }| ) ( |ZGRUP;{ is_file-zgrup }| ) ).
+    LOOP AT lt_cf INTO DATA(lv_cf).
+      SPLIT lv_cf AT ';' INTO DATA(lv_cname) DATA(lv_cval).
+      CONDENSE lv_cval.
+      IF lv_cval IS NOT INITIAL AND NOT ( lv_cname = 'PERNR' AND lv_cval CO '0' ).
+        set( EXPORTING iv_comp = lv_cname iv_value = lv_cval
+             CHANGING  cs_data = rs-data cs_datax = rs-datax ).
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD who_is.
+    SELECT SINGLE partner, type, bu_group, name_org1, name_first, name_last, partner_guid
+      FROM but000 WHERE partner = @iv_partner INTO @DATA(ls_bp).
+    IF sy-subrc <> 0.
+      rv = |business partner { iv_partner ALPHA = OUT }|.
+      RETURN.
+    ENDIF.
+    DATA lv_name TYPE string.
+    IF ls_bp-type = '1'.
+      lv_name = condense( |{ ls_bp-name_first } { ls_bp-name_last }| ).
+    ELSE.
+      lv_name = condense( CONV string( ls_bp-name_org1 ) ).
+    ENDIF.
+    DATA(lv_cat) = SWITCH string( ls_bp-type WHEN '1' THEN `person` WHEN '2' THEN `organisation`
+                                             ELSE `group` ).
+    rv = |business partner { iv_partner ALPHA = OUT } "{ lv_name }" ({ lv_cat }, grouping { ls_bp-bu_group }|.
+    SELECT SINGLE customer FROM cvi_cust_link WHERE partner_guid = @ls_bp-partner_guid INTO @DATA(lv_kunnr).
+    IF sy-subrc = 0.
+      rv = rv && |, customer { lv_kunnr ALPHA = OUT }|.
+    ENDIF.
+    SELECT SINGLE vendor FROM cvi_vend_link WHERE partner_guid = @ls_bp-partner_guid INTO @DATA(lv_vend).
+    IF sy-subrc = 0.
+      rv = rv && |, supplier { lv_vend ALPHA = OUT }|.
+    ENDIF.
+    IF lv_kunnr IS INITIAL AND lv_vend IS INITIAL.
+      rv = rv && `, neither customer nor supplier`.
+    ENDIF.
+    SELECT DISTINCT rltyp FROM but100 WHERE partner = @iv_partner ORDER BY rltyp INTO TABLE @DATA(lt_rl).
+    IF lt_rl IS NOT INITIAL.
+      rv = rv && `, roles`.
+      LOOP AT lt_rl INTO DATA(ls_rl).
+        rv = rv && | { ls_rl-rltyp }|.
+      ENDLOOP.
+    ENDIF.
+    rv = rv && `)`.
+  ENDMETHOD.
+
+  METHOD extend.
+    CLEAR: et_error, et_ok.
+    DATA: ls_data TYPE cvis_ei_extern,
+          lv_guid TYPE bu_partner_guid,
+          lv_bp   TYPE bu_partner.
+    IF is_file-bukrs IS INITIAL.
+      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } exists already and the file has no company code|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    SELECT SINGLE lifnr FROM lfb1 WHERE lifnr = @iv_lifnr AND bukrs = @is_file-bukrs INTO @DATA(lv_in_cc).
+    IF sy-subrc = 0.
+      APPEND VALUE bapiret2( type = 'I'
+                             message = |Vendor { iv_lifnr ALPHA = OUT } is already in company code { is_file-bukrs }| )
+             TO et_ok.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE partner_guid FROM cvi_vend_link WHERE vendor = @iv_lifnr INTO @lv_guid.
+    IF lv_guid IS INITIAL.
+      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } exists without a business partner (CVI_VEND_LINK) - | &&
+                               |it cannot be added to company code { is_file-bukrs }|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    SELECT SINGLE partner FROM but000 WHERE partner_guid = @lv_guid INTO @lv_bp.
+
+    ls_data-partner-header-object_task                  = c_update.
+    ls_data-partner-header-object_instance-bpartnerguid = lv_guid.
+    ls_data-vendor-header-object_task                   = c_update.
+    ls_data-vendor-header-object_instance-lifnr         = iv_lifnr.
+
+    " Company code data needs the supplier roles of the vendor's own account
+    " group; those the partner does not have yet are added.
+    SELECT SINGLE ktokk FROM lfa1 WHERE lifnr = @iv_lifnr INTO @DATA(lv_ktokk).
+    SELECT account_group, role FROM cvic_vend_to_bp2
+      WHERE account_group = @lv_ktokk INTO TABLE @DATA(lt_role).
+    SELECT DISTINCT rltyp FROM but100 WHERE partner = @lv_bp INTO TABLE @DATA(lt_has).
+    LOOP AT lt_role INTO DATA(ls_role_db).
+      IF line_exists( lt_has[ rltyp = ls_role_db-role ] ).
+        CONTINUE.
+      ENDIF.
+      DATA ls_role TYPE bus_ei_bupa_roles.
+      CLEAR ls_role.
+      ls_role-task     = c_insert.
+      ls_role-data_key = ls_role_db-role.
+      APPEND ls_role TO ls_data-partner-central_data-role-roles.
+    ENDLOOP.
+
+    APPEND company( is_file ) TO ls_data-vendor-company_data-company.
+
+    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE lifnr FROM lfb1 WHERE lifnr = @iv_lifnr AND bukrs = @is_file-bukrs INTO @lv_in_cc.
+    IF sy-subrc <> 0.
+      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } ({ who_is( lv_bp ) }) was saved, but it is | &&
+                               |still not in company code { is_file-bukrs }|
+           CHANGING  ct      = et_error ).
+      RETURN.
+    ENDIF.
+    APPEND VALUE bapiret2( type = 'S'
+                           message = |Employee vendor { iv_lifnr ALPHA = OUT } existed already (business partner | &&
+                                     |{ lv_bp ALPHA = OUT }) - added to company code { is_file-bukrs }| ) TO et_ok.
+
+    " Its bank account, as for every existing employee vendor.
+    IF is_file-bankl IS NOT INITIAL AND is_file-bankn IS NOT INITIAL.
+      DATA: lt_bk_err TYPE bapiret2_t,
+            lt_bk_ok  TYPE bapiret2_t.
+      change_bank( EXPORTING is_file  = is_file
+                             iv_lifnr = iv_lifnr
+                   IMPORTING et_error = lt_bk_err
+                             et_ok    = lt_bk_ok ).
+      LOOP AT lt_bk_err INTO DATA(ls_bk_err).
+        APPEND VALUE bapiret2( type = 'S' message = |Bank details not changed: { ls_bk_err-message }| ) TO et_ok.
+      ENDLOOP.
+      LOOP AT lt_bk_ok INTO DATA(ls_bk_ok) WHERE type = 'S'.
+        APPEND ls_bk_ok TO et_ok.
+      ENDLOOP.
+    ENDIF.
   ENDMETHOD.
 
   METHOD change_bank.

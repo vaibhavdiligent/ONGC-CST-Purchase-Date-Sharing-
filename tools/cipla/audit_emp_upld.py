@@ -64,6 +64,13 @@ need('the bank change is not sent as time-dependent for the line\'s own validity
      r"bankdetail-time_dependent = abap_true\..*iv_comp = 'BANKDETAILVALIDFROM'.*iv_comp = 'BANKDETAILVALIDTO'")
 need('the bank change is not read back - a second bank details ID would go unreported',
      r"NOT line_exists\( lt_new\[ bkvid = lv_bkvid banks = lv_banks bankl = lv_bankl bankn = lv_bankn \] \)")
+need('a vendor that exists but is not in company code 1000 is not added to it - the save was refused with '
+     '"Business partner 123518 already exists" (CRQ, 23.11.2026); XK01 in ECC failed on this case too',
+     r"SELECT SINGLE lifnr FROM lfa1 WHERE lifnr = @iv_lifnr INTO @DATA\(lv_is_vendor\)\.\s*\n\s*IF lv_is_vendor IS NOT INITIAL\.\s*\n\s*extend\(")
+need('EXTEND does not add the company code data to the existing vendor',
+     r"METHOD extend\..*object_task\s*= c_update\..*APPEND company\( is_file \) TO ls_data-vendor-company_data-company\..*ENDMETHOD\.")
+need('a business partner number that is already taken is not explained (whose it is)',
+     r"SELECT SINGLE partner FROM but000 WHERE partner = @lv_bpno INTO @DATA\(lv_taken\)\..*who_is\( lv_bpno \)")
 need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
      'why no vendor was created (CRQ, 23.11.2026)',
      r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')
