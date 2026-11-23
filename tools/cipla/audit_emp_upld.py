@@ -64,6 +64,11 @@ need('the bank change is not sent as time-dependent for the line\'s own validity
      r"bankdetail-time_dependent = abap_true\..*iv_comp = 'BANKDETAILVALIDFROM'.*iv_comp = 'BANKDETAILVALIDTO'")
 need('the bank change is not read back - a second bank details ID would go unreported',
      r"NOT line_exists\( lt_new\[ bkvid = lv_bkvid banks = lv_banks bankl = lv_bankl bankn = lv_bankn \] \)")
+need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
+     'why no vendor was created (CRQ, 23.11.2026)',
+     r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')
+need('the log is copied into the mail table on every file row instead of once after the loop',
+     r"ENDLOOP\.\s*\n(?:\s*\n|\s*\".*\n)*\s*APPEND LINES OF ta_msg TO ta_msg_new\.")
 need('the mail\'s serial number is a one-character field - "*" at 10 and CONVT_NO_NUMBER at 11 (CRQ, 23.11.2026)',
      r'lv_srno\s+TYPE i,')
 need('the payment method is not CNT for the 50-column file - it sends only C (CRQ, 23.11.2026)',

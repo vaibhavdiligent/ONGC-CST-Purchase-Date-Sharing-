@@ -338,6 +338,8 @@ CASES = [
      [('src/zfi_emp_upld.prog.abap', "      ls_data-partner-central_data-bankdetail-time_dependent = abap_true.\n", "")]),
     ('Employee upload: an ended bank line taken as line 1', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "    DELETE lt_old WHERE ( bk_valid_from IS NOT INITIAL AND bk_valid_from > lv_now )\n                     OR ( bk_valid_to   IS NOT INITIAL AND bk_valid_to   < lv_now ).\n", "")]),
+    ('Employee upload: log only by mail - SOST 826, nobody saw the result (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "    PERFORM f_write_log.                        \" S/4HANA conversion: log in the spool\n", "")]),
     ('Employee upload: CONVT_NO_NUMBER in the mail - serial number C(1) (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "         lv_srno                TYPE i,", "         lv_srno                TYPE c VALUE 0,")]),
     ('Employee upload: payment method C instead of CNT (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',

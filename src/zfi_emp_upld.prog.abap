@@ -266,6 +266,12 @@ DATA: ta_msg            TYPE TABLE OF ty_msg,
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
 
 * S/4HANA: the layout of the file being read
+" S/4HANA conversion: the run's log, also printed in the job's spool -
+" the mail can fail to go out (SOST status red, message 826, 23.11.2026).
+DATA: gt_log       TYPE TABLE OF ty_msg,
+      gt_run       TYPE string_table,
+      gv_to_create TYPE i,
+      gv_to_update TYPE i.
 DATA: gs_col    TYPE ty_hrms_col,
       gv_layout TYPE c LENGTH 1,
       gv_sep    TYPE string.
@@ -980,6 +986,7 @@ START-OF-SELECTION.
   ELSE.
     PERFORM fetch_files.                        "Added by Aishwarya - 8000003767 - 04.04.2025
     PERFORM f_read_n_run.
+    PERFORM f_write_log.                        " S/4HANA conversion: log in the spool
   ENDIF.
 
 *&---------------------------------------------------------------------*
@@ -1100,6 +1107,8 @@ FORM f_read_n_run.
 
           "" CLOSE THE FILE
           CLOSE DATASET lv_file.
+          APPEND |File { lv_file }: { lines( ta_file ) } employee rows, layout | &&
+                 COND string( WHEN gv_layout = co_lay_hrms THEN `HRMS` ELSE `50 columns` ) TO gt_run.
 
           "" ARCHIVE FILE
           lv_arcpath = lv_path.
@@ -1122,9 +1131,13 @@ FORM f_read_n_run.
             PERFORM f_mail_log USING lv_filename.
           ENDIF.
         ELSE.
+          APPEND LINES OF ta_msg TO gt_log.
           PERFORM f_mail_log USING lv_filename.
         ENDIF.
       ENDLOOP.
+      IF lv_filecount = 0.
+        APPEND |No employee file ({ co_file }) in { lv_path }| TO gt_run.
+      ENDIF.
 
     ENDIF.
   ENDIF.
@@ -1154,6 +1167,7 @@ FORM f_runbdc.
     IF ta_create IS NOT INITIAL OR ta_update IS NOT INITIAL.
       READ TABLE ta_create INTO wa_create WITH KEY lifnr = lv_key BINARY SEARCH.
       IF sy-subrc = 0.
+        gv_to_create = gv_to_create + 1.
         wa_file-lifnr = wa_create-lifnr.
         lv_status = co_create.
 *   EOC BY Aishwarya - 8000003767 - 07.04.2025
@@ -1167,6 +1181,7 @@ FORM f_runbdc.
         READ TABLE ta_update INTO wa_update WITH KEY lifnr = lv_key BINARY SEARCH.
         wa_update-lifnr = |{ wa_update-lifnr ALPHA = IN }|.
         IF sy-subrc = 0.
+          gv_to_update = gv_to_update + 1.
           READ TABLE ta_lfbk INTO DATA(wa_lfbk) WITH KEY lifnr = wa_update-lifnr banks = wa_file-banks bankl = wa_file-bankl bankn = wa_file-bankn BINARY SEARCH.
           IF sy-subrc <> 0.
             lv_status = co_update.
@@ -1187,10 +1202,14 @@ FORM f_runbdc.
       ENDIF.
     ENDIF.
 
-    APPEND LINES OF ta_msg TO ta_msg_new.
-    APPEND LINES OF ta_msg_update TO ta_msg_new.
-
   ENDLOOP.
+
+  " S/4HANA conversion: once after the loop - TA_MSG / TA_MSG_UPDATE gather
+  " the whole run; copied on every one of ~26,800 rows before.
+  APPEND LINES OF ta_msg TO ta_msg_new.
+  APPEND LINES OF ta_msg_update TO ta_msg_new.
+  APPEND LINES OF ta_msg TO gt_log.
+  APPEND LINES OF ta_msg_update TO gt_log.
 
   SORT ta_msg_new BY emp_no.
   DELETE ADJACENT DUPLICATES FROM ta_msg_new COMPARING emp_no.
@@ -2813,4 +2832,37 @@ FORM f_bp_log USING    uv_status TYPE clike
     ENDIF.
     APPEND ls_msg TO ct_msg.
   ENDLOOP.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_WRITE_LOG
+*&---------------------------------------------------------------------*
+* S/4HANA conversion: the run's log in the job's spool (SM37 - Spool), so
+* it can be read when the log mail does not go out.
+*----------------------------------------------------------------------*
+FORM f_write_log.
+  DATA lv_text TYPE string.
+  WRITE: / 'Employee vendor upload - log'.
+  ULINE.
+  lv_text = |Vendors of the DPR / tax invoice files: { lines( ta_create ) } not yet in company code 1000, | &&
+            |{ lines( ta_update ) } already there|.
+  WRITE: / lv_text.
+  LOOP AT gt_run INTO lv_text.
+    WRITE: / lv_text.
+  ENDLOOP.
+  lv_text = |Employee rows found among them: { gv_to_create } to create, { gv_to_update } to check / change bank|.
+  WRITE: / lv_text.
+  IF gv_to_create = 0.
+    WRITE: / 'No employee vendor to create - every employee of the files is already a vendor in 1000,',
+           / 'or is not in the DPR / tax invoice files.'.
+  ENDIF.
+  ULINE.
+  SORT gt_log BY emp_no status remarks.
+  DELETE ADJACENT DUPLICATES FROM gt_log COMPARING emp_no status remarks.
+  LOOP AT gt_log INTO DATA(ls_log).
+    lv_text = |{ ls_log-emp_no } { ls_log-status } { ls_log-emp_name }: { ls_log-remarks }|.
+    WRITE: / lv_text.
+  ENDLOOP.
+  IF gt_log IS INITIAL.
+    WRITE: / 'No messages.'.
+  ENDIF.
 ENDFORM.
