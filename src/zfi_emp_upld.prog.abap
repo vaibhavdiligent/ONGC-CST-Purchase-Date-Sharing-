@@ -862,26 +862,57 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    " The partner's bank details - line 1 (the lowest bank details ID) is the
-    " one FK02 typed over. It takes the HRMS account in place: adding a new
-    " ID and deleting the old one left both accounts on the partner (bank
-    " details are time-dependent, the delete only ends the old one) - seen
-    " with the HONC vendors in CRS, 20.11.2026.
-    SELECT bkvid, banks, bankl, bankn FROM but0bk
+    " The partner's bank details. FK02 typed over line 1; here the currently
+    " valid line with the lowest ID takes the HRMS account in place.
+    " Bank details are time-dependent in this system (BUT0BK in V_TB056):
+    " a change sent without its validity is applied as of today - SAP ends
+    " the line and opens a new ID with the new bank, and the partner shows
+    " two lines (60451: 0001 HDFC0009209 and 0002 HDFC0009229, CRQ,
+    " 23.11.2026). So the change is sent as time-dependent, for the line's
+    " own validity period, and lines that are no longer valid are left out.
+    DATA lv_now TYPE timestamp.
+    GET TIME STAMP FIELD lv_now.
+    SELECT bkvid, banks, bankl, bankn, bk_valid_from, bk_valid_to FROM but0bk
       WHERE partner = @lv_bp
       ORDER BY bkvid INTO TABLE @DATA(lt_old).
+    DELETE lt_old WHERE ( bk_valid_from IS NOT INITIAL AND bk_valid_from > lv_now )
+                     OR ( bk_valid_to   IS NOT INITIAL AND bk_valid_to   < lv_now ).
     IF line_exists( lt_old[ banks = lv_banks bankl = lv_bankl bankn = lv_bankn ] ).
       APPEND VALUE bapiret2( type = 'I' message = 'The bank account is already maintained' ) TO et_ok.
       RETURN.
     ENDIF.
 
     DATA ls_bk TYPE bus_ei_bupa_bankdetail.
+    DATA lv_bkvid TYPE bu_bkvid.
     IF lt_old IS NOT INITIAL.
+      DATA(ls_line) = lt_old[ 1 ].
+      lv_bkvid       = ls_line-bkvid.
       ls_bk-task     = c_update.
-      ls_bk-data_key = lt_old[ 1 ]-bkvid.
+      ls_bk-data_key = lv_bkvid.
+      ls_data-partner-central_data-bankdetail-time_dependent = abap_true.
+      DATA lv_date TYPE d.
+      IF ls_line-bk_valid_from IS NOT INITIAL.
+        CONVERT TIME STAMP ls_line-bk_valid_from TIME ZONE 'UTC' INTO DATE lv_date.
+        IF lv_date IS NOT INITIAL.
+          set( EXPORTING iv_comp = 'BANKDETAILVALIDFROM' iv_value = lv_date
+               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+        ENDIF.
+      ENDIF.
+      IF ls_line-bk_valid_to IS NOT INITIAL.
+        CLEAR lv_date.
+        CONVERT TIME STAMP ls_line-bk_valid_to TIME ZONE 'UTC' INTO DATE lv_date.
+        IF lv_date IS NOT INITIAL.
+          set( EXPORTING iv_comp = 'BANKDETAILVALIDTO' iv_value = lv_date
+               CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
+        ENDIF.
+      ENDIF.
     ELSE.
+      " No valid bank line: a new one after the highest ID in use.
+      SELECT MAX( bkvid ) FROM but0bk WHERE partner = @lv_bp INTO @DATA(lv_max).
+      lv_bkvid       = COND #( WHEN lv_max IS INITIAL OR lv_max CN '0123456789' THEN '0001'
+                               ELSE |{ CONV i( lv_max ) + 1 WIDTH = 4 ALIGN = RIGHT PAD = '0' }| ).
       ls_bk-task     = c_insert.
-      ls_bk-data_key = '0001'.
+      ls_bk-data_key = lv_bkvid.
     ENDIF.
     set( EXPORTING iv_comp = 'BANK_CTRY' iv_value = lv_banks
          CHANGING  cs_data = ls_bk-data cs_datax = ls_bk-datax ).
@@ -896,6 +927,25 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     APPEND ls_bk TO ls_data-partner-central_data-bankdetail-bankdetails.
 
     IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
+      RETURN.
+    ENDIF.
+
+    " Read back: the account must now be on that bank details ID. If SAP
+    " opened another ID instead, the log says so with both lines.
+    GET TIME STAMP FIELD lv_now.
+    SELECT bkvid, banks, bankl, bankn, bk_valid_from, bk_valid_to FROM but0bk
+      WHERE partner = @lv_bp
+      ORDER BY bkvid INTO TABLE @DATA(lt_new).
+    IF NOT line_exists( lt_new[ bkvid = lv_bkvid banks = lv_banks bankl = lv_bankl bankn = lv_bankn ] ).
+      DATA(lv_lines) = ``.
+      LOOP AT lt_new INTO DATA(ls_new).
+        lv_lines = lv_lines && | { ls_new-bkvid } { ls_new-bankl } { ls_new-bankn }| &&
+                   COND string( WHEN ls_new-bk_valid_to IS NOT INITIAL AND ls_new-bk_valid_to < lv_now
+                                THEN ` (no longer valid);` ELSE `;` ).
+      ENDLOOP.
+      APPEND VALUE bapiret2( type = 'S'
+                             message = |Bank account saved, but not on bank details ID { lv_bkvid } - | &&
+                                       |partner { lv_bp ALPHA = OUT } has:{ lv_lines }| ) TO et_ok.
       RETURN.
     ENDIF.
     APPEND VALUE bapiret2( type = 'S'
@@ -1255,7 +1305,11 @@ FORM f_convert_wa USING uwa_line CHANGING cwa_file LIKE wa_file.
   cwa_file-pernr      = lv_val34 .
   cwa_file-zterm      = lv_val35 .
   cwa_file-reprf      = lv_val36 .
-  cwa_file-zwels      = lv_val37 .
+* cwa_file-zwels      = lv_val37 .
+  " S/4HANA conversion: payment method CNT for every employee vendor, as
+  " the mapping sheet "expected output file for upload" has it - the file
+  " sends only C (CRQ, 23.11.2026).
+  cwa_file-zwels      = co_hrms_zwels.
   cwa_file-zahls      = lv_val38 .
   cwa_file-hbkid      = lv_val39 .
   cwa_file-zgrup      = lv_val40 .
@@ -2237,7 +2291,8 @@ FORM send_email_new .
   DATA : lta_message            TYPE STANDARD TABLE OF solisti1,
          lwa_message            TYPE solisti1,
          lv_subject             LIKE sodocchgi1-obj_descr,
-         lv_srno                TYPE c VALUE 0,
+*         lv_srno                TYPE c VALUE 0,   " S/4HANA: C(1) - '*' at 10, CONVT_NO_NUMBER at 11
+         lv_srno                TYPE i,
          lwa_doc_data           LIKE sodocchgi1,
          lta_packing_list       TYPE TABLE OF sopcklsti1,
          lwa_packing_list       TYPE sopcklsti1,
@@ -2246,7 +2301,7 @@ FORM send_email_new .
          lv_send_address        TYPE so_rec_ext,
          lv_sender_address_type LIKE soextreci1-adr_typ,
          lv_sent_all            TYPE c,
-         lv_srno1               TYPE c VALUE 0.
+         lv_srno1               TYPE i.
 
   CONSTANTS: co_s(1) VALUE 'S',
              co_e(1) VALUE 'E'.
@@ -2328,7 +2383,7 @@ FORM send_email_new .
     APPEND lwa_message TO lta_message.
 
     CLEAR lwa_message.
-    CONCATENATE '<td>' lv_srno'</td>' INTO lwa_message-line.
+    lwa_message-line = |<td>{ lv_srno }</td>|.
     APPEND lwa_message TO lta_message.
 
     CLEAR lwa_message.

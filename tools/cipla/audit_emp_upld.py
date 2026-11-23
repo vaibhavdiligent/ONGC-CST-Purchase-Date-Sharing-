@@ -54,8 +54,20 @@ need('the save is not validated first', r'cl_md_bp_maintain=>validate_single\(')
 need('the save does not go through the BP API', r'cl_md_bp_maintain=>maintain\(')
 need('the commit\'s verdict is not read',
      r"CALL FUNCTION 'BAPI_TRANSACTION_COMMIT'\s*\n\s*EXPORTING wait\s*=\s*abap_true\s*\n\s*IMPORTING return = ls_cret\.")
-need('the bank change does not overwrite the first bank details ID in place, as FK02 typed over line 1',
-     r'ls_bk-task\s*= c_update\.\s*\n\s*ls_bk-data_key = lt_old\[ 1 \]-bkvid\.')
+need('the bank change does not overwrite the currently valid bank details ID in place, as FK02 typed over line 1',
+     r'ls_bk-task\s*= c_update\.\s*\n\s*ls_bk-data_key = lv_bkvid\.')
+need('lines that are no longer valid are not left out - an ended bank line was taken as line 1',
+     r'DELETE lt_old WHERE \( bk_valid_from IS NOT INITIAL AND bk_valid_from > lv_now \)\s*\n\s*'
+     r'OR \( bk_valid_to\s+IS NOT INITIAL AND bk_valid_to\s+< lv_now \)\.')
+need('the bank change is not sent as time-dependent for the line\'s own validity - SAP applied it as of today, '
+     'ended the line and opened a second ID (BP 60451, CRQ, 23.11.2026)',
+     r"bankdetail-time_dependent = abap_true\..*iv_comp = 'BANKDETAILVALIDFROM'.*iv_comp = 'BANKDETAILVALIDTO'")
+need('the bank change is not read back - a second bank details ID would go unreported',
+     r"NOT line_exists\( lt_new\[ bkvid = lv_bkvid banks = lv_banks bankl = lv_bankl bankn = lv_bankn \] \)")
+need('the mail\'s serial number is a one-character field - "*" at 10 and CONVT_NO_NUMBER at 11 (CRQ, 23.11.2026)',
+     r'lv_srno\s+TYPE i,')
+need('the payment method is not CNT for the 50-column file - it sends only C (CRQ, 23.11.2026)',
+     r'cwa_file-zwels\s+= co_hrms_zwels\.(?:(?!ENDFORM).)*ENDFORM\.(?:(?!FORM f_convert_hrms).)*FORM f_convert_hrms')
 if re.search(r'task\s*= c_delete', SRC):
     fail.append('a bank detail is deleted - with time-dependent bank details the old account stays and the '
                 'partner shows two (HONC, CRS, 20.11.2026); overwrite line 1 instead')
