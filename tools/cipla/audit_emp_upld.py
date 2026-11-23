@@ -74,6 +74,9 @@ if re.search(r'METHOD extend\.', SRC, re.I):
     fail.append('an existing vendor is added to the company code - the rule is: update its bank account and IFSC only')
 need('a business partner number that is already taken is not explained (whose it is)',
      r"SELECT SINGLE partner FROM but000 WHERE partner = @lv_bpno INTO @DATA\(lv_taken\)\..*who_is\( lv_bpno \)")
+need('a business partner saved without a supplier is not diagnosed - the log must show the system\'s customer / '
+     'vendor integration settings (production, BP 141883: supplier created in quality, not in production)',
+     r"gv_cvi_checked = abap_true\.\s*\n\s*cvi_check\(.*METHOD cvi_check\..*MDSC_CTRL_OPT_A.*TBC002.*TB003.*TBC001.*MDS_PPO2")
 need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
      'why no vendor was created (CRQ, 23.11.2026)',
      r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')

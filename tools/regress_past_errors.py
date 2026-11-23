@@ -342,6 +342,8 @@ CASES = [
      [('src/zfi_emp_upld.prog.abap', "    PERFORM f_write_log.                        \" S/4HANA conversion: log in the spool\n", "")]),
     ('Employee upload: vendor already created - "Business partner 123518 already exists" instead of a bank update (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "    IF ls_is_vendor-lifnr IS NOT INITIAL.\n      ev_existed = abap_true.\n", "    IF ls_is_vendor-lifnr IS INITIAL.\n      ev_existed = abap_false.\n")]),
+    ('Employee upload: BP saved without supplier in production - nothing in the log says why (BP 141883)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "        gv_cvi_checked = abap_true.\n        cvi_check( EXPORTING iv_bp    = lv_bp\n", "        gv_cvi_checked = abap_true.\n        who_is( lv_bp ).\n        DATA(lv_x) = VALUE bapiret2_t( ( LINES OF et_error ) ). \" ( EXPORTING iv_bp = lv_bp\n")]),
     ('Employee upload: CONVT_NO_NUMBER in the mail - serial number C(1) (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "         lv_srno                TYPE i,", "         lv_srno                TYPE c VALUE 0,")]),
     ('Employee upload: payment method C instead of CNT (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',

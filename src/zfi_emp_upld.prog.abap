@@ -419,6 +419,21 @@ CLASS lcl_emp_bp DEFINITION FINAL.
     CLASS-METHODS company
       IMPORTING is_file   TYPE ty_file
       RETURNING VALUE(rs) TYPE vmds_ei_company.
+    "! Why SAP saved the business partner without a supplier: the settings
+    "! of customer / vendor integration in this system, for the log.
+    CLASS-METHODS cvi_check
+      IMPORTING iv_bp    TYPE bu_partner
+                iv_ktokk TYPE ktokk
+                iv_group TYPE bu_group
+      CHANGING  ct_error TYPE bapiret2_t.
+    "! Rows of a customizing table that hold one of two values in any field
+    "! (all rows when both are empty); read without knowing the field names.
+    CLASS-METHODS rows_of
+      IMPORTING iv_tab    TYPE tabname
+                iv_a      TYPE clike OPTIONAL
+                iv_b      TYPE clike OPTIONAL
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-DATA gv_cvi_checked TYPE abap_bool.
     "! Who a business partner is: name, category, customer / supplier, roles.
     CLASS-METHODS who_is
       IMPORTING iv_partner TYPE bu_partner
@@ -872,11 +887,109 @@ CLASS lcl_emp_bp IMPLEMENTATION.
                        ELSE |Business partner { lv_bp ALPHA = OUT } was saved, but no supplier is linked | &&
                             |to it - check the supplier roles of { is_file-ktokk } (CVIC_VEND_TO_BP2)| )
            CHANGING  ct      = et_error ).
+      " Same program, supplier created in quality and not in production
+      " (Cipla, BP 141883): the cause is in the system's customer / vendor
+      " integration - the log shows those settings, once per run.
+      IF lv_bp IS NOT INITIAL AND gv_cvi_checked = abap_false.
+        gv_cvi_checked = abap_true.
+        cvi_check( EXPORTING iv_bp    = lv_bp
+                             iv_ktokk = is_file-ktokk
+                             iv_group = lv_grp
+                   CHANGING  ct_error = et_error ).
+      ENDIF.
       RETURN.
     ENDIF.
     APPEND VALUE bapiret2( type = 'S'
                            message = |Employee vendor { lv_new ALPHA = OUT } created as business | &&
                                      |partner { lv_bp ALPHA = OUT } (person)| ) TO et_ok.
+  ENDMETHOD.
+
+  METHOD rows_of.
+    DATA lr_tab TYPE REF TO data.
+    FIELD-SYMBOLS: <lt_any> TYPE STANDARD TABLE,
+                   <ls_any> TYPE any,
+                   <lv_any> TYPE any.
+    CLEAR rv.
+    DATA(lv_n) = 0.
+    DATA(lv_a) = condense( CONV string( iv_a ) ).
+    DATA(lv_b) = condense( CONV string( iv_b ) ).
+    TRY.
+        CREATE DATA lr_tab TYPE STANDARD TABLE OF (iv_tab).
+        ASSIGN lr_tab->* TO <lt_any>.
+        SELECT * FROM (iv_tab) INTO TABLE @<lt_any> UP TO 20000 ROWS.
+        LOOP AT <lt_any> ASSIGNING <ls_any>.
+          DATA(lv_row) = ``.
+          DATA(lv_hit) = xsdbool( lv_a IS INITIAL AND lv_b IS INITIAL ).
+          DO.
+            ASSIGN COMPONENT sy-index OF STRUCTURE <ls_any> TO <lv_any>.
+            IF sy-subrc <> 0.
+              EXIT.
+            ENDIF.
+            IF sy-index = 1.
+              CONTINUE.                         " the client
+            ENDIF.
+            DATA(lv_val) = condense( CONV string( <lv_any> ) ).
+            IF ( lv_a IS NOT INITIAL AND lv_val = lv_a ) OR ( lv_b IS NOT INITIAL AND lv_val = lv_b ).
+              lv_hit = abap_true.
+            ENDIF.
+            lv_row = COND #( WHEN sy-index = 2 THEN lv_val ELSE |{ lv_row }/{ lv_val }| ).
+          ENDDO.
+          IF lv_hit = abap_true.
+            lv_n = lv_n + 1.
+            IF lv_n <= 30.
+              rv = COND #( WHEN rv IS INITIAL THEN lv_row ELSE |{ rv }; { lv_row }| ).
+            ENDIF.
+          ENDIF.
+        ENDLOOP.
+        IF lv_n = 0.
+          rv = `no entry`.
+        ELSEIF lv_n > 30.
+          rv = |{ rv }; ... { lv_n } rows|.
+        ENDIF.
+      CATCH cx_root.
+        rv = `cannot be read`.
+    ENDTRY.
+  ENDMETHOD.
+
+  METHOD cvi_check.
+    " 1 - the roles the partner has now against the roles that were sent
+    SELECT DISTINCT rltyp FROM but100 WHERE partner = @iv_bp ORDER BY rltyp INTO TABLE @DATA(lt_has).
+    SELECT DISTINCT role FROM cvic_vend_to_bp2 WHERE account_group = @iv_ktokk
+      ORDER BY role INTO TABLE @DATA(lt_sent).
+    DATA(lv_has) = ``.
+    LOOP AT lt_has INTO DATA(ls_has).
+      lv_has = |{ lv_has } { ls_has-rltyp }|.
+    ENDLOOP.
+    DATA(lv_sent) = ``.
+    LOOP AT lt_sent INTO DATA(ls_sent).
+      lv_sent = |{ lv_sent } { ls_sent-role }|.
+    ENDLOOP.
+    add( EXPORTING iv_text = |CVI check 1 - roles on business partner { iv_bp ALPHA = OUT }:| &&
+                             |{ COND string( WHEN lv_has IS INITIAL THEN ` none` ELSE lv_has ) }; roles of | &&
+                             |account group { iv_ktokk } (CVIC_VEND_TO_BP2):{ lv_sent }|
+         CHANGING  ct      = ct_error ).
+    " 2 - is the synchronisation business partner -> vendor active?
+    add( EXPORTING iv_text = |CVI check 2 - active synchronisation options with VENDOR (MDSC_CTRL_OPT_A, | &&
+                             |expected BP/VENDOR/X): { rows_of( iv_tab = 'MDSC_CTRL_OPT_A' iv_a = 'VENDOR' ) }|
+         CHANGING  ct      = ct_error ).
+    " 3 - which role categories create a vendor
+    add( EXPORTING iv_text = |CVI check 3 - role categories for direction BP to vendor (TBC002): | &&
+                             |{ rows_of( iv_tab = 'TBC002' ) }|
+         CHANGING  ct      = ct_error ).
+    " 4 - the role category of each role that was sent
+    LOOP AT lt_sent INTO ls_sent.
+      add( EXPORTING iv_text = |CVI check 4 - role { ls_sent-role } (TB003): | &&
+                               |{ rows_of( iv_tab = 'TB003' iv_a = ls_sent-role ) }|
+           CHANGING  ct      = ct_error ).
+    ENDLOOP.
+    " 5 - number assignment BP grouping -> vendor account group
+    add( EXPORTING iv_text = |CVI check 5 - number assignment of grouping { iv_group } / account group | &&
+                             |{ iv_ktokk } for direction BP to vendor (TBC001): | &&
+                             |{ rows_of( iv_tab = 'TBC001' iv_a = iv_group iv_b = iv_ktokk ) }|
+         CHANGING  ct      = ct_error ).
+    add( EXPORTING iv_text = `CVI check 6 - a supplier error that SAP parked is in transaction MDS_PPO2 ` &&
+                             `(postprocessing), under the business partner's number`
+         CHANGING  ct      = ct_error ).
   ENDMETHOD.
 
   METHOD company.
@@ -1315,7 +1428,9 @@ FORM f_runbdc.
   APPEND LINES OF ta_msg TO gt_log.
   APPEND LINES OF ta_msg_update TO gt_log.
 
-  SORT ta_msg_new BY emp_no.
+  " STABLE: the mail shows one line per employee - the first message, not
+  " whichever the sort put first.
+  SORT ta_msg_new STABLE BY emp_no.
   DELETE ADJACENT DUPLICATES FROM ta_msg_new COMPARING emp_no.
 
   IF ta_msg_new IS NOT INITIAL.
