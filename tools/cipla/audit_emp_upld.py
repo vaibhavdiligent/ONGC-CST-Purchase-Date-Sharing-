@@ -70,6 +70,16 @@ need('FK02 is not replaced by LCL_EMP_BP=>CHANGE_BANK', r'lcl_emp_bp=>change_ban
 need('the header line does not decide the layout', r'PERFORM f_header USING lwa_line\.')
 need('the HRMS columns are not found by their headings',
      r"WHEN 'EMPLOYEECODE' OR 'EMPCODE'\..*WHEN 'BANKACCTNO' OR 'BANKACCNO'\..*WHEN 'BANKIFSC'\.")
+need('the 50-column file is taken for the HRMS layout - its template header line also says Emp_Code '
+     '("Emp_Code#1000##Z008#Salutation#fname mname lname#..."); the file was refused for a missing name '
+     'column and no employee vendor was created (CRQ, 23.11.2026)',
+     r"IF gs_col-emp IS INITIAL\s*\n\s*OR lines\( lt_col \) >= 40\s*\n\s*"
+     r"OR \( gs_col-name IS INITIAL AND gs_col-lname IS INITIAL \)\.")
+need('employee codes with leading zeros (01047) are not found among the DPR / tax invoice vendors, which '
+     'have none',
+     r"lv_key = wa_file-lifnr\.\s*\n\s*SHIFT lv_key LEFT DELETING LEADING '0'\..*"
+     r"READ TABLE ta_create INTO wa_create WITH KEY lifnr = lv_key BINARY SEARCH\..*"
+     r"READ TABLE ta_update INTO wa_update WITH KEY lifnr = lv_key BINARY SEARCH\.")
 need('only the first file\'s header is recognised - the flag is not reset per file',
      r"ta_msg, ta_file\.\s*\n\s*lv_header_skip = '0'\.")
 for what, pat in (('company code 1000', r"co_hrms_bukrs TYPE bukrs\s+VALUE '1000'"),

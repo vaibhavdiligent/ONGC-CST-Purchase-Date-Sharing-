@@ -1090,13 +1090,19 @@ ENDFORM.
 *  <--  p2        text
 *----------------------------------------------------------------------*
 FORM f_runbdc.
+  DATA lv_key TYPE lifnr.
   LOOP AT ta_file INTO wa_file.
+    " S/4HANA conversion: the DPR / tax invoice vendors in TA_CREATE and
+    " TA_UPDATE have no leading zeros; HRMS writes some employee codes with
+    " them (01047) - compare without, or such an employee is never found.
+    lv_key = wa_file-lifnr.
+    SHIFT lv_key LEFT DELETING LEADING '0'.
 
 *   BOC BY Aishwarya - 8000003767 - 07.04.2025
     " S/4HANA conversion: no batch input tables to refresh any more.
 
     IF ta_create IS NOT INITIAL OR ta_update IS NOT INITIAL.
-      READ TABLE ta_create INTO wa_create WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
+      READ TABLE ta_create INTO wa_create WITH KEY lifnr = lv_key BINARY SEARCH.
       IF sy-subrc = 0.
         wa_file-lifnr = wa_create-lifnr.
         lv_status = co_create.
@@ -1108,7 +1114,7 @@ FORM f_runbdc.
 
 *   BOC BY Aishwarya - 8000003767 - 09.04.2025
       ELSEIF ta_update IS NOT INITIAL OR ta_create IS NOT INITIAL.
-        READ TABLE ta_update INTO wa_update WITH KEY lifnr = wa_file-lifnr BINARY SEARCH.
+        READ TABLE ta_update INTO wa_update WITH KEY lifnr = lv_key BINARY SEARCH.
         wa_update-lifnr = |{ wa_update-lifnr ALPHA = IN }|.
         IF sy-subrc = 0.
           READ TABLE ta_lfbk INTO DATA(wa_lfbk) WITH KEY lifnr = wa_update-lifnr banks = wa_file-banks bankl = wa_file-bankl bankn = wa_file-bankn BINARY SEARCH.
@@ -2523,6 +2529,11 @@ ENDFORM.
 * found by its column headings, in any order and with either spelling
 * (Employee_Code / Emp_Code, Bank_AcctNo / Bank_AccNo, ...); any other
 * file is the 50-column layout F_CONVERT_WA has always read.
+* The 50-column file's own header line is a template row that also says
+* "Emp_Code" ("Emp_Code#1000##Z008#Salutation#fname mname lname#...") - it
+* was taken for the HRMS layout, refused for a missing name column, and no
+* employee vendor was created (CRQ, 23.11.2026). A header with 40 or more
+* columns, or without an employee name heading, is the 50-column layout.
 *----------------------------------------------------------------------*
 FORM f_header USING uv_line TYPE string.
   DATA: lt_col  TYPE string_table,
@@ -2562,14 +2573,16 @@ FORM f_header USING uv_line TYPE string.
       WHEN 'EMAIL'.                         gs_col-mail2 = lv_ix.
     ENDCASE.
   ENDLOOP.
-  IF gs_col-emp IS INITIAL.
-    gv_sep = '#'.                         " the 50-column layout
+  IF gs_col-emp IS INITIAL
+     OR lines( lt_col ) >= 40
+     OR ( gs_col-name IS INITIAL AND gs_col-lname IS INITIAL ).
+    CLEAR gs_col.                         " the 50-column layout
+    gv_sep = '#'.
     RETURN.
   ENDIF.
   gv_layout = co_lay_hrms.
   " What a vendor cannot be created without.
   DATA(lt_need) = VALUE string_table(
-    ( COND #( WHEN gs_col-name IS INITIAL AND gs_col-lname IS INITIAL THEN `Employee_Name` ) )
     ( COND #( WHEN gs_col-acct IS INITIAL THEN `Bank_AcctNo` ) )
     ( COND #( WHEN gs_col-ifsc IS INITIAL THEN `Bank IFSC` ) ) ).
   DELETE lt_need WHERE table_line IS INITIAL.
