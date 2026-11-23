@@ -378,10 +378,11 @@ CLASS lcl_emp_bp DEFINITION FINAL.
   PUBLIC SECTION.
     "! A new employee vendor, number IV_LIFNR (the employee code).
     CLASS-METHODS create
-      IMPORTING is_file  TYPE ty_file
-                iv_lifnr TYPE lifnr
-      EXPORTING et_error TYPE bapiret2_t
-                et_ok    TYPE bapiret2_t.
+      IMPORTING is_file    TYPE ty_file
+                iv_lifnr   TYPE lifnr
+      EXPORTING et_error   TYPE bapiret2_t
+                et_ok      TYPE bapiret2_t
+                ev_existed TYPE abap_bool.
     "! FK02: the file's bank account into line 1 of the bank details - the
     "! vendor's first account is replaced, the others stay.
     CLASS-METHODS change_bank
@@ -414,13 +415,6 @@ CLASS lcl_emp_bp DEFINITION FINAL.
     CLASS-METHODS reset_bp.
     "! Undo what is not committed and refresh the partner's buffers.
     CLASS-METHODS discard.
-    "! The vendor exists but not in the file's company code: add the company
-    "! code data, as XK01 did for an existing vendor.
-    CLASS-METHODS extend
-      IMPORTING is_file  TYPE ty_file
-                iv_lifnr TYPE lifnr
-      EXPORTING et_error TYPE bapiret2_t
-                et_ok    TYPE bapiret2_t.
     "! The company code data of the file (XK01 screens 0210 / 0215).
     CLASS-METHODS company
       IMPORTING is_file   TYPE ty_file
@@ -580,16 +574,40 @@ CLASS lcl_emp_bp IMPLEMENTATION.
           lv_guid TYPE bu_partner_guid.
 
     " The employee is "new" when the vendor is not in company code 1000
-    " (FETCH_FILES reads LFB1). The vendor itself can exist all the same:
-    " XK01 then added the company code to it - so does EXTEND. Without this
-    " the save was refused with "Business partner 123518 already exists"
-    " (CRQ, 23.11.2026).
-    SELECT SINGLE lifnr FROM lfa1 WHERE lifnr = @iv_lifnr INTO @DATA(lv_is_vendor).
-    IF lv_is_vendor IS NOT INITIAL.
-      extend( EXPORTING is_file  = is_file
-                        iv_lifnr = iv_lifnr
-              IMPORTING et_error = et_error
-                        et_ok    = et_ok ).
+    " (FETCH_FILES reads LFB1); the vendor itself can exist all the same.
+    " Rule (Cipla, 23.11.2026): a vendor that is already created is not
+    " created again - its bank account and IFSC are updated from the file.
+    " Before, the save was refused with "Business partner 123518 already
+    " exists".
+    CLEAR ev_existed.
+    SELECT SINGLE lifnr, land1 FROM lfa1 WHERE lifnr = @iv_lifnr INTO @DATA(ls_is_vendor).
+    IF ls_is_vendor-lifnr IS NOT INITIAL.
+      ev_existed = abap_true.
+      DATA(lv_ex_banks) = COND banks( WHEN is_file-banks IS NOT INITIAL THEN to_upper( is_file-banks )
+                                      ELSE ls_is_vendor-land1 ).
+      DATA(lv_ex_bankl) = CONV bankk( to_upper( is_file-bankl ) ).
+      SELECT SINGLE lifnr FROM lfbk
+        WHERE lifnr = @iv_lifnr AND banks = @lv_ex_banks
+          AND bankl = @lv_ex_bankl AND bankn = @is_file-bankn
+        INTO @DATA(lv_ex_same).
+      IF lv_ex_same IS NOT INITIAL.
+        APPEND VALUE bapiret2( type = 'I'
+                               message = |Vendor { iv_lifnr ALPHA = OUT } exists already with this bank account | &&
+                                         |and IFSC - nothing to change| ) TO et_ok.
+      ELSE.
+        change_bank( EXPORTING is_file  = is_file
+                               iv_lifnr = iv_lifnr
+                     IMPORTING et_error = et_error
+                               et_ok    = et_ok ).
+      ENDIF.
+      IF et_error IS INITIAL AND is_file-bukrs IS NOT INITIAL.
+        SELECT SINGLE lifnr FROM lfb1 WHERE lifnr = @iv_lifnr AND bukrs = @is_file-bukrs INTO @DATA(lv_ex_cc).
+        IF lv_ex_cc IS INITIAL.
+          APPEND VALUE bapiret2( type = 'I'
+                                 message = |Vendor { iv_lifnr ALPHA = OUT } is not set up in company code | &&
+                                           |{ is_file-bukrs }| ) TO et_ok.
+        ENDIF.
+      ENDIF.
       RETURN.
     ENDIF.
     " The business partner takes the employee code as its number. When that
@@ -915,87 +933,6 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       ENDLOOP.
     ENDIF.
     rv = rv && `)`.
-  ENDMETHOD.
-
-  METHOD extend.
-    CLEAR: et_error, et_ok.
-    DATA: ls_data TYPE cvis_ei_extern,
-          lv_guid TYPE bu_partner_guid,
-          lv_bp   TYPE bu_partner.
-    IF is_file-bukrs IS INITIAL.
-      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } exists already and the file has no company code|
-           CHANGING  ct      = et_error ).
-      RETURN.
-    ENDIF.
-    SELECT SINGLE lifnr FROM lfb1 WHERE lifnr = @iv_lifnr AND bukrs = @is_file-bukrs INTO @DATA(lv_in_cc).
-    IF sy-subrc = 0.
-      APPEND VALUE bapiret2( type = 'I'
-                             message = |Vendor { iv_lifnr ALPHA = OUT } is already in company code { is_file-bukrs }| )
-             TO et_ok.
-      RETURN.
-    ENDIF.
-    SELECT SINGLE partner_guid FROM cvi_vend_link WHERE vendor = @iv_lifnr INTO @lv_guid.
-    IF lv_guid IS INITIAL.
-      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } exists without a business partner (CVI_VEND_LINK) - | &&
-                               |it cannot be added to company code { is_file-bukrs }|
-           CHANGING  ct      = et_error ).
-      RETURN.
-    ENDIF.
-    SELECT SINGLE partner FROM but000 WHERE partner_guid = @lv_guid INTO @lv_bp.
-
-    ls_data-partner-header-object_task                  = c_update.
-    ls_data-partner-header-object_instance-bpartnerguid = lv_guid.
-    ls_data-vendor-header-object_task                   = c_update.
-    ls_data-vendor-header-object_instance-lifnr         = iv_lifnr.
-
-    " Company code data needs the supplier roles of the vendor's own account
-    " group; those the partner does not have yet are added.
-    SELECT SINGLE ktokk FROM lfa1 WHERE lifnr = @iv_lifnr INTO @DATA(lv_ktokk).
-    SELECT account_group, role FROM cvic_vend_to_bp2
-      WHERE account_group = @lv_ktokk INTO TABLE @DATA(lt_role).
-    SELECT DISTINCT rltyp FROM but100 WHERE partner = @lv_bp INTO TABLE @DATA(lt_has).
-    LOOP AT lt_role INTO DATA(ls_role_db).
-      IF line_exists( lt_has[ rltyp = ls_role_db-role ] ).
-        CONTINUE.
-      ENDIF.
-      DATA ls_role TYPE bus_ei_bupa_roles.
-      CLEAR ls_role.
-      ls_role-task     = c_insert.
-      ls_role-data_key = ls_role_db-role.
-      APPEND ls_role TO ls_data-partner-central_data-role-roles.
-    ENDLOOP.
-
-    APPEND company( is_file ) TO ls_data-vendor-company_data-company.
-
-    IF save( EXPORTING is_data = ls_data CHANGING ct_error = et_error ) = abap_false.
-      RETURN.
-    ENDIF.
-    SELECT SINGLE lifnr FROM lfb1 WHERE lifnr = @iv_lifnr AND bukrs = @is_file-bukrs INTO @lv_in_cc.
-    IF sy-subrc <> 0.
-      add( EXPORTING iv_text = |Vendor { iv_lifnr ALPHA = OUT } ({ who_is( lv_bp ) }) was saved, but it is | &&
-                               |still not in company code { is_file-bukrs }|
-           CHANGING  ct      = et_error ).
-      RETURN.
-    ENDIF.
-    APPEND VALUE bapiret2( type = 'S'
-                           message = |Employee vendor { iv_lifnr ALPHA = OUT } existed already (business partner | &&
-                                     |{ lv_bp ALPHA = OUT }) - added to company code { is_file-bukrs }| ) TO et_ok.
-
-    " Its bank account, as for every existing employee vendor.
-    IF is_file-bankl IS NOT INITIAL AND is_file-bankn IS NOT INITIAL.
-      DATA: lt_bk_err TYPE bapiret2_t,
-            lt_bk_ok  TYPE bapiret2_t.
-      change_bank( EXPORTING is_file  = is_file
-                             iv_lifnr = iv_lifnr
-                   IMPORTING et_error = lt_bk_err
-                             et_ok    = lt_bk_ok ).
-      LOOP AT lt_bk_err INTO DATA(ls_bk_err).
-        APPEND VALUE bapiret2( type = 'S' message = |Bank details not changed: { ls_bk_err-message }| ) TO et_ok.
-      ENDLOOP.
-      LOOP AT lt_bk_ok INTO DATA(ls_bk_ok) WHERE type = 'S'.
-        APPEND ls_bk_ok TO et_ok.
-      ENDLOOP.
-    ENDIF.
   ENDMETHOD.
 
   METHOD change_bank.
@@ -2941,11 +2878,18 @@ FORM f_bp_create.
         lt_ok    TYPE bapiret2_t,
         lv_lifnr TYPE lifnr.
   lv_lifnr = |{ wa_file-lifnr ALPHA = IN }|.
-  lcl_emp_bp=>create( EXPORTING is_file  = wa_file
-                                iv_lifnr = lv_lifnr
-                      IMPORTING et_error = lt_error
-                                et_ok    = lt_ok ).
-  PERFORM f_bp_log USING co_create lt_error lt_ok CHANGING ta_msg.
+  DATA lv_existed TYPE abap_bool.
+  lcl_emp_bp=>create( EXPORTING is_file    = wa_file
+                                iv_lifnr   = lv_lifnr
+                      IMPORTING et_error   = lt_error
+                                et_ok      = lt_ok
+                                ev_existed = lv_existed ).
+  IF lv_existed = abap_true.
+    " the vendor was already created: its bank account was updated
+    PERFORM f_bp_log USING co_update lt_error lt_ok CHANGING ta_msg_update.
+  ELSE.
+    PERFORM f_bp_log USING co_create lt_error lt_ok CHANGING ta_msg.
+  ENDIF.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  F_BP_UPDATE
@@ -2977,7 +2921,7 @@ FORM f_bp_log USING    uv_status TYPE clike
   ls_msg-emp_name = wa_file-name1.
   IF it_error IS INITIAL AND it_ok IS NOT INITIAL.
     LOOP AT it_ok INTO DATA(ls_ok).
-      ls_msg-status  = uv_status.
+      ls_msg-status  = COND #( WHEN ls_ok-type = 'I' THEN `No change` ELSE uv_status ).
       ls_msg-remarks = ls_ok-message.
       APPEND ls_msg TO ct_msg.
     ENDLOOP.
