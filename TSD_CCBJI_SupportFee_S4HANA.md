@@ -7,8 +7,8 @@
 | Transaction | `/CCBJI/RURGL_REPSUPP` (new, to be created in S/4) |
 | RICEF | GAP-1000002273 |
 | Company Code | 7827 (BJI); TVARVC also shows 7830 |
-| Based on | FS_SupportFee_S4HANA_v2.0.docx + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx + ECC posting program /CCBJI/RUFIGLR_SUPPFI_POST |
-| Status | v1.2 — Design for review. No code written yet. v1.1: posting design aligned to actual ECC program. v1.2: FS v1.3 + client review points absorbed (existing /CCBJI/T_SUP_COS reused — new CE table cancelled; updated §8.5 priority diagram; KAM upload pending business decision); performance architecture (CDS + AMDP) added; BW HANA source findings incorporated (RJ/AB doc types, 3-mechanism dedup — see bw_sources/README). |
+| Based on | FS_SupportFee_S4HANA_v1.4.docx (latest, 20.11.2026) + answered functional questionnaire + mail 'RE: Support fees' 24.11.2026 + FS v2.0 + legacy BW program ZBW_RUFIGLR_REPORTING_SUPP + copa FS.zip system extracts + copa_add_input.docx + ECC posting program /CCBJI/RUFIGLR_SUPPFI_POST |
+| Status | v1.3 — Design for review. No code written yet. v1.3: FS v1.4 + functional answers absorbed — initial lift keeps the existing % logic (new classification rules deferred), KAM upload descoped, COPA posting on hold, effective-dated % rule, doc types via TVARVC, delivery plan added (§15). Earlier: v1.2 — No code written yet. v1.1: posting design aligned to actual ECC program. v1.2: FS v1.3 + client review points absorbed (existing /CCBJI/T_SUP_COS reused — new CE table cancelled; updated §8.5 priority diagram; KAM upload pending business decision); performance architecture (CDS + AMDP) added; BW HANA source findings incorporated (RJ/AB doc types, 3-mechanism dedup — see bw_sources/README). |
 | Author | Claude (Diligent Consulting) — reviewed by Vaibhav Maheshwari |
 
 ---
@@ -48,12 +48,12 @@ Verified system facts driving this design:
 | 3 | `/CCBJI/RUFIGLI_REP_SEL` | Include | Selection screen |
 | 4 | `/CCBJI/RUFIGLI_REP_FORM` | Include | Logic |
 | 5 | `/CCBJI/RURGL_REPSUPP` | TCode | Launch report |
-| 6 | `/CCBJI/T_KAM_L4_CC` | Table | KAM L4 → cost center mapping (§3.1) |
+| 6 | `/CCBJI/T_KAM_L4_CC` | Table | KAM L4 → cost center mapping (§3.1) — **pending O-12** (may be dropped if the KAM step is not needed) |
 | 7 | `/CCBJI/T_SUP_COS` (EXISTING in S/4 — reused, no new table) | Table | Cost element mapping for COPA posting (§3.2) |
-| 8 | `/CCBJI/T_GL_TYPE` | Table | GL type classification (§3.3) |
-| 9 | `/CCBJI/T_RPPCAT_TY` | Table | RPP category type classification (§3.4) |
-| 10 | `/CCBJI/RUFIGLR_KAML4_UPLOAD` | Report | KAM L4 CSV upload (§9) |
-| 11 | `/CCBJI/RURGL_KAML4UP` | TCode | Launch upload |
+| 8 | ~~`/CCBJI/T_GL_TYPE`~~ | Table | **DEFERRED to phase 2** (D-15) |
+| 9 | ~~`/CCBJI/T_RPPCAT_TY`~~ | Table | **DEFERRED to phase 2** (D-15) |
+| 10 | ~~`/CCBJI/RUFIGLR_KAML4_UPLOAD`~~ | Report | **DESCOPED** — functional Q9 "Not needed" (D-18) |
+| 11 | ~~`/CCBJI/RURGL_KAML4UP`~~ | TCode | **DESCOPED** (D-18) |
 | 12 | `/CCBJI/S_SUPFEE_RESULT` | Structure | = ZSRTR_RESULT (51 fields, S/4 types) |
 | 13 | `/CCBJI/S_SUPFEE_MONTH` | Structure | = ZSRTR_MONTHRES |
 | 14 | `/CCBJI/S_SUPFEE_AUDIT` | Structure | = ZSRTR_AUDITRES |
@@ -61,9 +61,10 @@ Verified system facts driving this design:
 | 16 | `/CCBJI/S_SUPFEE_COPA` | Structure | ACDOCA COPA extraction result |
 | 17 | `/CCBJI/MC_SUPFEE` | Message class | All messages (replaces TEXT-Exx pattern) |
 | 18 | `/CCBJI/RTR_TOT` | Data element | DEC 15 total (replaces Z_RTR_TOT) |
-| 19 | SM30 maintenance views/dialogs for tables 6–9 | TMG | User maintenance |
-| 20 | Number range object (reuse `Z_SUPP_FEE` copied to S/4, interval Z1 1000000001–1999999999) | SNRO | COPA doc grouping id |
+| 19 | SM30 maintenance dialog for table 6 (only if O-12 keeps it) | TMG | User maintenance |
+| 20 | Number range object `/CCBJI/SUPFEE` (replaces BW `Z_SUPP_FEE`, same interval Z1 1000000001–1999999999) | SNRO | Document grouping id for XREF1_HD |
 | 21 | BAdI implementation `ACC_DOCUMENT` (`/CCBJI/` impl.) | BAdI | Map EXTENSION1 row (XREF1_HD) to BKPF-XREF1_HD, as the ECC program did |
+| 22 | TVARVC `/CCBJI/RTR_DOC_TYPE` (select-option, 31 doc types) | Variant variable | Replaces set Z_RTR_DOC_TYPE (FS v1.4, D-17) |
 
 TVARVC entries (STVARV, new in S/4): see §8.
 
@@ -93,7 +94,11 @@ reused — the previously planned new table is CANCELLED. Verify at build start
 names are replaced by GL/cost-element values for account-based COPA (config
 data activity, owner Functional).
 
-### 3.3 `/CCBJI/T_GL_TYPE` — GL type classification (DECISION D-02)
+### 3.3 `/CCBJI/T_GL_TYPE` — GL type classification — DEFERRED TO PHASE 2 (D-15)
+Not built in the initial lift. Functional answer (Q4/Q5): no 50% / CokeON G/L lists
+exist; where 50% applies it is simply maintained as a rate in `/CCBJI/T_SUP_FEE`.
+Design below kept for phase 2.
+
 The FS decision tree needs each expense GL classed as 50% Support / CokeON / Other.
 No such data exists anywhere today, so it becomes a new config table:
 
@@ -108,7 +113,9 @@ Runtime default when a GL has no row: **OTHER** + warning in log (matches FS §1
 50PCT/COKEON lists when available; until then the program behaves like the legacy
 cascade (no fixed-rate shortcuts).
 
-### 3.4 `/CCBJI/T_RPPCAT_TY` — RPP category type (DECISION D-03)
+### 3.4 `/CCBJI/T_RPPCAT_TY` — RPP category type — DEFERRED TO PHASE 2 (D-15)
+Not built in the initial lift (functional answer Q7/Q8). Design kept for phase 2.
+
 
 | Field | Key | Type | Values |
 |---|---|---|---|
@@ -122,10 +129,13 @@ Runtime default when missing: **OTHER** (out of scope) + warning, per FS §17.
 
 Block B1 (unchanged from FS §6 unless noted):
 * P_RYEAR, P_POPER, P_BUKRS (obligatory, defaults as FS)
-* S_BLART (no intervals, F4 from set Z_RTR_DOC_TYPE), S_RACCT, S_CHANNL,
+* S_BLART (no intervals, F4 from TVARVC `/CCBJI/RTR_DOC_TYPE` — replaces set
+  Z_RTR_DOC_TYPE per FS v1.4), S_RACCT, S_CHANNL,
   S_RPPCAT, S_BAC
 * S_KOSTL — NEW select-option on ACDOCA-RCNTR, validated against CSKS
 * P_SOURCE is DROPPED (BW memory workaround; DB-side aggregation removes the need)
+* Authorization: AUTHORITY-CHECK `F_BKPF_BUK`, BUKRS = P_BUKRS, ACTVT `03`
+  (FS v1.4 §3.1 — the only authorization object)
 
 Block B2 (execution mode): RB_SUMM (default) / RB_DET / RB_MNTH / RB_AUDT /
 RB_POST / **RB_SIM (NEW — Simulation)**.
@@ -140,7 +150,9 @@ Block B3 (technical):
 ## 5. Data Retrieval (F_GET_DATA) — performance design
 
 All ACDOCA access is **aggregated in the database**; the 118M-row period must never
-be transferred row-wise.
+be transferred row-wise. FS v1.4 §3.1 states the expected volume as **1–3 billion
+records**, run as a month-end activity — this makes package-wise extraction and
+parallel sessions a core part of the design, not just a fallback (§5a).
 
 Flow 2 (FI source) select — one shot, DB aggregation:
 ```
@@ -203,25 +215,35 @@ min. Prove with ST05/SQLM/PlanViz on the reconciliation month.
 
 Per FS v2.0 §8, two flows selected via `/CCBJI/T_DOC_TYP`-SOURCE by expense GL.
 
-FS v1.3 §8.5 replaced the priority table with a decision-flow diagram carrying
-TWO numberings: business priority (GL=1, CC=2, RPPCat=3, Customer=4, Channel=5)
-and PROGRAM ORDER (RPPCat=1, CC=2, Customer=3, Channel=4, GL=5). The program
-order matches the legacy ABAP cascade exactly (RPP-Cat lookup -> GL+PRCTR ->
-BAC+Channel -> Channel -> GL-only), with the GL fixed-rate routing (50% Support
-GL / CokeON GL) as an up-front branch. Two interpretation points to confirm
-(O-10): (a) diagram shows "Adjacent Category + Specific GL (Rebate, Spot Only)
--> Apply 50%" as one combined condition — AND or two rules? (b) "Other
-Category" now flows on through CC/Customer/Channel checks (v2.0 said skip) —
-confirm out-of-scope vs continue.
+**Initial lift = existing logic (D-15).** Functional answer (questionnaire Q7/Q8,
+confirmed in mail 24.11.2026): keep the current priority and combination rules
+to determine the Support Fee %; no change to the % determination logic. The new
+FS v2.0 classification rules (G/L type, RPP category type, HORECA) move to phase 2.
+Answers already given for phase 2 (Q1–Q3): Adjacent Category -> fixed 50% only
+when the G/L is also a specific Rebate/Spot account, else continue; Specific GL
+-> continue to the next rules; Other Category -> continue (not skipped).
+
+### 6.0 Support Fee % determination — effective dating (D-16)
+Per functional answer Q6: for each key combination (SOURCE, RACCT, BAC, RPPCAT,
+CHANNEL, KOSTL) the rate used is the one with the **latest PERIO <= run period**;
+a combination without a newer row keeps its older rate.
+* Implemented in the AMDP: `ROW_NUMBER() OVER (PARTITION BY source, racct, bac,
+  rppcat, channel, kostl ORDER BY perio DESC)` on rows with `perio <= run period`,
+  keep row 1. Only valid rates (not all 522k rows) reach ABAP.
+* Difference to legacy BW ABAP: it keeps only the single newest PERIO of the whole
+  table (`DELETE ... WHERE perio <> top perio`). Both give identical results when
+  each upload was a complete rate set — the data (2020/011: 152k, 2022/003: 176k,
+  2023/002: 193k rows) points to full reloads. Confirmation requested (O-13);
+  the BW comparison run (O-02) will prove it.
 
 Priority cascade (both flows), implemented over sorted tables with BINARY SEARCH:
 
 | Prio | Rule | Rate source | CAL_RULES text |
 |---|---|---|---|
-| 0 | GL_TYPE = 50PCT | TVARVC `/CCBJI/RTR_50PCT` | 50%_FIXED |
-| 0 | GL_TYPE = COKEON (Flow 1) | TVARVC `/CCBJI/RTR_VENDPCT` | VENDING_CH |
-| 1 | RPPCAT type OTHER (Flow 1) | — skip line (out of scope) | — |
-| 1 | RPPCAT type ADJACENT (Flow 1) | TVARVC `/CCBJI/RTR_50PCT` | 50%_FIXED |
+| 0 | *(phase 2)* GL_TYPE = 50PCT | TVARVC `/CCBJI/RTR_50PCT` | 50%_FIXED |
+| 0 | *(phase 2)* GL_TYPE = COKEON (Flow 1) | TVARVC `/CCBJI/RTR_VENDPCT` | VENDING_CH |
+| 1 | *(phase 2)* RPPCAT type OTHER (Flow 1) | continue (Q3 = not skipped) | — |
+| 1 | *(phase 2)* RPPCAT type ADJACENT + specific G/L (Flow 1) | TVARVC `/CCBJI/RTR_50PCT` | 50%_FIXED |
 | 2 | SOURCE+RPPCAT+RACCT | T_SUP_FEE | TEXT-027 RPP Category-GL |
 | 3 | SOURCE+RACCT+KOSTL(=PRCTR) | T_SUP_FEE | TEXT-049/048 GL-CC |
 | 4 | SOURCE+RACCT+BAC+CHANNEL | T_SUP_FEE | TEXT-028 BAC & Channel |
@@ -231,9 +253,8 @@ Priority cascade (both flows), implemented over sorted tables with BINARY SEARCH
 Notes:
 * Priorities 2–6 replicate the legacy binary-search cascade exactly (MOD-002/003/006
   behavior: the T_SUP_FEE "KOSTL" key column is matched against the line's PRCTR).
-* Priorities 0–1 are the FS v2.0 additions; they activate only when
-  `/CCBJI/T_GL_TYPE` / `/CCBJI/T_RPPCAT_TY` rows exist (D-02/D-03), so cutover
-  can go live matching legacy results 1:1 and business logic switches on by config.
+* Priorities 0–1 are NOT built in the initial lift (D-15). The initial lift is
+  priorities 2–6 only, which reproduce the BW result 1:1.
 * Fee = `ROUND(cost × incidence% / 100)` via `J_1I6_ROUND_TO_NEAREST_AMT`, JPY.
 * Cost = 0 after aggregation → skip (CONTINUE), as legacy.
 
@@ -244,7 +265,9 @@ Notes:
    is RPP Category — confirmed in KEA5).
 2. **Revenue mgmt plant (KMVKBU)**: `/CCEJ/TZKTSD0004`-ZKZSMWERKS by WW207 dealer.
 3. **KAM chain**: WW235_PA (fallback `/CCEJ/TEJACC` by BAC) → `/CCEJ/TKAMREP` →
-   KAMORGL4CD → `/CCBJI/T_KAM_L4_CC` → KOSTL.
+   KAMORGL4CD → `/CCBJI/T_KAM_L4_CC` → KOSTL. **Pending O-12**: functional said the
+   KAM upload is "not needed" — if the whole step is dropped, step 4.2 below is
+   removed and the profit center comes from the ACDOCA line (step 4.3).
 4. **Profit center (F_DERIVE_PROFIT_CENTER)** — DECISION D-04 (replaces the
    nonexistent /CCEJ/T_PROFCTRPH fallback):
    1. PC-reposting types (BTTYPE/AWTYP per §5 mapping) → PRCTR = CSKS-PRCTR of
@@ -255,21 +278,22 @@ Notes:
       carries a profit center — this replaces the old top-1 fallback table).
    4. PRCTR still empty → TVARVC `/CCBJI/RTR_DEFPC` if maintained, else keep blank
       and log warning. No hard error.
-5. **Dummy cost center**: TVARVC `/CCBJI/RTR_KOSTL` (LOW = BUKRS, HIGH = dummy
-   `ZZZZZZZZZZ`) is kept read-compatible but only used where the legacy MOD-004
-   path still applies (COPA display of alphanumeric cost centers).
+5. **Dummy cost center**: the BW meaning of TVARVC `/CCBJI/RTR_KOSTL` (HIGH =
+   `ZZZZZZZZZZ`) is RETIRED — its only use (MOD-004) was already commented out in
+   BW (MOD-009). In S/4 the name keeps the ECC meaning: profit center of the
+   debit line (D-20).
 
 ## 8. TVARVC entries (new/retained in S/4)
 
 | Name | Type | Content | Status |
 |---|---|---|---|
 | `/CCBJI/RTR/RECTYPE` | S | 4,6,7,8,9,B (from BW) | migrate as-is |
-| `/CCBJI/RTR_KOSTL` | S | 7827→ZZZZZZZZZZ; 7830→ZZZZZZZZZZ | migrate as-is |
-| `/CCBJI/RTR_50PCT` | P | `50.00` | NEW (D-05: fixed rate configurable, not hardcoded) |
-| `/CCBJI/RTR_VENDPCT` | P | vending-channel % for CokeON GLs | NEW (value TBD by business; empty = rule inactive) |
+| `/CCBJI/RTR_DOC_TYPE` | S | 31 doc types: FS GA GB GC GD GP GR GS AB DR SA SB KR UQ 7M FZ RP KA WE SK WA WL RW RV RE FX 7K 7L BA RJ Z9 | NEW — replaces set Z_RTR_DOC_TYPE (D-17) |
+| `/CCBJI/RTR_50PCT` | P | `50.00` | DEFERRED to phase 2 (D-15) |
+| `/CCBJI/RTR_VENDPCT` | P | vending-channel % for CokeON GLs | DEFERRED to phase 2 (D-15) |
 | `/CCBJI/RTR_DEFPC` | P | default profit center (optional) | NEW (D-04 step 4) |
-| `/CCBJI/RTR_DEBITGL` | P | debit GL of the aggregated debit line | **RETAINED — value to be copied from ECC TVARVC** |
-| `/CCBJI/RTR_KOSTL` (ECC variant) | P/S | profit center for the debit line | **RETAINED — value to be copied from ECC TVARVC** (note: BW entry of same name = dummy cost center; ECC entry = debit-line PRCTR — two different meanings, ECC one is the posting-relevant one) |
+| `/CCBJI/RTR_DEBITGL` | P | `0115103238` (from ECC) | debit GL of the aggregated debit line |
+| `/CCBJI/RTR_KOSTL` | S | 7827 → `7827019901`; 7830 → `7830010162` (from ECC) | profit center of the debit line (ECC meaning; BW dummy-cost-center meaning retired, D-20) |
 | `/CCEJ/RTR/HANA_CONN`, `/CCBJI/RTR_SFEE_AL11`, `RTR_BSCHL`, `RTR_COUNT`, `RTR/POSTING_GL`, `RTR_SFEE_TAXGL` | | | RETIRED (file/HANA-era; BSCHL replaced by DRCRK; TAXGL was dead code in ECC) |
 
 DECISION D-06 (cost center scope, Flow 2): **scope = `/CCBJI/T_SUP_FEE` itself** —
@@ -277,7 +301,12 @@ a GL+PRCTR(/KOSTL-key) combination present in the incidence master is in scope;
 no separate scope table. S_KOSTL additionally filters at selection when entered.
 This is exactly how the legacy cascade behaved and keeps one source of truth.
 
-## 9. KAM L4 Upload Program `/CCBJI/RUFIGLR_KAML4_UPLOAD`
+## 9. KAM L4 Upload Program — DESCOPED (D-18)
+
+Functional answer Q9: "Not needed". Not built. Original design kept below for
+reference only.
+
+### 9.1 (reference) `/CCBJI/RUFIGLR_KAML4_UPLOAD`
 
 Modeled on ZJRTR_RUCOPBR_HANA_ALLOC_UPLD (KAM_L4 branch) with the gaps fixed:
 * CSV col1 = KAMORGL4CD, col2 = KOSTL (same file layout users know today)
@@ -329,7 +358,10 @@ below replicates the **actual ECC program** (analyzed from source, closing O-01)
    only), which no longer exists → mandatory here: before posting, SELECT
    existing BKPF/ACDOCA docs BLART `YE`, RBUKRS/RYEAR/POPER (+ XREF1_HD pattern);
    if found, hard stop with list unless checkbox P_FORCE is set.
-6. COPA-source documents additionally carry the profitability-segment CRITERIA
+6. **ON HOLD (D-19)** — functional answer Q11: posting logic to be discussed later;
+   today the COPA result is stored in BW HANA table `CCEJ_VIRTUAL.ZJ_SUPP_COPA`.
+   Whether the initial lift stores the COPA result in a `/CCBJI/` table is open
+   (O-14). Original design: COPA-source documents additionally carry the profitability-segment CRITERIA
    table (WW-characteristics per §7 + KSTAR from `/CCBJI/T_SUP_COS` flag
    lookup) for account-based COPA — one BAPI for both flows (FS v2.0). Note the
    ECC program posted NO profitability segment (COPA went via RKEVEXT3 in BW
@@ -355,17 +387,20 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 | # | Item | Owner | Blocking? |
 |---|---|---|---|
 | O-01 | ~~ECC consumer program field mapping~~ **CLOSED** — /CCBJI/RUFIGLR_SUPPFI_POST source analyzed; §10 updated | — | Closed |
-| O-02 | Reconciliation benchmark REVISED: FB03 check proved BA docs are CCMC-upload accrual transfers (TCode /CCEJ/RURCO_FI_UPLD), NOT the legacy support fee — the YE output was never migrated to S/4. Benchmark options: (a) export legacy YE docs from ECC for one month, or (b) functional sign-off of Simulation output in UAT | Vaibhav / Functional | Before go-live sign-off |
-| O-03 | Business values for `/CCBJI/T_GL_TYPE`, `/CCBJI/T_RPPCAT_TY`, `RTR_VENDPCT` | Functional | No — rules dormant until config filled (D-02/D-03) |
+| O-02 | **UPDATED 24.11.2026**: functional chose Option A — users run the BW report for a period and provide the results; the new program's Simulation is compared for the same period. Period and delivery date pending (O-15). Previous note: Reconciliation benchmark REVISED: FB03 check proved BA docs are CCMC-upload accrual transfers (TCode /CCEJ/RURCO_FI_UPLD), NOT the legacy support fee — the YE output was never migrated to S/4. Benchmark options: (a) export legacy YE docs from ECC for one month, or (b) functional sign-off of Simulation output in UAT | Vaibhav / Functional | Before go-live sign-off |
+| O-03 | ~~Config values for new rules~~ **DEFERRED to phase 2** (Q4/Q5: none for now; Q7/Q8: keep existing logic) | — | Phase 2 |
 | O-04 | ~~Package~~ **CLOSED**: new package `/CCBJI/SUPPFEE` — client rule: EVERY object strictly in the /CCBJI/ namespace, no Z or Y names anywhere | — | Closed |
 | O-05 | ~~KOKRS~~ **CLOSED**: TKA02 7827 → JP00 | — | Closed |
 | O-06 | ~~BA doc type~~ **CLOSED**: FB03 on doc 0127744258 shows BA = CCMC upload (accrual transfer/reversal, /CCEJ/RURCO_FI_UPLD), unrelated to support fee. Design stays YE | — | Closed |
 | O-07 | ~~ECC TVARVC~~ **CLOSED**: RTR_DEBITGL = 0115103238; RTR_KOSTL (debit-line profit center): 7827 → 7827019901, 7830 → 7830010162 | — | Closed |
 | O-08 | ECC never posted a profitability segment; account-based COPA CRITERIA on credit lines is the S/4 addition per FS v2.0 — CO functional to validate characteristic list | CO Functional | Before posting go-live |
 | O-09 | ~~T_SUP_COS~~ **CLOSED**: 16 rows confirmed in S/4, same key (HKONT+WW214+WW207+WW237→KSTAR); note one mapping differs from BW (0893309312/X/blank/X → 0994294122 in S/4 vs 0994293406 in BW) — S/4 content is authoritative | — | Closed |
-| O-10 | Confirm two §8.5 diagram readings: Adjacent+SpecificGL combined condition (AND vs two rules); Other Category continue-vs-skip | Functional | Before cascade build |
+| O-10 | ~~§8.5 readings~~ **CLOSED**: Q1 = 50% only with specific G/L; Q2 = continue; Q3 = continue. Recorded for phase 2 (not in initial lift) | — | Closed |
 | O-11 | ~~ABAP release~~ **CLOSED**: SAP_BASIS 816 / S4CORE 109 — latest platform, full CDS/CTE/window-function/AMDP syntax available | — | Closed |
-| O-12 | KAM L4 upload program: business checking if mapping can be derived from system directly — upload program (+TCode) built only if manual upload stays | Business/Functional | Phase 6 |
+| O-12 | KAM L4: Q9 answered "Not needed" — upload program descoped. **Clarify**: is the whole KAM L4 → cost center step for profit center derivation also dropped (profit center from ACDOCA), or still needed with data from another source? | Functional (Kundan) | Before Phase 3 |
+| O-13 | Confirm % validity rule: per key combination, latest PERIO <= run period (Q6) vs legacy "single newest upload period" — identical if every upload was a full rate set | Functional (Kundan) | Before Phase 2 |
+| O-14 | COPA result for the initial lift: store in a `/CCBJI/` table (replacing HANA `ZJ_SUPP_COPA`) or out of scope until posting discussion? | Functional (Kundan) | Before Phase 5 |
+| O-15 | BW comparison data: which period, delivery date; Summary + Detail exports | Functional (Kundan) | Phase 6 |
 
 ## 14. Decisions taken (for the record)
 
@@ -383,3 +418,27 @@ RPPCAT-type defaulting warnings, KAM-L4-not-found info.
 * D-12 Naming standard: client has no written convention — the draft codified from existing /CCBJI/ patterns (RUFIGLR_/RUFIGLI_ programs, T_/S_ DDIC, RTR_ elements, CL_/IM_ classes/BAdIs, I_ CDS, GAP-1000002273 transport prefix) is adopted as the project standard
 * D-13 Coding standard: no client ATC variant/guideline — build to latest S/4HANA 2025 practice: CDS + AMDP data layer, clean modern ABAP (inline declarations, SALV OM, class-based logic behind the FS-mandated report shell), SAP default ATC checks clean
 * D-14 Client TSD template to follow later — this markdown TSD remains the working design document and will be ported into the client template when provided
+* D-15 Initial lift keeps the existing % determination and priority logic (cascade priorities 2–6); G/L type, RPP category type and HORECA rules deferred to phase 2 (functional Q7/Q8 + mail 24.11.2026)
+* D-16 % validity: per key combination, latest PERIO <= run period, determined in the AMDP with ROW_NUMBER (functional Q6; O-13 confirmation)
+* D-17 Document types via TVARVC `/CCBJI/RTR_DOC_TYPE` instead of set Z_RTR_DOC_TYPE (FS v1.4)
+* D-18 KAM L4 upload program + TCode descoped (functional Q9)
+* D-19 COPA posting on hold until the posting discussion (functional Q11); FI posting (YE) stays in scope
+* D-20 TVARVC `/CCBJI/RTR_KOSTL` keeps only the ECC meaning (debit-line profit center); BW dummy-cost-center meaning retired (already unused since MOD-009)
+
+## 15. Delivery plan (estimate, initial lift)
+
+Assumed start 01.12.2026; working days; Japan year-end holidays 29.12–04.01 excluded.
+
+| Phase | Content | Days | Planned finish |
+|---|---|---|---|
+| 1 | Package, DDIC (structures, message class, number range), TVARVC | 2 | 02.12.2026 |
+| 2 | CDS views + AMDP data layer (6-branch routing, dedup, effective-dated %) | 6 | 10.12.2026 |
+| 3 | Report shell, selection screen, % cascade, derivations | 5 | 17.12.2026 |
+| 4 | ALV reports (Summary, Detail, Monthly, JC Audit) | 3 | 22.12.2026 — **demo of calculation + Simulation output** |
+| 5 | FI posting (YE) + Simulation + parallel posting + BAdI + re-run protection | 6 | 06.01.2027 |
+| 6 | Unit test, ATC, volume/performance test, comparison with BW results | 5 | 13.01.2027 |
+
+Total 27 working days → last phase ends 13.01.2027; committed date with 2 days
+buffer: development complete by **15.01.2027**.
+Not included: COPA posting (on hold, D-19) and phase-2 rules (D-15). Phase 6
+comparison depends on the BW results (O-15); Phases 2–3 depend on O-12/O-13.
