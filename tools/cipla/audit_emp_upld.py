@@ -91,6 +91,11 @@ need('an employee without mobile number is not refused before the save - SAP sav
 need('the partner that is completed does not get its mobile number - its supplier is parked again',
      r"IF lv_tk_mob IS INITIAL AND lv_tk_aguid IS NOT INITIAL\..*?ls_adr-data_key-guid\s+= lv_tk_aguid\..*?"
      r"ls_tel-contact-data-r_3_user\s+= '3'\.")
+need('the bank change is reported as updated without checking the supplier (LFBK) - SAP can keep the change '
+     'on the partner and park the step to the supplier (MDS_PPO2); the customer saw vendors not updated',
+     r"INTO @DATA\(lv_new_on_vendor\)\.\s*\n\s*IF lv_new_on_vendor IS INITIAL\.\s*\n\s*add\(")
+need('an account that is on the partner but not on the supplier is reported as already maintained',
+     r"INTO @DATA\(lv_old_on_vendor\)\.\s*\n\s*IF lv_old_on_vendor IS INITIAL\.\s*\n\s*add\(")
 need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
      'why no vendor was created (CRQ, 23.11.2026)',
      r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')

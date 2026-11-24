@@ -350,6 +350,8 @@ CASES = [
      [('src/zfi_emp_upld.prog.abap', "gs_col-mob   CHANGING cwa_file-mob_number.", "gs_col-mob   CHANGING cwa_file-tel_number.")]),
     ('Employee upload: employee without mobile number - partner saved without supplier', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "    IF is_file-mob_number IS INITIAL.\n      add( EXPORTING iv_text = |Not created: the employee has no mobile number", "    IF is_file-mob_number = '?'.\n      add( EXPORTING iv_text = |Not created: the employee has no mobile number")]),
+    ('Employee upload: bank change reported as updated, supplier (LFBK) not checked (production, 24.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
+     [('src/zfi_emp_upld.prog.abap', "    IF lv_new_on_vendor IS INITIAL.\n", "    IF lv_new_on_vendor = '?'.\n")]),
     ('Employee upload: CONVT_NO_NUMBER in the mail - serial number C(1) (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "         lv_srno                TYPE i,", "         lv_srno                TYPE c VALUE 0,")]),
     ('Employee upload: payment method C instead of CNT (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',

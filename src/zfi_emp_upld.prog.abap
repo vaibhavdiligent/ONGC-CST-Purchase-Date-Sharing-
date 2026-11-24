@@ -1173,6 +1173,21 @@ CLASS lcl_emp_bp IMPLEMENTATION.
     DELETE lt_old WHERE ( bk_valid_from IS NOT INITIAL AND bk_valid_from > lv_now )
                      OR ( bk_valid_to   IS NOT INITIAL AND bk_valid_to   < lv_now ).
     IF line_exists( lt_old[ banks = lv_banks bankl = lv_bankl bankn = lv_bankn ] ).
+      " On the partner - and on the supplier? SAP passes the partner's bank
+      " details on to the supplier (LFBK); payments read them there. When
+      " that step failed (parked in MDS_PPO2), the partner has the account
+      " and the supplier not: that was reported as "already maintained".
+      SELECT SINGLE lifnr FROM lfbk
+        WHERE lifnr = @iv_lifnr AND banks = @lv_banks AND bankl = @lv_bankl AND bankn = @lv_bankn
+        INTO @DATA(lv_old_on_vendor).
+      IF lv_old_on_vendor IS INITIAL.
+        add( EXPORTING iv_text = |Bank account { lv_bankl } { lv_bankn } is on business partner | &&
+                                 |{ lv_bp ALPHA = OUT }, but supplier { iv_lifnr ALPHA = OUT } does not have | &&
+                                 |it: SAP did not pass it on. Reprocess the entry of partner | &&
+                                 |{ lv_bp ALPHA = OUT } in MDS_PPO2 (it names the reason)|
+             CHANGING  ct      = et_error ).
+        RETURN.
+      ENDIF.
       APPEND VALUE bapiret2( type = 'I' message = 'The bank account is already maintained' ) TO et_ok.
       RETURN.
     ENDIF.
@@ -1241,6 +1256,18 @@ CLASS lcl_emp_bp IMPLEMENTATION.
       APPEND VALUE bapiret2( type = 'S'
                              message = |Bank account saved, but not on bank details ID { lv_bkvid } - | &&
                                        |partner { lv_bp ALPHA = OUT } has:{ lv_lines }| ) TO et_ok.
+      RETURN.
+    ENDIF.
+    " The supplier must have it too (LFBK) - "updated" is said only then.
+    SELECT SINGLE lifnr FROM lfbk
+      WHERE lifnr = @iv_lifnr AND banks = @lv_banks AND bankl = @lv_bankl AND bankn = @lv_bankn
+      INTO @DATA(lv_new_on_vendor).
+    IF lv_new_on_vendor IS INITIAL.
+      add( EXPORTING iv_text = |Bank account { lv_bankl } { lv_bankn } was saved on business partner | &&
+                               |{ lv_bp ALPHA = OUT }, but supplier { iv_lifnr ALPHA = OUT } did not get it: | &&
+                               |SAP did not pass it on. See the entry of partner { lv_bp ALPHA = OUT } in | &&
+                               |MDS_PPO2 (it names the reason) and reprocess it there|
+           CHANGING  ct      = et_error ).
       RETURN.
     ENDIF.
     APPEND VALUE bapiret2( type = 'S'
