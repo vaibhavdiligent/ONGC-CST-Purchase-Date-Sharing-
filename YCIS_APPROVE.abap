@@ -646,10 +646,18 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lt_text TYPE bcsy_text,
         ls_text TYPE soli,
         lv_addr TYPE ad_smtpadr,
+        lt_addr TYPE STANDARD TABLE OF ad_smtpadr,
         lv_sub  TYPE so_obj_des.
 
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
     WHERE wf_level = p_level AND sales_office = p_office.
+* GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): a central level
+* (sales office '0001') is found under whatever sales office its approvers
+* are maintained; a blank e-mail ID is taken from the user master (SU01).
+  IF p_office = '0001'.
+    SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
+      WHERE wf_level = p_level.
+  ENDIF.
   CHECK lt_wf IS NOT INITIAL.
 
   TRY.
@@ -693,9 +701,17 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
                  i_text    = lt_text
                  i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
+      PERFORM set_mail_sender USING lo_send.
       LOOP AT lt_wf INTO ls_wf.
-        CHECK ls_wf-email IS NOT INITIAL.
         lv_addr = ls_wf-email.
+        IF lv_addr IS INITIAL.
+          PERFORM user_email USING ls_wf-userid CHANGING lv_addr.
+        ENDIF.
+        CHECK lv_addr IS NOT INITIAL.
+        TRANSLATE lv_addr TO LOWER CASE.
+        READ TABLE lt_addr TRANSPORTING NO FIELDS WITH KEY table_line = lv_addr.
+        CHECK sy-subrc <> 0.               " each address once
+        APPEND lv_addr TO lt_addr.
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
       ENDLOOP.
@@ -803,4 +819,50 @@ FORM wf_text USING    ps_appr TYPE ycis_apprvl
     WHEN OTHERS.
       p_txt = ps_appr-wf_status.
   ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  user_email   (e-mail ID of a SAP user from SU01)
+*&---------------------------------------------------------------------*
+*   GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): used when the
+*   e-mail ID of an approver is blank in YCIS_WF_APPR.
+*&---------------------------------------------------------------------*
+FORM user_email USING    p_user TYPE any
+                CHANGING p_addr TYPE ad_smtpadr.
+  DATA: lv_adrn TYPE usr21-addrnumber,
+        lv_pers TYPE usr21-persnumber.
+  CLEAR p_addr.
+  CHECK p_user IS NOT INITIAL.
+  SELECT SINGLE addrnumber persnumber FROM usr21 INTO (lv_adrn, lv_pers)
+    WHERE bname = p_user.
+  CHECK sy-subrc = 0.
+  SELECT smtp_addr FROM adr6 INTO p_addr UP TO 1 ROWS
+    WHERE addrnumber = lv_adrn
+      AND persnumber = lv_pers
+    ORDER BY flgdefault DESCENDING.
+  ENDSELECT.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  set_mail_sender
+*&---------------------------------------------------------------------*
+*   A user without an e-mail ID in SU01 cannot be the sender of an
+*   internet mail (it stops in SOST). Such a user's e-mail ID from
+*   YCIS_WF_APPR is used as sender instead.
+*&---------------------------------------------------------------------*
+FORM set_mail_sender USING po_send TYPE REF TO cl_bcs.
+  DATA: lv_addr   TYPE ad_smtpadr,
+        lo_sender TYPE REF TO if_sender_bcs.
+  PERFORM user_email USING sy-uname CHANGING lv_addr.
+  CHECK lv_addr IS INITIAL.            " SU01 e-mail ID exists - default sender
+  SELECT email FROM ycis_wf_appr INTO lv_addr UP TO 1 ROWS
+    WHERE userid = sy-uname
+      AND email <> space.
+  ENDSELECT.
+  CHECK lv_addr IS NOT INITIAL.
+  TRY.
+      lo_sender = cl_cam_address_bcs=>create_internet_address( lv_addr ).
+      po_send->set_sender( lo_sender ).
+    CATCH cx_bcs.
+  ENDTRY.
 ENDFORM.

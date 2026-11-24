@@ -225,3 +225,16 @@ Constant `GC_SMD_ACTIVE` (value blank) in YRVG004_QAIS_EXECUTE_N1, YCIS_APPROVE,
 | Mail | SCOT / SOST (Basis) | SAPconnect sending active in PDR (workflow and credit-note e-mails) |
 
 Do not move QAR test data (YCIS_APPRVL / YCIS_APPRVL_GRD rows) to PDR.
+
+## PDR issues 23.11.2026 (CPC L6 issues / 45 min for rebate orders)
+
+| # | Issue | Change | Program |
+|---|-------|--------|---------|
+| PDR-1 | L5 approval – no e-mail to L6 | Mail to a central level (L3–L6) reads the approvers of that level under **any** sales office (not only `0001`); a blank e-mail ID in YCIS_WF_APPR is taken from SU01 (USR21/ADR6); duplicates removed; if the approving user has no SU01 e-mail, his YCIS_WF_APPR e-mail is the sender. L5 message now says *e-mail sent to n L6 address(es)* or *e-mail to L6 NOT sent: <reason>*. | YCIS_APPRV5 (same recipient logic in YCIS_APPROVE, YCIS_EXECUTE, YCIS_VET, YCIS_DISBURSE) |
+| PDR-2 | L6 POST – "Credit Note (G2) creation/posting failed" for every line, no entry posted | SAP's own message from billing (BAPI_BILLINGDOC_CREATEMULTIPLE, with message ID/number) is kept in **Remarks** of the line (line stays on the screen, Pending L6) and shown in a result list after POST; no pop-up per line. Billing block on the rebate order (VBAK-FAKSK) or a missing order is reported by name. | YCIS_DISBURSE |
+| PDR-3 | L3 Execute – 350 lines took 45 min | More than 20 ticked lines are split into up to 5 packets and created by parallel background jobs **YCIS_L3_REBATE_ORDERS** (SM37), started immediately; the user gets the screen back at once. Each line is locked while its order is created (no duplicate order from two runs); a failed order keeps SAP's reason in Remarks; L4 is e-mailed once, by the last job. One synchronous commit per line instead of two. Up to 20 lines – dialog as before. | YCIS_EXECUTE |
+
+Prerequisites / checks in PDR:
+* PDR-3: L3 users need **S_BTCH_JOB** (JOBACTION `RELE`, JOBGROUP `*`) to release their own jobs – without it the lines are executed in dialog as before. Enough background work processes (SM50, type BGD) for 5 parallel jobs. Packets are handed over in cluster table INDX (areas `YC`/`YD`) – nothing to create.
+* PDR-2: after the new version, POST one line in YRVG004_P – the Remarks / result list give the SAP reason (typical: authorisation V_VBRK_FKA for billing type G2 / V_VBRK_VKO for sales org. 5000, billing block on ZP09, copy control ZP09 → G2 (VTFA), G2 number range, posting period, account determination).
+* PDR-1: YCIS_WF_APPR level 6 entry with user ID; e-mail ID in YCIS_WF_APPR or SU01. Mails that still do not arrive: SOST.

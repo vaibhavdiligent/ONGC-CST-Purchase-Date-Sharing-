@@ -14,6 +14,14 @@
 *&
 *& GUI status 'STANDARD' (function codes EXEC, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (see doc).
+*&
+*& GAIL 23.11.2026 (350 lines took 45 min): more than 20 ticked lines are
+*&   executed by up to 5 parallel background jobs YCIS_L3_REBATE_ORDERS
+*&   (SM37) - the L3 user needs authorisation S_BTCH_JOB / RELE to release
+*&   own jobs, otherwise the lines are executed in dialog as before. Each
+*&   line is locked while its order is created (no duplicate orders); a
+*&   failed order keeps SAP's reason in Remarks; L4 is e-mailed once when
+*&   the last job has finished.
 *&---------------------------------------------------------------------*
 REPORT  ycis_execute.
 
@@ -68,6 +76,10 @@ TYPES: BEGIN OF ty_out,
          oth_qty     TYPE p LENGTH 13 DECIMALS 3,     " other grades qty
          oth_rate    TYPE p LENGTH 9 DECIMALS 2,      " other rate (Rs./MT)
          purch_no    TYPE ycis_apprvl-purch_no,
+*        GAIL 23.11.2026: period of the line (not displayed) - identifies the
+*        line exactly when a customer has more than one period pending
+         period_from TYPE ycis_apprvl-period_from,
+         period_to   TYPE ycis_apprvl-period_to,
 *        L1 & L2 verification status captured for L3 onward processing
          l1_user     TYPE ycis_apprvl-l1_user,
          l1_date     TYPE ycis_apprvl-l1_date,
@@ -86,6 +98,24 @@ TYPES: BEGIN OF ty_out,
          rej_date    TYPE ycis_apprvl-rej_date,
          rej_remarks TYPE ycis_apprvl-rej_remarks,
        END OF ty_out.
+
+*   GAIL 23.11.2026 ('45 min for generation of rebate orders' - 350 lines):
+*   more than GC_BG_MIN ticked lines are executed by up to GC_JOBS parallel
+*   background jobs (name GC_JOBNAME, visible in SM37) instead of one by one
+*   in dialog. Fewer lines are executed in dialog as before.
+CONSTANTS: gc_jobs    TYPE i VALUE 5,
+           gc_bg_min  TYPE i VALUE 20,
+           gc_jobname TYPE btcjob VALUE 'YCIS_L3_REBATE_ORDERS'.
+
+TYPES: BEGIN OF ty_key,                  " key of one YCIS_APPRVL line
+         qais_no     TYPE ycis_apprvl-qais_no,
+         scheme_type TYPE ycis_apprvl-scheme_type,
+         period_from TYPE ycis_apprvl-period_from,
+         period_to   TYPE ycis_apprvl-period_to,
+         kunnr       TYPE ycis_apprvl-kunnr,
+         kvgr2       TYPE ycis_apprvl-kvgr2,
+       END OF ty_key,
+       tt_key TYPE STANDARD TABLE OF ty_key WITH DEFAULT KEY.
 
 DATA: gt_appr  TYPE STANDARD TABLE OF ycis_apprvl,
       gs_appr  TYPE ycis_apprvl,
@@ -136,6 +166,8 @@ PARAMETERS p_exec RADIOBUTTON GROUP g2.
 SELECTION-SCREEN COMMENT 3(45) c_exec.
 SELECTION-SCREEN END OF LINE.
 SELECTION-SCREEN END OF BLOCK b2.
+* background packet id (set only by the Execute button - FORM submit_background)
+PARAMETERS p_bgid TYPE indx-srtfd NO-DISPLAY.
 
 INITIALIZATION.
   c_mon  = 'Monthly'.
@@ -172,6 +204,12 @@ AT SELECTION-SCREEN.
 
 *--------------------------------------------------------------------*
 START-OF-SELECTION.
+* background job started by the Execute button: create the rebate orders
+* of its packet of lines, no list output
+  IF p_bgid IS NOT INITIAL.
+    PERFORM run_background.
+    RETURN.
+  ENDIF.
   PERFORM build_stype_range.
   PERFORM check_l3_auth.
   IF gv_isl3 IS INITIAL.
@@ -483,12 +521,14 @@ FORM process_selected USING p_action TYPE char1.
         lv_err    TYPE i,
         lv_dup    TYPE i,
         lv_zero   TYPE i,
+        lv_queued TYPE i,
+        lv_jobs   TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
         lv_off    TYPE vkbur,
-        lv_vbeln  TYPE vbeln,
-        lv_exord  TYPE ycis_apprvl-order_no,
-        lv_exstat TYPE ycis_apprvl-wf_status.
+        lt_keys   TYPE tt_key,
+        lt_rest   TYPE tt_key,
+        ls_key    TYPE ty_key.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -507,137 +547,481 @@ FORM process_selected USING p_action TYPE char1.
     RETURN.
   ENDIF.
 
+  IF p_action = 'E'.
+*   GAIL 23.11.2026 (350 lines took 45 min at L3): a larger selection is
+*   handed to parallel background jobs - each job creates the rebate orders
+*   of its share of the lines, so the user does not wait and the run is
+*   several times faster. Lines that could not be scheduled (e.g. no
+*   authorisation to release own background jobs) are executed here as before.
+    LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
+      READ TABLE gt_appr INTO gs_appr
+           WITH KEY qais_no     = gs_out-qais_no
+                    scheme_type = gs_out-scheme_type
+                    kunnr       = gs_out-kunnr
+                    kvgr2       = gs_out-kvgr2
+                    period_from = gs_out-period_from
+                    period_to   = gs_out-period_to.
+      CHECK sy-subrc = 0.
+      MOVE-CORRESPONDING gs_appr TO ls_key.
+      APPEND ls_key TO lt_keys.
+    ENDLOOP.
+    IF lines( lt_keys ) > gc_bg_min.
+      PERFORM submit_background USING lt_keys lv_remark
+                                CHANGING lt_rest lv_jobs.
+      IF lv_jobs > 0.
+*       lines now with a background job: show it on the grid, do not run them here
+        LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
+          READ TABLE gt_appr INTO gs_appr
+               WITH KEY qais_no     = gs_out-qais_no
+                        scheme_type = gs_out-scheme_type
+                        kunnr       = gs_out-kunnr
+                        kvgr2       = gs_out-kvgr2
+                        period_from = gs_out-period_from
+                        period_to   = gs_out-period_to.
+          CHECK sy-subrc = 0.
+          READ TABLE lt_rest TRANSPORTING NO FIELDS
+               WITH KEY qais_no     = gs_appr-qais_no
+                        scheme_type = gs_appr-scheme_type
+                        period_from = gs_appr-period_from
+                        period_to   = gs_appr-period_to
+                        kunnr       = gs_appr-kunnr
+                        kvgr2       = gs_appr-kvgr2.
+          IF sy-subrc <> 0.
+            gs_out-remarks = 'Queued - rebate order being created in background'.
+            CLEAR gs_out-sel.
+            MODIFY gt_out FROM gs_out.
+            lv_queued = lv_queued + 1.
+          ENDIF.
+        ENDLOOP.
+      ENDIF.
+    ENDIF.
+
+    PERFORM execute_rows USING lv_remark
+                         CHANGING lv_cnt lv_dup lv_zero lv_err.
+
+*   executed rows keep their Rebate Order number on the grid; they are now
+*   forwarded to L4 (CPC Finance - Financial Vetting). L4 is central in
+*   YCIS_WF_APPR (sales office '0001', level 4) - notify once that rebate
+*   orders are ready for financial vetting. Background jobs send this mail
+*   themselves when the last job of the run has finished.
+    IF lv_cnt > 0.                      " only real rebate orders go to L4
+      PERFORM send_mail USING '4' '0001' '0001' space.
+    ENDIF.
+    IF lv_queued > 0.
+      MESSAGE |{ lv_queued } line(s) handed to { lv_jobs } background job(s) { gc_jobname } - the rebate orders are created in the background and forwarded to L4 (L4 is e-mailed when all jobs are finished). Run YRVG004_E again (Executed) to see the orders. Processed here: { lv_cnt } created, { lv_zero } zero-value closed, { lv_dup } already created/in process, { lv_err } failed.| TYPE 'I'.
+    ELSEIF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
+      MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
+    ELSE.
+      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } zero-value line(s) closed at L3, { lv_err } failed - see 'Remarks'| TYPE 'S'.
+    ENDIF.
+    RETURN.
+  ENDIF.
+
+* reject
   LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
     READ TABLE gt_appr INTO gs_appr
          WITH KEY qais_no     = gs_out-qais_no
                   scheme_type = gs_out-scheme_type
                   kunnr       = gs_out-kunnr
-                  kvgr2       = gs_out-kvgr2.
+                  kvgr2       = gs_out-kvgr2
+                  period_from = gs_out-period_from
+                  period_to   = gs_out-period_to.
+    CHECK sy-subrc = 0.
+    gs_appr-wf_status   = '10'.     " back to L1 (6-level: any reject returns to L1)
+    gs_appr-status      = 'R'.
+    gs_appr-rej_level   = gc_level.
+    gs_appr-rej_by      = sy-uname.
+    gs_appr-rej_date    = sy-datum.
+    gs_appr-rej_time    = sy-uzeit.
+    gs_appr-rej_remarks = lv_remark.
+    gs_appr-rem_l3      = lv_remark.
+    gs_appr-remarks     = 'Rejected by L3'.
+    MODIFY ycis_apprvl FROM gs_appr.
+    COLLECT gs_appr-sales_off INTO lt_office.
+    lv_cnt = lv_cnt + 1.
+  ENDLOOP.
+  IF lv_cnt > 0.
+    COMMIT WORK.
+*   6-level rule: any reject returns to L1 for reinitiation - notify L1.
+    LOOP AT lt_office INTO lv_off.
+      PERFORM send_mail USING '1' lv_off lv_off space.
+    ENDLOOP.
+    DELETE gt_out WHERE sel = 'X'.
+  ENDIF.
+  MESSAGE |{ lv_cnt } line(s) rejected and returned to L1| TYPE 'S'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  execute_rows   (create the rebate orders of the ticked lines)
+*&---------------------------------------------------------------------*
+*   Used by the dialog (Execute button) and by the background jobs.
+*   Each line is locked (ENQUEUE_E_TABLE on its YCIS_APPRVL key) before the
+*   duplicate check, so a dialog run and a background job - or two jobs -
+*   can never create a second rebate order for the same line.
+*&---------------------------------------------------------------------*
+FORM execute_rows USING    p_remark TYPE ycis_apprvl-rej_remarks
+                  CHANGING p_cnt    TYPE i
+                           p_dup    TYPE i
+                           p_zero   TYPE i
+                           p_err    TYPE i.
+  DATA: lv_vbeln  TYPE vbeln,
+        lv_msg    TYPE bapi_msg,
+        lv_varkey TYPE rstable-varkey,
+        lv_exord  TYPE ycis_apprvl-order_no,
+        lv_exstat TYPE ycis_apprvl-wf_status.
+
+  LOOP AT gt_out INTO gs_out WHERE sel = 'X'.
+    READ TABLE gt_appr INTO gs_appr
+         WITH KEY qais_no     = gs_out-qais_no
+                  scheme_type = gs_out-scheme_type
+                  kunnr       = gs_out-kunnr
+                  kvgr2       = gs_out-kvgr2
+                  period_from = gs_out-period_from
+                  period_to   = gs_out-period_to.
     CHECK sy-subrc = 0.
 
-    IF p_action = 'E'.
-*     Guard against a duplicate rebate order: re-read the current record
-*     from the database (the in-memory copy can be stale after an earlier
-*     Execute in the same session). If it already carries an order / is
-*     Completed, tell the user and skip - do NOT create a second order.
-      CLEAR: lv_exord, lv_exstat.
-      SELECT SINGLE order_no wf_status
-        INTO (lv_exord, lv_exstat)
-        FROM ycis_apprvl
-        WHERE qais_no     = gs_appr-qais_no
-          AND scheme_type = gs_appr-scheme_type
-          AND period_from = gs_appr-period_from
-          AND period_to   = gs_appr-period_to
-          AND kunnr       = gs_appr-kunnr
-          AND kvgr2       = gs_appr-kvgr2.
-      IF lv_exord IS NOT INITIAL OR lv_exstat = '40'.
-        lv_dup = lv_dup + 1.
-        gs_out-order_no = lv_exord.
-        gs_out-remarks  = |Rebate order { lv_exord } already created|.
-        CLEAR gs_out-sel.
-        MODIFY gt_out FROM gs_out.
-        CONTINUE.
-      ENDIF.
-
-*     Zero-amount group member (GAIL 05.08.2026): a row with no discount
-*     value / no order quantity creates NO rebate order, but it has already
-*     flowed L1 -> L2 as a legitimate 'Grp O.k' / waiver line (a pure zero
-*     row with no waiver is blocked at L1). It must still be COMPLETED with
-*     a dummy SD document ('GROUP OK') and Approved status, so the group is
-*     treated as processed and can be run again next month - instead of
-*     being left stuck at Pending with a blank SD document.
-*     CIS UAT 23.10.2026 (L4 obs.): a row WITHOUT a rebate order (zero
-*     discount value, e.g. a group member) is NOT forwarded to L4 any more -
-*     only rebate orders created against the discount approved at L3 go on
-*     to L4. The zero row is closed (Completed) here at L3.
-      IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
-        lv_zero = lv_zero + 1.
-        gs_appr-wf_status = '70'.          " Completed at L3 - not forwarded to L4
-        gs_appr-status    = 'A'.
-        gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
-        gs_appr-l3_user   = sy-uname.
-        gs_appr-l3_date   = sy-datum.
-        gs_appr-l3_time   = sy-uzeit.
-        gs_appr-rem_l3    = lv_remark.
-        gs_appr-remarks   = 'Group OK - no discount, closed at L3 (not sent to L4)'.
-        MODIFY ycis_apprvl FROM gs_appr.
-        COMMIT WORK AND WAIT.
-        gs_out-order_no = 'GROUP OK'.
-        gs_out-remarks  = 'Group OK - no discount, closed at L3'.
-        CLEAR gs_out-sel.
-        MODIFY gt_out FROM gs_out.
-        CONTINUE.
-      ENDIF.
-
-      CLEAR lv_vbeln.
-      PERFORM create_order USING gs_appr CHANGING lv_vbeln.
-      IF lv_vbeln IS NOT INITIAL.
-        gs_appr-wf_status = '40'.        " Pending L4 (Financial Vetting) - 6-level flow
-        gs_appr-status    = 'P'.         " still in workflow (final only after L6)
-        gs_appr-order_no  = lv_vbeln.
-        gs_appr-l3_user   = sy-uname.
-        gs_appr-l3_date   = sy-datum.
-        gs_appr-l3_time   = sy-uzeit.
-        gs_appr-rem_l3    = lv_remark.   " L3 execution remark (prints on note)
-        gs_appr-remarks   = 'Executed - rebate order created, forwarded to L4'.
-        MODIFY ycis_apprvl FROM gs_appr.
-*       one sync commit per row: persists this order's VBKD / YRVA_REBATE /
-*       YCIS_APPRVL_GRD / master + the YCIS_APPRVL stamp together, so the
-*       duplicate guard is crash-safe and group execution does 1 (not 3)
-*       extra COMMIT WORK AND WAIT per member.
-        COMMIT WORK AND WAIT.
-        lv_cnt = lv_cnt + 1.
-*       keep the row on the main grid and show the created rebate order
-        gs_out-order_no = lv_vbeln.
-        gs_out-remarks  = 'Executed - order created'.
-        CLEAR gs_out-sel.
-        MODIFY gt_out FROM gs_out.
-      ELSE.
-        lv_err = lv_err + 1.
-        gs_out-remarks = 'Order creation failed'.
-        CLEAR gs_out-sel.
-        MODIFY gt_out FROM gs_out.
-      ENDIF.
-    ELSE.
-      gs_appr-wf_status   = '10'.     " back to L1 (6-level: any reject returns to L1)
-      gs_appr-status      = 'R'.
-      gs_appr-rej_level   = gc_level.
-      gs_appr-rej_by      = sy-uname.
-      gs_appr-rej_date    = sy-datum.
-      gs_appr-rej_time    = sy-uzeit.
-      gs_appr-rej_remarks = lv_remark.
-      gs_appr-rem_l3      = lv_remark.
-      gs_appr-remarks     = 'Rejected by L3'.
-      MODIFY ycis_apprvl FROM gs_appr.
-      COLLECT gs_appr-sales_off INTO lt_office.
-      lv_cnt = lv_cnt + 1.
+*   line lock - another L3 run / background job is working on this line
+    lv_varkey = |{ sy-mandt }/{ gs_appr-qais_no }/{ gs_appr-scheme_type }/{ gs_appr-period_from }/{ gs_appr-period_to }/{ gs_appr-kunnr }/{ gs_appr-kvgr2 }|.
+    CALL FUNCTION 'ENQUEUE_E_TABLE'
+      EXPORTING
+        mode_rstable   = 'E'
+        tabname        = 'YCIS_APPRVL'
+        varkey         = lv_varkey
+        _scope         = '1'
+      EXCEPTIONS
+        foreign_lock   = 1
+        system_failure = 2
+        OTHERS         = 3.
+    IF sy-subrc <> 0.
+      p_dup = p_dup + 1.
+      gs_out-remarks = 'In process - another L3 run / background job'.
+      CLEAR gs_out-sel.
+      MODIFY gt_out FROM gs_out.
+      CONTINUE.
     ENDIF.
+
+*   Guard against a duplicate rebate order: re-read the current record
+*   from the database (the in-memory copy can be stale after an earlier
+*   Execute in the same session). If it already carries an order / is
+*   Completed, tell the user and skip - do NOT create a second order.
+    CLEAR: lv_exord, lv_exstat.
+    SELECT SINGLE order_no wf_status
+      INTO (lv_exord, lv_exstat)
+      FROM ycis_apprvl
+      WHERE qais_no     = gs_appr-qais_no
+        AND scheme_type = gs_appr-scheme_type
+        AND period_from = gs_appr-period_from
+        AND period_to   = gs_appr-period_to
+        AND kunnr       = gs_appr-kunnr
+        AND kvgr2       = gs_appr-kvgr2.
+    IF lv_exord IS NOT INITIAL OR lv_exstat <> '30'.
+      p_dup = p_dup + 1.
+      gs_out-order_no = lv_exord.
+      IF lv_exord IS NOT INITIAL.
+        gs_out-remarks  = |Rebate order { lv_exord } already created|.
+      ELSE.
+        gs_out-remarks  = 'Already processed at L3'.
+      ENDIF.
+      CLEAR gs_out-sel.
+      MODIFY gt_out FROM gs_out.
+      PERFORM unlock_row USING lv_varkey.
+      CONTINUE.
+    ENDIF.
+
+*   Zero-amount group member (GAIL 05.08.2026): a row with no discount
+*   value / no order quantity creates NO rebate order, but it has already
+*   flowed L1 -> L2 as a legitimate 'Grp O.k' / waiver line (a pure zero
+*   row with no waiver is blocked at L1). It must still be COMPLETED with
+*   a dummy SD document ('GROUP OK') and Approved status, so the group is
+*   treated as processed and can be run again next month - instead of
+*   being left stuck at Pending with a blank SD document.
+*   CIS UAT 23.10.2026 (L4 obs.): a row WITHOUT a rebate order (zero
+*   discount value, e.g. a group member) is NOT forwarded to L4 any more -
+*   only rebate orders created against the discount approved at L3 go on
+*   to L4. The zero row is closed (Completed) here at L3.
+    IF gs_appr-cd_value IS INITIAL OR gs_appr-target_qty IS INITIAL.
+      p_zero = p_zero + 1.
+      gs_appr-wf_status = '70'.          " Completed at L3 - not forwarded to L4
+      gs_appr-status    = 'A'.
+      gs_appr-order_no  = 'GROUP OK'.    " dummy SD document - no real order
+      gs_appr-l3_user   = sy-uname.
+      gs_appr-l3_date   = sy-datum.
+      gs_appr-l3_time   = sy-uzeit.
+      gs_appr-rem_l3    = p_remark.
+      gs_appr-remarks   = 'Group OK - no discount, closed at L3 (not sent to L4)'.
+      MODIFY ycis_apprvl FROM gs_appr.
+      COMMIT WORK.
+      gs_out-order_no = 'GROUP OK'.
+      gs_out-remarks  = 'Group OK - no discount, closed at L3'.
+      CLEAR gs_out-sel.
+      MODIFY gt_out FROM gs_out.
+      PERFORM unlock_row USING lv_varkey.
+      CONTINUE.
+    ENDIF.
+
+    CLEAR: lv_vbeln, lv_msg.
+    PERFORM create_order USING gs_appr CHANGING lv_vbeln lv_msg.
+    IF lv_vbeln IS NOT INITIAL.
+      gs_appr-wf_status = '40'.        " Pending L4 (Financial Vetting) - 6-level flow
+      gs_appr-status    = 'P'.         " still in workflow (final only after L6)
+      gs_appr-order_no  = lv_vbeln.
+      gs_appr-l3_user   = sy-uname.
+      gs_appr-l3_date   = sy-datum.
+      gs_appr-l3_time   = sy-uzeit.
+      gs_appr-rem_l3    = p_remark.    " L3 execution remark (prints on note)
+      gs_appr-remarks   = 'Executed - rebate order created, forwarded to L4'.
+      MODIFY ycis_apprvl FROM gs_appr.
+*     one commit per row: persists this order's VBKD / YRVA_REBATE /
+*     YCIS_APPRVL_GRD / master + the YCIS_APPRVL stamp together (direct
+*     table updates only - the sales order itself was already written
+*     synchronously by BAPI_TRANSACTION_COMMIT in create_order, so no
+*     second synchronous wait is needed here).
+      COMMIT WORK.
+      p_cnt = p_cnt + 1.
+*     keep the row on the main grid and show the created rebate order
+      gs_out-order_no = lv_vbeln.
+      gs_out-remarks  = 'Executed - order created'.
+    ELSE.
+      p_err = p_err + 1.
+*     keep the SAP reason on the line (also visible after a background run)
+      gs_appr-remarks = |Order creation failed: { lv_msg }|.
+      MODIFY ycis_apprvl FROM gs_appr.
+      COMMIT WORK.
+      gs_out-remarks = gs_appr-remarks.
+    ENDIF.
+    CLEAR gs_out-sel.
+    MODIFY gt_out FROM gs_out.
+    PERFORM unlock_row USING lv_varkey.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+FORM unlock_row USING p_varkey TYPE rstable-varkey.
+  CALL FUNCTION 'DEQUEUE_E_TABLE'
+    EXPORTING
+      mode_rstable = 'E'
+      tabname      = 'YCIS_APPRVL'
+      varkey       = p_varkey
+      _scope       = '1'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  submit_background
+*&---------------------------------------------------------------------*
+*   GAIL 23.11.2026: split the selected lines into up to GC_JOBS packets
+*   and start one background job per packet (this program, hidden
+*   parameter P_BGID). The line keys + remark of a packet are handed over
+*   in the standard cluster table INDX (area 'YC'). PT_REST returns the
+*   lines that could not be scheduled - the caller executes them in dialog.
+*&---------------------------------------------------------------------*
+FORM submit_background USING    pt_keys  TYPE tt_key
+                                p_remark TYPE ycis_apprvl-rej_remarks
+                       CHANGING pt_rest  TYPE tt_key
+                                p_jobs   TYPE i.
+  TYPES: BEGIN OF ty_pk,
+           id   TYPE indx-srtfd,
+           keys TYPE tt_key,
+         END OF ty_pk.
+  DATA: lt_pack     TYPE tt_key,
+        lt_pk       TYPE STANDARD TABLE OF ty_pk,
+        ls_pk       TYPE ty_pk,
+        ls_key      TYPE ty_key,
+        lv_npack    TYPE i,
+        lv_pack     TYPE i,
+        lv_idx      TYPE i,
+        lv_ts       TYPE timestampl,
+        lv_tsc      TYPE c LENGTH 30,
+        lv_dig      TYPE c LENGTH 17,
+        lv_base     TYPE indx-srtfd,
+        lv_id       TYPE indx-srtfd,
+        lv_nn       TYPE n LENGTH 2,
+        lv_jobcount TYPE tbtcjob-jobcount,
+        lv_rel      TYPE btch0000-char1.
+
+  CLEAR p_jobs.
+  pt_rest = pt_keys.
+
+* the user must be allowed to release his own background jobs
+  AUTHORITY-CHECK OBJECT 'S_BTCH_JOB'
+    ID 'JOBACTION' FIELD 'RELE'
+    ID 'JOBGROUP'  DUMMY.
+  IF sy-subrc <> 0.
+    MESSAGE 'No authorisation to release background jobs (S_BTCH_JOB) - lines are executed in dialog' TYPE 'S'.
+    RETURN.
+  ENDIF.
+
+* unique run id: 'L3' + time stamp (digits only, max. 19 characters)
+  GET TIME STAMP FIELD lv_ts.
+  lv_tsc = |{ lv_ts DECIMALS = 3 }|.
+  REPLACE ALL OCCURRENCES OF '.' IN lv_tsc WITH ''.
+  CONDENSE lv_tsc NO-GAPS.
+  lv_dig  = lv_tsc(17).
+  lv_base = |L3{ lv_dig }|.
+
+  lv_npack = lines( pt_keys ).
+  IF lv_npack > gc_jobs.
+    lv_npack = gc_jobs.
+  ENDIF.
+
+* 1. store all packets first (so that no job can finish and report the run
+*    complete before the other packets exist)
+  DO lv_npack TIMES.
+    lv_pack = sy-index.
+*   round robin: line 1 -> job 1, line 2 -> job 2 ...
+    CLEAR ls_pk.
+    LOOP AT pt_keys INTO ls_key.
+      lv_idx = ( sy-tabix - 1 ) MOD lv_npack + 1.
+      IF lv_idx = lv_pack.
+        APPEND ls_key TO ls_pk-keys.
+      ENDIF.
+    ENDLOOP.
+    CHECK ls_pk-keys IS NOT INITIAL.
+    lv_nn    = lv_pack.
+    ls_pk-id = |{ lv_base }{ lv_nn }|.
+    lt_pack  = ls_pk-keys.
+    EXPORT keys = lt_pack remark = p_remark TO DATABASE indx(yc) ID ls_pk-id.
+    APPEND ls_pk TO lt_pk.
+  ENDDO.
+  COMMIT WORK.                         " the jobs must find their packets
+
+* 2. one background job per packet, started immediately
+  LOOP AT lt_pk INTO ls_pk.
+    lv_id = ls_pk-id.
+    CLEAR lv_jobcount.
+    CALL FUNCTION 'JOB_OPEN'
+      EXPORTING
+        jobname          = gc_jobname
+      IMPORTING
+        jobcount         = lv_jobcount
+      EXCEPTIONS
+        cant_create_job  = 1
+        invalid_job_data = 2
+        jobname_missing  = 3
+        OTHERS           = 4.
+    IF sy-subrc <> 0.
+      DELETE FROM DATABASE indx(yc) ID lv_id.
+      COMMIT WORK.
+      CONTINUE.                        " these lines run in dialog
+    ENDIF.
+
+    SUBMIT (sy-repid) WITH p_bgid = lv_id
+           VIA JOB gc_jobname NUMBER lv_jobcount
+           AND RETURN.
+    IF sy-subrc = 0.
+      CLEAR lv_rel.
+      CALL FUNCTION 'JOB_CLOSE'
+        EXPORTING
+          jobcount             = lv_jobcount
+          jobname              = gc_jobname
+          strtimmed            = 'X'
+        IMPORTING
+          job_was_released     = lv_rel
+        EXCEPTIONS
+          OTHERS               = 1.
+    ENDIF.
+    IF sy-subrc <> 0 OR lv_rel IS INITIAL.
+*     job not started - remove it and run these lines in dialog
+      CALL FUNCTION 'BP_JOB_DELETE'
+        EXPORTING
+          jobcount   = lv_jobcount
+          jobname    = gc_jobname
+          forcedmode = 'X'
+        EXCEPTIONS
+          OTHERS     = 1.
+      DELETE FROM DATABASE indx(yc) ID lv_id.
+      COMMIT WORK.
+      CONTINUE.
+    ENDIF.
+
+    p_jobs = p_jobs + 1.
+    LOOP AT ls_pk-keys INTO ls_key.
+      DELETE pt_rest WHERE qais_no     = ls_key-qais_no
+                       AND scheme_type = ls_key-scheme_type
+                       AND period_from = ls_key-period_from
+                       AND period_to   = ls_key-period_to
+                       AND kunnr       = ls_key-kunnr
+                       AND kvgr2       = ls_key-kvgr2.
+    ENDLOOP.
+  ENDLOOP.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  run_background   (one background packet - P_BGID)
+*&---------------------------------------------------------------------*
+FORM run_background.
+  DATA: lt_keys   TYPE tt_key,
+        lv_remark TYPE ycis_apprvl-rej_remarks,
+        lv_cnt    TYPE i,
+        lv_dup    TYPE i,
+        lv_zero   TYPE i,
+        lv_err    TYPE i,
+        lv_like   TYPE indx-srtfd,
+        lv_run    TYPE c LENGTH 19,
+        lv_left   TYPE i,
+        lt_ids    TYPE STANDARD TABLE OF indx-srtfd,
+        lv_id     TYPE indx-srtfd,
+        lv_pcnt   TYPE i,
+        lv_tot    TYPE i.
+
+  PERFORM check_l3_auth.
+  IF gv_isl3 IS INITIAL.
+    MESSAGE 'Background job user is not a Level-3 (CPC) executor (YCIS_WF_APPR)' TYPE 'S'.
+    RETURN.
+  ENDIF.
+
+  IMPORT keys = lt_keys remark = lv_remark FROM DATABASE indx(yc) ID p_bgid.
+  IF sy-subrc <> 0 OR lt_keys IS INITIAL.
+    MESSAGE |No lines found for background packet { p_bgid }| TYPE 'S'.
+    RETURN.
+  ENDIF.
+
+  SELECT * FROM ycis_apprvl INTO TABLE gt_appr
+    FOR ALL ENTRIES IN lt_keys
+    WHERE qais_no     = lt_keys-qais_no
+      AND scheme_type = lt_keys-scheme_type
+      AND period_from = lt_keys-period_from
+      AND period_to   = lt_keys-period_to
+      AND kunnr       = lt_keys-kunnr
+      AND kvgr2       = lt_keys-kvgr2
+      AND wf_status   = '30'.
+  REFRESH gt_out.
+  LOOP AT gt_appr INTO gs_appr.
+    CLEAR gs_out.
+    MOVE-CORRESPONDING gs_appr TO gs_out.
+    gs_out-sel = 'X'.
+    APPEND gs_out TO gt_out.
   ENDLOOP.
 
-* executed rows keep their Rebate Order number on the grid; they are now
-* forwarded to L4 (CPC Finance - Financial Vetting). Reject returns to L1.
-  IF p_action = 'E'.
-*   L4 is central in YCIS_WF_APPR (sales office '0001', level 4) - notify once
-*   that rebate orders are ready for financial vetting. (executed rows are
-*   already committed per-row above.)
-    IF lv_cnt > 0.                      " only real rebate orders go to L4
+  PERFORM execute_rows USING lv_remark
+                       CHANGING lv_cnt lv_dup lv_zero lv_err.
+  MESSAGE |Packet { p_bgid }: { lv_cnt } rebate order(s) created & forwarded to L4, { lv_zero } zero-value line(s) closed, { lv_dup } already created / in process, { lv_err } failed (reason in Remarks)| TYPE 'S'.
+
+* packet finished: remove it, leave the number of created orders for the
+* last job of the run (area 'YD')
+  DELETE FROM DATABASE indx(yc) ID p_bgid.
+  EXPORT cnt = lv_cnt TO DATABASE indx(yd) ID p_bgid.
+  COMMIT WORK.
+
+* last job of this run (no packet of the run left) -> one mail to L4
+  lv_run  = p_bgid(19).                " run id without the packet number
+  lv_like = |{ lv_run }%|.
+  SELECT COUNT(*) INTO lv_left FROM indx
+    WHERE relid = 'YC' AND srtfd LIKE lv_like.
+  CHECK lv_left = 0.
+  SELECT DISTINCT srtfd FROM indx INTO TABLE lt_ids
+    WHERE relid = 'YD' AND srtfd LIKE lv_like.
+  LOOP AT lt_ids INTO lv_id.
+    CLEAR lv_pcnt.
+    IMPORT cnt = lv_pcnt FROM DATABASE indx(yd) ID lv_id.
+    lv_tot = lv_tot + lv_pcnt.
+  ENDLOOP.
+  DELETE FROM indx WHERE relid = 'YD' AND srtfd LIKE lv_like.
+  IF sy-dbcnt > 0.                     " only the job that removed them mails
+    COMMIT WORK.
+    IF lv_tot > 0.
       PERFORM send_mail USING '4' '0001' '0001' space.
     ENDIF.
-    IF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
-      MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
-    ELSE.
-      MESSAGE |{ lv_cnt } rebate order(s) created & forwarded to L4, { lv_dup } already created, { lv_zero } zero-value line(s) closed at L3, { lv_err } failed - see 'Remarks'| TYPE 'S'.
-    ENDIF.
-  ELSE.
-    IF lv_cnt > 0.
-      COMMIT WORK.
-*     6-level rule: any reject returns to L1 for reinitiation - notify L1.
-      LOOP AT lt_office INTO lv_off.
-        PERFORM send_mail USING '1' lv_off lv_off space.
-      ENDLOOP.
-      DELETE gt_out WHERE sel = 'X'.
-    ENDIF.
-    MESSAGE |{ lv_cnt } line(s) rejected and returned to L1| TYPE 'S'.
+    MESSAGE |Run { lv_run } completed: { lv_tot } rebate order(s) created in total| TYPE 'S'.
   ENDIF.
 ENDFORM.
 
@@ -649,7 +1033,8 @@ ENDFORM.
 *&      Form  create_order   (build & post the rebate order from payload)
 *&---------------------------------------------------------------------*
 FORM create_order USING p_appr TYPE ycis_apprvl
-                  CHANGING p_vbeln TYPE vbeln.
+                  CHANGING p_vbeln TYPE vbeln
+                           p_msg   TYPE bapi_msg.
 *   Interface types mirror the production create_sale_order in
 *   YRVG004_QAIS_EXECUTE : SOLD_TO_PARTY is a structure (BAPISOLDTO) and
 *   RETURN is a single IMPORTING structure (BAPIRETURN1) - NOT a table.
@@ -668,6 +1053,7 @@ FORM create_order USING p_appr TYPE ycis_apprvl
 *   skip creation and return with an empty document. Mirrors the guard in
 *   the original YRVU001 (IF cd_value1 <> 0 AND target_qty <> 0 -> create).
   IF p_appr-cd_value IS INITIAL OR p_appr-target_qty IS INITIAL.
+    p_msg = 'No discount value / quantity'.
     RETURN.
   ENDIF.
 
@@ -725,6 +1111,11 @@ FORM create_order USING p_appr TYPE ycis_apprvl
     PERFORM post_master_update USING p_appr w_vbeln.
   ELSE.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+*   GAIL 23.11.2026: keep SAP's reason (shown in Remarks / job log)
+    p_msg = x_return-message.
+    IF p_msg IS INITIAL.
+      p_msg = |{ x_return-type } { x_return-id } { x_return-number }|.
+    ENDIF.
   ENDIF.
 ENDFORM.
 
@@ -775,7 +1166,7 @@ FORM post_order_update USING p_appr TYPE ycis_apprvl
       AND period_to   = p_appr-period_to
       AND kunnr       = p_appr-kunnr
       AND kvgr2       = p_appr-kvgr2.
-* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
+* commit consolidated in execute_rows (one COMMIT WORK per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -900,7 +1291,7 @@ FORM post_master_update USING p_appr TYPE ycis_apprvl
       ENDIF.
       MODIFY yrva_qais_data_m FROM ls_qm.
   ENDCASE.
-* commit consolidated in process_selected (one COMMIT WORK AND WAIT per row)
+* commit consolidated in execute_rows (one COMMIT WORK per row)
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -943,10 +1334,18 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lt_text TYPE bcsy_text,
         ls_text TYPE soli,
         lv_addr TYPE ad_smtpadr,
+        lt_addr TYPE STANDARD TABLE OF ad_smtpadr,
         lv_sub  TYPE so_obj_des.
 
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
     WHERE wf_level = p_level AND sales_office = p_office.
+* GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): a central level
+* (sales office '0001') is found under whatever sales office its approvers
+* are maintained; a blank e-mail ID is taken from the user master (SU01).
+  IF p_office = '0001'.
+    SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
+      WHERE wf_level = p_level.
+  ENDIF.
   CHECK lt_wf IS NOT INITIAL.
 
   TRY.
@@ -978,9 +1377,17 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
+      PERFORM set_mail_sender USING lo_send.
       LOOP AT lt_wf INTO ls_wf.
-        CHECK ls_wf-email IS NOT INITIAL.
         lv_addr = ls_wf-email.
+        IF lv_addr IS INITIAL.
+          PERFORM user_email USING ls_wf-userid CHANGING lv_addr.
+        ENDIF.
+        CHECK lv_addr IS NOT INITIAL.
+        TRANSLATE lv_addr TO LOWER CASE.
+        READ TABLE lt_addr TRANSPORTING NO FIELDS WITH KEY table_line = lv_addr.
+        CHECK sy-subrc <> 0.               " each address once
+        APPEND lv_addr TO lt_addr.
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
       ENDLOOP.
@@ -1087,4 +1494,50 @@ FORM wf_text USING    ps_appr TYPE ycis_apprvl
     WHEN OTHERS.
       p_txt = ps_appr-wf_status.
   ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  user_email   (e-mail ID of a SAP user from SU01)
+*&---------------------------------------------------------------------*
+*   GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): used when the
+*   e-mail ID of an approver is blank in YCIS_WF_APPR.
+*&---------------------------------------------------------------------*
+FORM user_email USING    p_user TYPE any
+                CHANGING p_addr TYPE ad_smtpadr.
+  DATA: lv_adrn TYPE usr21-addrnumber,
+        lv_pers TYPE usr21-persnumber.
+  CLEAR p_addr.
+  CHECK p_user IS NOT INITIAL.
+  SELECT SINGLE addrnumber persnumber FROM usr21 INTO (lv_adrn, lv_pers)
+    WHERE bname = p_user.
+  CHECK sy-subrc = 0.
+  SELECT smtp_addr FROM adr6 INTO p_addr UP TO 1 ROWS
+    WHERE addrnumber = lv_adrn
+      AND persnumber = lv_pers
+    ORDER BY flgdefault DESCENDING.
+  ENDSELECT.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  set_mail_sender
+*&---------------------------------------------------------------------*
+*   A user without an e-mail ID in SU01 cannot be the sender of an
+*   internet mail (it stops in SOST). Such a user's e-mail ID from
+*   YCIS_WF_APPR is used as sender instead.
+*&---------------------------------------------------------------------*
+FORM set_mail_sender USING po_send TYPE REF TO cl_bcs.
+  DATA: lv_addr   TYPE ad_smtpadr,
+        lo_sender TYPE REF TO if_sender_bcs.
+  PERFORM user_email USING sy-uname CHANGING lv_addr.
+  CHECK lv_addr IS INITIAL.            " SU01 e-mail ID exists - default sender
+  SELECT email FROM ycis_wf_appr INTO lv_addr UP TO 1 ROWS
+    WHERE userid = sy-uname
+      AND email <> space.
+  ENDSELECT.
+  CHECK lv_addr IS NOT INITIAL.
+  TRY.
+      lo_sender = cl_cam_address_bcs=>create_internet_address( lv_addr ).
+      po_send->set_sender( lo_sender ).
+    CATCH cx_bcs.
+  ENDTRY.
 ENDFORM.

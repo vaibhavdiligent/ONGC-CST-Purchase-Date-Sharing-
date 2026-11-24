@@ -37,6 +37,11 @@
 *&   pt.8  On posting, the credit note PDF (Smart Form YRV_CREDIT_NOTE, as
 *&         in YRVR167) is e-mailed to the customer's e-mail IDs (partner
 *&         logic of YRVR169) - FORM send_cn_mail.
+*&
+*& GAIL 23.11.2026 (CPC L6 issues): a credit note that cannot be created
+*&   shows SAP's own reason - in Remarks of the line (the line stays on the
+*&   screen, Pending L6) and in a result list after POST - instead of one
+*&   generic pop-up per line. A billing block on the rebate order is named.
 *&---------------------------------------------------------------------*
 REPORT  ycis_disburse.
 
@@ -98,6 +103,17 @@ TYPES: BEGIN OF ty_out,
          rej_date    TYPE ycis_apprvl-rej_date,
          rej_remarks TYPE ycis_apprvl-rej_remarks,
        END OF ty_out.
+
+* GAIL 23.11.2026 (CPC L6 issues): result log of a posting run - SAP's own
+* reason is shown for every line that could not be posted
+TYPES: BEGIN OF ty_log,
+         kunnr     TYPE ycis_apprvl-kunnr,
+         cust_name TYPE ycis_apprvl-cust_name,
+         order_no  TYPE ycis_apprvl-order_no,
+         cn_doc    TYPE ycis_apprvl-cn_doc,
+         result    TYPE char10,
+         msg       TYPE bapi_msg,
+       END OF ty_log.
 
 DATA: gt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
       gs_appr   TYPE ycis_apprvl,
@@ -560,7 +576,11 @@ FORM process_selected USING p_action TYPE char1.
         lv_mail   TYPE i,
         lv_nmail  TYPE i,
         lv_txtok  TYPE flag,
-        lv_ntext  TYPE i.
+        lv_ntext  TYPE i,
+        lv_msg    TYPE bapi_msg,
+        lv_fail   TYPE i,
+        lt_log    TYPE STANDARD TABLE OF ty_log,
+        ls_log    TYPE ty_log.
 
   READ TABLE gt_out INTO gs_out WITH KEY sel = 'X'.
   IF sy-subrc <> 0.
@@ -599,13 +619,33 @@ FORM process_selected USING p_action TYPE char1.
 *       Note from the ZP09 request, POST it to accounting immediately, and let
 *       output determination send the PDF + customer e-mail. Failure to
 *       create/post leaves the row Pending L6 (not marked disbursed).
-      CLEAR: lv_ok, lv_cndoc, lv_accdoc, lv_accyr.
+      CLEAR: lv_ok, lv_cndoc, lv_accdoc, lv_accyr, lv_msg.
       PERFORM post_disbursement USING gs_appr
-              CHANGING lv_ok lv_cndoc lv_accdoc lv_accyr.
+              CHANGING lv_ok lv_cndoc lv_accdoc lv_accyr lv_msg.
+      CLEAR ls_log.
+      ls_log-kunnr     = gs_appr-kunnr.
+      ls_log-cust_name = gs_appr-cust_name.
+      ls_log-order_no  = gs_appr-order_no.
       IF lv_ok IS INITIAL.
-*         credit-note creation failed - skip this row, leave it Pending L6
+*         credit-note creation failed - the row stays Pending L6 and on the
+*         grid, SAP's reason is kept in Remarks and listed in the result log
+*         (GAIL 23.11.2026: before, only 'Credit Note (G2) creation/posting
+*         failed' was shown, once per line, without the reason)
+        lv_fail = lv_fail + 1.
+        ls_log-result = 'NOT POSTED'.
+        ls_log-msg    = lv_msg.
+        APPEND ls_log TO lt_log.
+        gs_appr-remarks = |L6 posting failed: { lv_msg }|.
+        MODIFY ycis_apprvl FROM gs_appr.
+        gs_out-remarks = gs_appr-remarks.
+        CLEAR gs_out-sel.
+        MODIFY gt_out FROM gs_out.
         CONTINUE.
       ENDIF.
+      ls_log-cn_doc = lv_cndoc.
+      ls_log-result = 'POSTED'.
+      ls_log-msg    = lv_msg.              " e.g. accounting document not yet posted
+      APPEND ls_log TO lt_log.
       IF lv_cndoc IS NOT INITIAL.
         gs_appr-cn_doc = lv_cndoc.         " G2 credit note (billing doc)
       ENDIF.
@@ -641,7 +681,7 @@ FORM process_selected USING p_action TYPE char1.
     MODIFY ycis_apprvl FROM gs_appr.
   ENDLOOP.
 
-  IF lv_disb > 0 OR lv_rej > 0.
+  IF lv_disb > 0 OR lv_rej > 0 OR lv_fail > 0.
     COMMIT WORK.
   ENDIF.
   LOOP AT lt_cn INTO ls_cn.
@@ -672,7 +712,43 @@ FORM process_selected USING p_action TYPE char1.
     ENDLOOP.
   ENDIF.
   DELETE gt_out WHERE sel = 'X'.
-  MESSAGE |{ lv_disb } posted (Credit Note created, Accounting document posted, { lv_ntext } G/L text set, { lv_mail } e-mailed), { lv_rej } returned to L1| TYPE 'S'.
+* result log: every line with its credit note or SAP's reason for failure
+  IF lv_fail > 0.
+    PERFORM show_log USING lt_log.
+  ENDIF.
+  MESSAGE |{ lv_disb } posted (Credit Note created, Accounting document posted, { lv_ntext } G/L text set, { lv_mail } e-mailed), { lv_fail } not posted (reason in Remarks), { lv_rej } returned to L1| TYPE 'S'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  show_log   (result of the posting run as a pop-up list)
+*&---------------------------------------------------------------------*
+FORM show_log USING pt_log TYPE STANDARD TABLE.
+  DATA: lo_alv  TYPE REF TO cl_salv_table,
+        lo_cols TYPE REF TO cl_salv_columns_table,
+        lo_col  TYPE REF TO cl_salv_column,
+        lt_log  TYPE STANDARD TABLE OF ty_log.
+  lt_log = pt_log.
+  SORT lt_log BY result kunnr.
+  TRY.
+      cl_salv_table=>factory( IMPORTING r_salv_table = lo_alv
+                              CHANGING  t_table      = lt_log ).
+      lo_alv->get_display_settings( )->set_list_header(
+        'L6 posting result - lines NOT POSTED stay pending at L6' ).
+      lo_cols = lo_alv->get_columns( ).
+      lo_cols->set_optimize( 'X' ).
+      lo_col = lo_cols->get_column( 'RESULT' ).
+      lo_col->set_long_text( 'Result' ).
+      lo_col->set_medium_text( 'Result' ).
+      lo_col->set_short_text( 'Result' ).
+      lo_col = lo_cols->get_column( 'MSG' ).
+      lo_col->set_long_text( 'Message from SAP' ).
+      lo_col->set_medium_text( 'SAP message' ).
+      lo_col->set_short_text( 'Message' ).
+      lo_alv->set_screen_popup( start_column = 5  end_column = 160
+                                start_line   = 3  end_line   = 25 ).
+      lo_alv->display( ).
+    CATCH cx_salv_msg cx_salv_not_found.
+  ENDTRY.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -696,7 +772,8 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
                        CHANGING p_ok     TYPE flag
                                 p_cndoc  TYPE vbeln_vf
                                 p_accdoc TYPE belnr_d
-                                p_accyr  TYPE gjahr.
+                                p_accyr  TYPE gjahr
+                                p_msg    TYPE bapi_msg.
   DATA: lt_bill   TYPE STANDARD TABLE OF bapivbrk,
         ls_bill   TYPE bapivbrk,
         lt_succ   TYPE STANDARD TABLE OF bapivbrksuccess,
@@ -704,12 +781,13 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
         lt_return TYPE STANDARD TABLE OF bapireturn1,
         ls_return TYPE bapireturn1,
         lv_err    TYPE flag,
-        lv_posted TYPE flag.
+        lv_posted TYPE flag,
+        lv_faksk  TYPE vbak-faksk.
 
-  CLEAR: p_ok, p_cndoc, p_accdoc, p_accyr.
+  CLEAR: p_ok, p_cndoc, p_accdoc, p_accyr, p_msg.
 *   need the L3 rebate order (ZP09) as the billing reference
-  IF ps_appr-order_no IS INITIAL.
-    MESSAGE 'No rebate order (ZP09) found - Credit Note not created' TYPE 'I'.
+  IF ps_appr-order_no IS INITIAL OR ps_appr-order_no = 'GROUP OK'.
+    p_msg = 'No rebate order (ZP09) - Credit Note not created'.
     RETURN.
   ENDIF.
 *   idempotent: a Credit Note already exists for this proposal -> keep it
@@ -718,6 +796,19 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
     p_cndoc  = ps_appr-cn_doc.
     p_accdoc = ps_appr-acc_doc.
     p_accyr  = ps_appr-acc_year.
+    RETURN.
+  ENDIF.
+
+*   GAIL 23.11.2026: check the rebate order first - a missing order or a
+*   billing block on it is reported by name instead of a generic failure
+  SELECT SINGLE faksk FROM vbak INTO lv_faksk
+    WHERE vbeln = ps_appr-order_no.
+  IF sy-subrc <> 0.
+    p_msg = |Rebate order { ps_appr-order_no } not found (VBAK)|.
+    RETURN.
+  ENDIF.
+  IF lv_faksk IS NOT INITIAL.
+    p_msg = |Rebate order { ps_appr-order_no } has billing block { lv_faksk } - remove it (VA02 / V.23) and post again|.
     RETURN.
   ENDIF.
 
@@ -742,14 +833,25 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
       return        = lt_return
       success       = lt_succ.
 
-*   any error message -> rollback, signal failure, leave row Pending L6
+*   any error message -> rollback, signal failure, leave row Pending L6.
+*   GAIL 23.11.2026: SAP's own message(s) are returned to the caller (Remarks
+*   + result log) instead of one generic pop-up per line.
   LOOP AT lt_return INTO ls_return WHERE type = 'E' OR type = 'A'.
     lv_err = 'X'.
+    PERFORM add_msg USING ls_return CHANGING p_msg.
   ENDLOOP.
   READ TABLE lt_succ INTO ls_succ INDEX 1.
   IF lv_err = 'X' OR sy-subrc <> 0 OR ls_succ-bill_doc IS INITIAL.
     CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
-    MESSAGE 'Credit Note (G2) creation/posting failed for the selected proposal' TYPE 'I'.
+    IF p_msg IS INITIAL.
+*     no error message - take whatever SAP returned (warnings / info)
+      LOOP AT lt_return INTO ls_return.
+        PERFORM add_msg USING ls_return CHANGING p_msg.
+      ENDLOOP.
+    ENDIF.
+    IF p_msg IS INITIAL.
+      p_msg = 'Credit Note (G2) not created - no message returned by billing'.
+    ENDIF.
     RETURN.
   ENDIF.
 
@@ -765,9 +867,26 @@ FORM post_disbursement USING    ps_appr  TYPE ycis_apprvl
 *   billing posting status VBRK-RFBSK = 'C' as posted.
   PERFORM read_acc_doc USING p_cndoc 'X' CHANGING p_accdoc p_accyr lv_posted.
   IF lv_posted IS INITIAL.
-    MESSAGE |Credit Note { p_cndoc } created; accounting document not posted - release it in VFX3| TYPE 'I'.
+    p_msg = |Credit Note { p_cndoc } created; accounting document not posted - release it in VFX3|.
   ENDIF.
   p_ok = 'X'.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+FORM add_msg USING    ps_ret TYPE bapireturn1
+             CHANGING p_msg  TYPE bapi_msg.
+  DATA lv_txt TYPE bapi_msg.
+  lv_txt = ps_ret-message.
+  IF lv_txt IS INITIAL.
+    lv_txt = |{ ps_ret-type } { ps_ret-id } { ps_ret-number } { ps_ret-message_v1 } { ps_ret-message_v2 }|.
+  ELSE.
+    lv_txt = |{ lv_txt } ({ ps_ret-id } { ps_ret-number })|.
+  ENDIF.
+  IF p_msg IS INITIAL.
+    p_msg = lv_txt.
+  ELSEIF p_msg NS lv_txt.
+    p_msg = |{ p_msg }; { lv_txt }|.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -811,6 +930,7 @@ FORM send_mail USING p_mode   TYPE char1
         lt_text TYPE bcsy_text,
         ls_text TYPE soli,
         lv_addr TYPE ad_smtpadr,
+        lt_addr TYPE STANDARD TABLE OF ad_smtpadr,
         lv_sub  TYPE so_obj_des.
 
 * both notifications go to the originating sales office (Level 1)
@@ -845,9 +965,17 @@ FORM send_mail USING p_mode   TYPE char1
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
+      PERFORM set_mail_sender USING lo_send.
       LOOP AT lt_wf INTO ls_wf.
-        CHECK ls_wf-email IS NOT INITIAL.
         lv_addr = ls_wf-email.
+        IF lv_addr IS INITIAL.
+          PERFORM user_email USING ls_wf-userid CHANGING lv_addr.
+        ENDIF.
+        CHECK lv_addr IS NOT INITIAL.
+        TRANSLATE lv_addr TO LOWER CASE.
+        READ TABLE lt_addr TRANSPORTING NO FIELDS WITH KEY table_line = lv_addr.
+        CHECK sy-subrc <> 0.               " each address once
+        APPEND lv_addr TO lt_addr.
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
       ENDLOOP.
@@ -1352,4 +1480,50 @@ FORM set_gl_text USING    p_cndoc TYPE vbeln_vf
   IF p_ok = 'X'.
     COMMIT WORK AND WAIT.
   ENDIF.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  user_email   (e-mail ID of a SAP user from SU01)
+*&---------------------------------------------------------------------*
+*   GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): used when the
+*   e-mail ID of an approver is blank in YCIS_WF_APPR.
+*&---------------------------------------------------------------------*
+FORM user_email USING    p_user TYPE any
+                CHANGING p_addr TYPE ad_smtpadr.
+  DATA: lv_adrn TYPE usr21-addrnumber,
+        lv_pers TYPE usr21-persnumber.
+  CLEAR p_addr.
+  CHECK p_user IS NOT INITIAL.
+  SELECT SINGLE addrnumber persnumber FROM usr21 INTO (lv_adrn, lv_pers)
+    WHERE bname = p_user.
+  CHECK sy-subrc = 0.
+  SELECT smtp_addr FROM adr6 INTO p_addr UP TO 1 ROWS
+    WHERE addrnumber = lv_adrn
+      AND persnumber = lv_pers
+    ORDER BY flgdefault DESCENDING.
+  ENDSELECT.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  set_mail_sender
+*&---------------------------------------------------------------------*
+*   A user without an e-mail ID in SU01 cannot be the sender of an
+*   internet mail (it stops in SOST). Such a user's e-mail ID from
+*   YCIS_WF_APPR is used as sender instead.
+*&---------------------------------------------------------------------*
+FORM set_mail_sender USING po_send TYPE REF TO cl_bcs.
+  DATA: lv_addr   TYPE ad_smtpadr,
+        lo_sender TYPE REF TO if_sender_bcs.
+  PERFORM user_email USING sy-uname CHANGING lv_addr.
+  CHECK lv_addr IS INITIAL.            " SU01 e-mail ID exists - default sender
+  SELECT email FROM ycis_wf_appr INTO lv_addr UP TO 1 ROWS
+    WHERE userid = sy-uname
+      AND email <> space.
+  ENDSELECT.
+  CHECK lv_addr IS NOT INITIAL.
+  TRY.
+      lo_sender = cl_cam_address_bcs=>create_internet_address( lv_addr ).
+      po_send->set_sender( lo_sender ).
+    CATCH cx_bcs.
+  ENDTRY.
 ENDFORM.

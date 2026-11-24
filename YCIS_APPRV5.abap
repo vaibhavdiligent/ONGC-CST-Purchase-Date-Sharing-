@@ -15,6 +15,10 @@
 *& GUI status 'STANDARD' (function codes APPR, REJ, SELALL, DESEL, BACK,
 *& EXIT) must exist in this program - create it in SE41 (copy from the L2
 *& program YCIS_APPROVE).
+*&
+*& GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): the L6 approvers
+*&   are read for level 6 under any sales office, a blank e-mail ID is taken
+*&   from SU01, and the result message says whether the L6 mail was sent.
 *&---------------------------------------------------------------------*
 REPORT  ycis_apprv5.
 
@@ -88,6 +92,9 @@ DATA: gt_appr   TYPE STANDARD TABLE OF ycis_apprvl,
 
 *--------------------------------------------------------------------*
 DATA: gt_qais TYPE STANDARD TABLE OF yrva_qais_data.   " seasonal ind. / waivers
+* GAIL 23.11.2026: result of the e-mail to L6 (shown after approval)
+DATA: gv_nrec    TYPE i,
+      gv_mailerr TYPE string.
 
 SELECTION-SCREEN BEGIN OF BLOCK b1 WITH FRAME TITLE t_b1.
 SELECT-OPTIONS: s_sptag FOR ycis_apprvl-period_from,
@@ -563,6 +570,7 @@ FORM process_selected USING p_action TYPE char1.
     COMMIT WORK.
   ENDIF.
 *   forwarded to L6 (CPC Finance) - central (office '0001', level 6): one mail
+  CLEAR: gv_nrec, gv_mailerr.
   IF lv_appr > 0.
     PERFORM send_mail USING '6' '0001' '0001'.
   ENDIF.
@@ -573,7 +581,15 @@ FORM process_selected USING p_action TYPE char1.
     ENDLOOP.
   ENDIF.
   DELETE gt_out WHERE sel = 'X'.
-  MESSAGE |{ lv_appr } approved & forwarded to L6, { lv_rej } returned to L1| TYPE 'S'.
+* GAIL 23.11.2026: say whether L6 was e-mailed (and why not)
+  IF lv_appr > 0 AND gv_nrec = 0.
+    IF gv_mailerr IS INITIAL.
+      gv_mailerr = 'no L6 e-mail ID in YCIS_WF_APPR (level 6) or SU01'.
+    ENDIF.
+    MESSAGE |{ lv_appr } approved & forwarded to L6, { lv_rej } returned to L1 - e-mail to L6 NOT sent: { gv_mailerr }| TYPE 'I'.
+  ELSE.
+    MESSAGE |{ lv_appr } approved & forwarded to L6 (e-mail sent to { gv_nrec } L6 address(es)), { lv_rej } returned to L1| TYPE 'S'.
+  ENDIF.
 ENDFORM.
 
 *&---------------------------------------------------------------------*
@@ -617,10 +633,19 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
         lt_text TYPE bcsy_text,
         ls_text TYPE soli,
         lv_addr TYPE ad_smtpadr,
-        lv_sub  TYPE so_obj_des.
+        lt_addr TYPE STANDARD TABLE OF ad_smtpadr,
+        lv_sub  TYPE so_obj_des,
+        lx_bcs  TYPE REF TO cx_bcs.
 
   SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
     WHERE wf_level = p_level AND sales_office = p_office.
+* GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): a central level
+* (sales office '0001') is found under whatever sales office its approvers
+* are maintained; a blank e-mail ID is taken from the user master (SU01).
+  IF p_office = '0001'.
+    SELECT * FROM ycis_wf_appr INTO TABLE lt_wf
+      WHERE wf_level = p_level.
+  ENDIF.
   CHECK lt_wf IS NOT INITIAL.
 
   TRY.
@@ -650,16 +675,27 @@ FORM send_mail USING p_level  TYPE ycis_wlevel
       lo_doc = cl_document_bcs=>create_document(
                  i_type = 'RAW' i_text = lt_text i_subject = lv_sub ).
       lo_send->set_document( lo_doc ).
+      PERFORM set_mail_sender USING lo_send.
       LOOP AT lt_wf INTO ls_wf.
-        CHECK ls_wf-email IS NOT INITIAL.
         lv_addr = ls_wf-email.
+        IF lv_addr IS INITIAL.
+          PERFORM user_email USING ls_wf-userid CHANGING lv_addr.
+        ENDIF.
+        CHECK lv_addr IS NOT INITIAL.
+        TRANSLATE lv_addr TO LOWER CASE.
+        READ TABLE lt_addr TRANSPORTING NO FIELDS WITH KEY table_line = lv_addr.
+        CHECK sy-subrc <> 0.               " each address once
+        APPEND lv_addr TO lt_addr.
         lo_rec  = cl_cam_address_bcs=>create_internet_address( lv_addr ).
         lo_send->add_recipient( i_recipient = lo_rec ).
+        gv_nrec = gv_nrec + 1.
       ENDLOOP.
       lo_send->set_send_immediately( 'X' ).
       lo_send->send( i_with_error_screen = 'X' ).
       COMMIT WORK.
-    CATCH cx_bcs.
+    CATCH cx_bcs INTO lx_bcs.
+      CLEAR gv_nrec.                   " not sent
+      gv_mailerr = lx_bcs->get_text( ).
   ENDTRY.
 ENDFORM.
 
@@ -757,4 +793,50 @@ FORM wf_text USING    ps_appr TYPE ycis_apprvl
     WHEN OTHERS.
       p_txt = ps_appr-wf_status.
   ENDCASE.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  user_email   (e-mail ID of a SAP user from SU01)
+*&---------------------------------------------------------------------*
+*   GAIL 23.11.2026 (CPC: no mail to L6 on L5 approval): used when the
+*   e-mail ID of an approver is blank in YCIS_WF_APPR.
+*&---------------------------------------------------------------------*
+FORM user_email USING    p_user TYPE any
+                CHANGING p_addr TYPE ad_smtpadr.
+  DATA: lv_adrn TYPE usr21-addrnumber,
+        lv_pers TYPE usr21-persnumber.
+  CLEAR p_addr.
+  CHECK p_user IS NOT INITIAL.
+  SELECT SINGLE addrnumber persnumber FROM usr21 INTO (lv_adrn, lv_pers)
+    WHERE bname = p_user.
+  CHECK sy-subrc = 0.
+  SELECT smtp_addr FROM adr6 INTO p_addr UP TO 1 ROWS
+    WHERE addrnumber = lv_adrn
+      AND persnumber = lv_pers
+    ORDER BY flgdefault DESCENDING.
+  ENDSELECT.
+ENDFORM.
+
+*&---------------------------------------------------------------------*
+*&      Form  set_mail_sender
+*&---------------------------------------------------------------------*
+*   A user without an e-mail ID in SU01 cannot be the sender of an
+*   internet mail (it stops in SOST). Such a user's e-mail ID from
+*   YCIS_WF_APPR is used as sender instead.
+*&---------------------------------------------------------------------*
+FORM set_mail_sender USING po_send TYPE REF TO cl_bcs.
+  DATA: lv_addr   TYPE ad_smtpadr,
+        lo_sender TYPE REF TO if_sender_bcs.
+  PERFORM user_email USING sy-uname CHANGING lv_addr.
+  CHECK lv_addr IS INITIAL.            " SU01 e-mail ID exists - default sender
+  SELECT email FROM ycis_wf_appr INTO lv_addr UP TO 1 ROWS
+    WHERE userid = sy-uname
+      AND email <> space.
+  ENDSELECT.
+  CHECK lv_addr IS NOT INITIAL.
+  TRY.
+      lo_sender = cl_cam_address_bcs=>create_internet_address( lv_addr ).
+      po_send->set_sender( lo_sender ).
+    CATCH cx_bcs.
+  ENDTRY.
 ENDFORM.
