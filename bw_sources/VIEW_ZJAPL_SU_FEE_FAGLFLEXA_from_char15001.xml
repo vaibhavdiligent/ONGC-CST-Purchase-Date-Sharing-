@@ -1,0 +1,748 @@
+calculatedViewAttributes/>
+      <input node="#/BIC/AZJCCJCACC2">
+        <mapping xsi:type="Calculation:AttributeMapping" target="HKONT" source="HKONT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJC_ACC" source="CCJC_ACC"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:JoinView" id="Join_3" joinOrder="OUTSIDE_IN" joinType="inner">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER"/>
+        <viewAttribute id="ACCURAL_GL_ACC"/>
+        <viewAttribute id="POSTING_GL_ACC"/>
+        <viewAttribute id="AC_DOC_TYP"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Join_1">
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+      </input>
+      <input node="#Projection_4">
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="HKONT"/>
+      </input>
+      <joinAttribute name="GL_ACCOUNT"/>
+    </calculationView>
+    <calculationView xsi:type="Calculation:ProjectionView" id="PN_KNA1">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="KUNNR"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#KNA1">
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="/CCEJ/KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="KUNNR" source="KUNNR"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:JoinView" id="Join_8" joinOrder="OUTSIDE_IN" joinType="leftOuter">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC"/>
+        <viewAttribute id="POSTING_GL_ACC"/>
+        <viewAttribute id="AC_DOC_TYP"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Join_3">
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+      </input>
+      <input node="#PN_KNA1">
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="KUNNR"/>
+      </input>
+      <joinAttribute name="BAC"/>
+    </calculationView>
+    <calculationView xsi:type="Calculation:ProjectionView" id="Projection_2">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER" transparentFilter="false"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="POSTING_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="AC_DOC_TYP"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Join_8">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:ProjectionView" id="Projection_5">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER" transparentFilter="false"/>
+        <viewAttribute id="SOURCE">
+          <filter xsi:type="AccessControl:SingleValueFilter" including="false" value="FI"/>
+        </viewAttribute>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="POSTING_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="AC_DOC_TYP"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Projection_2">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:ProjectionView" id="Projection_6">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="FI_DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="FI_INCIDENCE_PER" transparentFilter="false"/>
+        <viewAttribute id="SOURCE">
+          <filter xsi:type="AccessControl:SingleValueFilter" including="true" value="FI"/>
+        </viewAttribute>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="POSTING_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="AC_DOC_TYP"/>
+        <viewAttribute id="SOURCE_1"/>
+        <viewAttribute id="SOURCE_2"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Projection_2">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FI_DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FI_INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE_1" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE_2" source="SOURCE"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:ProjectionView" id="Projection_1">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="PALEDGER">
+          <filter xsi:type="AccessControl:SingleValueFilter" including="true" value="01"/>
+        </viewAttribute>
+        <viewAttribute id="VRGAR">
+          <filter xsi:type="AccessControl:ListValueFilter" operator="IN" including="true">
+            <operands value="4"/>
+            <operands value="6"/>
+            <operands value="7"/>
+            <operands value="8"/>
+            <operands value="9"/>
+            <operands value="B"/>
+          </filter>
+        </viewAttribute>
+        <viewAttribute id="PERIO"/>
+        <viewAttribute id="RBELN"/>
+        <viewAttribute id="KSTAR"/>
+        <viewAttribute id="BUKRS"/>
+        <viewAttribute id="GJAHR"/>
+        <viewAttribute id="WW207"/>
+        <viewAttribute id="VV518"/>
+        <viewAttribute id="VV520"/>
+        <viewAttribute id="VV572"/>
+        <viewAttribute id="VV529"/>
+        <viewAttribute id="VV573"/>
+        <viewAttribute id="VV575"/>
+        <viewAttribute id="VV576"/>
+        <viewAttribute id="VV577"/>
+        <viewAttribute id="VV578"/>
+        <viewAttribute id="VV583"/>
+        <viewAttribute id="VV584"/>
+        <viewAttribute id="VV608"/>
+        <viewAttribute id="VV622"/>
+        <viewAttribute id="ARTNR"/>
+        <viewAttribute id="VRGAR_1"/>
+      </viewAttributes>
+      <calculatedViewAttributes>
+        <calculatedViewAttribute datatype="DECIMAL" id="CA_COPA_VF_SUM" length="17" scale="2" expressionLanguage="COLUMN_ENGINE">
+          <formula>&quot;VV518&quot;+&quot;VV520&quot;+&quot;VV572&quot;+&quot;VV529&quot;+&quot;VV573&quot;+&quot;VV575&quot;+&quot;VV576&quot;+&quot;VV577&quot;+&quot;VV578&quot;+&quot;VV583&quot;+&quot;VV584&quot;+&quot;VV608&quot;+&quot;VV622&quot;</formula>
+        </calculatedViewAttribute>
+      </calculatedViewAttributes>
+      <input node="#CE1JP00">
+        <mapping xsi:type="Calculation:AttributeMapping" target="PALEDGER" source="PALEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VRGAR" source="VRGAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PERIO" source="PERIO"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RBELN" source="RBELN"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="KSTAR" source="KSTAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BUKRS" source="BUKRS"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GJAHR" source="GJAHR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="WW207" source="WW207"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV518" source="VV518"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV520" source="VV520"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV572" source="VV572"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV529" source="VV529"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV573" source="VV573"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV575" source="VV575"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV576" source="VV576"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV577" source="VV577"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV578" source="VV578"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV583" source="VV583"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV584" source="VV584"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV608" source="VV608"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VV622" source="VV622"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ARTNR" source="ARTNR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="VRGAR_1" source="VRGAR"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:JoinView" id="Join_4" joinOrder="OUTSIDE_IN" joinType="leftOuter">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER" transparentFilter="false"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="POSTING_GL_ACC" transparentFilter="false"/>
+        <viewAttribute id="AC_DOC_TYP"/>
+        <viewAttribute id="WW207"/>
+        <viewAttribute id="ARTNR"/>
+        <viewAttribute id="CA_COPA_VF_SUM"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Projection_5">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+      </input>
+      <input node="#Projection_1">
+        <mapping xsi:type="Calculation:AttributeMapping" target="WW207" source="WW207"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ARTNR" source="ARTNR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CA_COPA_VF_SUM" source="CA_COPA_VF_SUM"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="RBELN"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="KSTAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="BUKRS"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="GJAHR"/>
+      </input>
+      <joinAttribute name="AC_DOC_NR"/>
+      <joinAttribute name="GL_ACCOUNT"/>
+      <joinAttribute name="COMP_CODE"/>
+      <joinAttribute name="FISCYEAR"/>
+    </calculationView>
+    <calculationView xsi:type="Calculation:UnionView" id="Union_1">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC"/>
+        <viewAttribute id="POSTING_GL_ACC"/>
+        <viewAttribute id="AC_DOC_TYP" transparentFilter="false"/>
+        <viewAttribute id="FI_DEB_CRE_LC"/>
+        <viewAttribute id="FI_INCIDENCE_PER"/>
+        <viewAttribute id="CA_COPA_VF_SUM" transparentFilter="false"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input emptyUnionBehavior="NO_ROW" node="#Projection_6">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="FI_DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="FI_INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FI_DEB_CRE_LC" source="FI_DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FI_INCIDENCE_PER" source="FI_INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:ConstantAttributeMapping" target="CA_COPA_VF_SUM" null="true" value=""/>
+      </input>
+      <input emptyUnionBehavior="NO_ROW" node="#Join_4">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+        <mapping xsi:type="Calculation:ConstantAttributeMapping" target="FI_DEB_CRE_LC" null="true" value=""/>
+        <mapping xsi:type="Calculation:ConstantAttributeMapping" target="FI_INCIDENCE_PER" null="true" value=""/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CA_COPA_VF_SUM" source="CA_COPA_VF_SUM"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:AggregationView" id="Aggregation_3">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC"/>
+        <viewAttribute id="POSTING_GL_ACC"/>
+        <viewAttribute id="AC_DOC_TYP" transparentFilter="false"/>
+        <viewAttribute id="CA_COPA_VF_SUM" transparentFilter="false"/>
+      </viewAttributes>
+      <calculatedViewAttributes/>
+      <input node="#Union_1">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CA_COPA_VF_SUM" source="CA_COPA_VF_SUM"/>
+      </input>
+    </calculationView>
+    <calculationView xsi:type="Calculation:ProjectionView" id="Projection_10">
+      <descriptions/>
+      <viewAttributes>
+        <viewAttribute id="FISCYEAR"/>
+        <viewAttribute id="FISCPER3"/>
+        <viewAttribute id="COMP_CODE"/>
+        <viewAttribute id="GL_ACCOUNT"/>
+        <viewAttribute id="CCJCACC_DESC"/>
+        <viewAttribute id="DEB_CRE_LC"/>
+        <viewAttribute id="BAC"/>
+        <viewAttribute id="RPPCAT"/>
+        <viewAttribute id="CO_AREA"/>
+        <viewAttribute id="PROFIT_CTR"/>
+        <viewAttribute id="INCIDENCE_PER"/>
+        <viewAttribute id="SOURCE"/>
+        <viewAttribute id="AC_DOC_NR"/>
+        <viewAttribute id="AC_LEDGER"/>
+        <viewAttribute id="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <viewAttribute id="ACCURAL_GL_ACC"/>
+        <viewAttribute id="POSTING_GL_ACC"/>
+        <viewAttribute id="AC_DOC_TYP" transparentFilter="false"/>
+        <viewAttribute id="CA_COPA_VF_SUM" transparentFilter="false"/>
+      </viewAttributes>
+      <calculatedViewAttributes>
+        <calculatedViewAttribute datatype="DECIMAL" id="CA_AMT_Support_Fee" length="17" scale="2" expressionLanguage="COLUMN_ENGINE">
+          <formula>&quot;DEB_CRE_LC&quot; * &quot;CA_Incidence_per&quot;/100</formula>
+        </calculatedViewAttribute>
+        <calculatedViewAttribute datatype="DECIMAL" id="CA_Incidence_per" length="8" scale="2" expressionLanguage="COLUMN_ENGINE">
+          <formula>if(&quot;SOURCE&quot; = 'FI'and &quot;GL_ACCOUNT&quot; !=''and &quot;FISCYEAR&quot;!='' and &quot;FISCPER3&quot;!='', &quot;INCIDENCE_PER&quot; , &#xD;
+if(&quot;SOURCE&quot; != 'FI', &quot;INCIDENCE_PER&quot;,999))&#xD;
+&#xD;
+</formula>
+        </calculatedViewAttribute>
+        <calculatedViewAttribute datatype="DECIMAL" id="CA_AMT_COPA" length="17" scale="2" expressionLanguage="COLUMN_ENGINE">
+          <formula>&quot;CA_COPA_VF_SUM&quot; * &quot;CA_Incidence_per&quot;/100</formula>
+        </calculatedViewAttribute>
+      </calculatedViewAttributes>
+      <input node="#Aggregation_3">
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCYEAR" source="FISCYEAR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="FISCPER3" source="FISCPER3"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="COMP_CODE" source="COMP_CODE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="GL_ACCOUNT" source="GL_ACCOUNT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CCJCACC_DESC" source="CCJCACC_DESC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="DEB_CRE_LC" source="DEB_CRE_LC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="BAC" source="BAC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="RPPCAT" source="RPPCAT"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CO_AREA" source="CO_AREA"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="PROFIT_CTR" source="PROFIT_CTR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="INCIDENCE_PER" source="INCIDENCE_PER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="SOURCE" source="SOURCE"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_NR" source="AC_DOC_NR"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_LEDGER" source="AC_LEDGER"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="_CCEJ_KNA1_FIXED_VALUE1" source="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="ACCURAL_GL_ACC" source="ACCURAL_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="POSTING_GL_ACC" source="POSTING_GL_ACC"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="AC_DOC_TYP" source="AC_DOC_TYP"/>
+        <mapping xsi:type="Calculation:AttributeMapping" target="CA_COPA_VF_SUM" source="CA_COPA_VF_SUM"/>
+      </input>
+    </calculationView>
+  </calculationViews>
+  <logicalModel id="Projection_10">
+    <descriptions/>
+    <attributes>
+      <attribute id="FISCYEAR" order="5" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="FISCYEAR"/>
+        <keyMapping columnObjectName="Projection_10" columnName="FISCYEAR"/>
+      </attribute>
+      <attribute id="FISCPER3" order="6" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="FISCPER3"/>
+        <keyMapping columnObjectName="Projection_10" columnName="FISCPER3"/>
+      </attribute>
+      <attribute id="COMP_CODE" order="7" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="COMP_CODE"/>
+        <keyMapping columnObjectName="Projection_10" columnName="COMP_CODE"/>
+      </attribute>
+      <attribute id="GL_ACCOUNT" order="8" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="GL_ACCOUNT"/>
+        <keyMapping columnObjectName="Projection_10" columnName="GL_ACCOUNT"/>
+      </attribute>
+      <attribute id="CCJCACC_DESC" order="9" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="CCJCACC_DESC"/>
+        <keyMapping columnObjectName="Projection_10" columnName="CCJCACC_DESC"/>
+      </attribute>
+      <attribute id="BAC" order="10" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="BAC"/>
+        <keyMapping columnObjectName="Projection_10" columnName="BAC"/>
+      </attribute>
+      <attribute id="RPPCAT" order="11" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="RPPCAT"/>
+        <keyMapping columnObjectName="Projection_10" columnName="RPPCAT"/>
+      </attribute>
+      <attribute id="CO_AREA" order="12" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="CO_AREA"/>
+        <keyMapping columnObjectName="Projection_10" columnName="CO_AREA"/>
+      </attribute>
+      <attribute id="PROFIT_CTR" order="13" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="PROFIT_CTR"/>
+        <keyMapping columnObjectName="Projection_10" columnName="PROFIT_CTR"/>
+      </attribute>
+      <attribute id="SOURCE" order="14" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="SOURCE"/>
+        <keyMapping columnObjectName="Projection_10" columnName="SOURCE"/>
+      </attribute>
+      <attribute id="AC_DOC_NR" order="15" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="AC_DOC_NR"/>
+        <keyMapping columnObjectName="Projection_10" columnName="AC_DOC_NR"/>
+      </attribute>
+      <attribute id="AC_LEDGER" order="16" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="AC_LEDGER"/>
+        <keyMapping columnObjectName="Projection_10" columnName="AC_LEDGER"/>
+      </attribute>
+      <attribute id="_CCEJ_KNA1_FIXED_VALUE1" order="17" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="_CCEJ_KNA1_FIXED_VALUE1"/>
+        <keyMapping columnObjectName="Projection_10" columnName="_CCEJ_KNA1_FIXED_VALUE1"/>
+      </attribute>
+      <attribute id="ACCURAL_GL_ACC" order="18" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="ACCURAL_GL_ACC"/>
+        <keyMapping columnObjectName="Projection_10" columnName="ACCURAL_GL_ACC"/>
+      </attribute>
+      <attribute id="POSTING_GL_ACC" order="19" attributeHierarchyActive="false" displayAttribute="false">
+        <descriptions defaultDescription="POSTING_GL_ACC"/>
+        <keyMapping columnObjectName="Projection_10" columnName="POSTING_GL_ACC"/>
+      </attribute>
+      <attribute id="AC_DOC_TYP" order="20" attributeHierarchyActive="false" displayAttribute="false" transparentFilter="false">
+        <descriptions defaultDescription="AC_DOC_TYP"/>
+        <keyMapping columnObjectName="Projection_10" columnName="AC_DOC_TYP"/>
+      </attribute>
+    </attributes>
+    <calculatedAttributes/>
+    <privateDataFoundation>
+      <tableProxies/>
+      <joins/>
+      <layout>
+        <shapes/>
+      </layout>
+    </privateDataFoundation>
+    <baseMeasures>
+      <measure id="DEB_CRE_LC" order="1" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="DEB_CRE_LC"/>
+        <measureMapping columnObjectName="Projection_10" columnName="DEB_CRE_LC"/>
+      </measure>
+      <measure id="CA_Incidence_per" order="2" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CA_Incidence_per"/>
+        <measureMapping columnObjectName="Projection_10" columnName="CA_Incidence_per"/>
+      </measure>
+      <measure id="CA_AMT_Support_Fee" order="3" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CA_AMT_Support_Fee"/>
+        <measureMapping columnObjectName="Projection_10" columnName="CA_AMT_Support_Fee"/>
+      </measure>
+      <measure id="CA_AMT_COPA" order="4" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="CA_AMT_COPA"/>
+        <measureMapping columnObjectName="Projection_10" columnName="CA_AMT_COPA"/>
+      </measure>
+      <measure id="INCIDENCE_PER" order="21" aggregationType="sum" measureType="simple">
+        <descriptions defaultDescription="INCIDENCE_PER"/>
+        <measureMapping columnObjectName="Projection_10" columnName="INCIDENCE_PER"/>
+      </measure>
+    </baseMeasures>
+    <calculatedMeasures/>
+    <restrictedMeasures/>
+    <localDimensions/>
+  </logicalModel>
+  <layout>
+    <shapes>
+      <shape expanded="true" modelObjectName="Output" modelObjectNameSpace="MeasureGroup">
+        <upperLeftCorner x="175" y="87"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="PN_FAGLFLEXA" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="22" y="1073"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_3" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="330" y="1073"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="PN_MAP_GL" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="176" y="1151"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Aggregation_1" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="176" y="1073"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Join_2" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="176" y="977"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Aggregation_2" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="22" y="977"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Join_1" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="99" y="881"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_4" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="253" y="881"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Join_3" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="176" y="785"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="PN_KNA1" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="22" y="785"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Join_8" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="98" y="689"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_2" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="98" y="611"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_5" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="186" y="533"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_6" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="98" y="437"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_1" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="340" y="533"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Join_4" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="252" y="437"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Union_1" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="175" y="321"/>
+        <rectangleSize height="-1" width="-1"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Aggregation_3" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="175" y="243"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+      <shape expanded="true" modelObjectName="Projection_10" modelObjectNameSpace="CalculationView">
+        <upperLeftCorner x="175" y="165"/>
+        <rectangleSize height="0" width="0"/>
+      </shape>
+    </shapes>
+  </layout>
+</Calculation:scenario>
