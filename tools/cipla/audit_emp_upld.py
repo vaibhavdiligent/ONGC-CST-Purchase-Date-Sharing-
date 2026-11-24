@@ -96,6 +96,13 @@ need('the bank change is reported as updated without checking the supplier (LFBK
      r"INTO @DATA\(lv_new_on_vendor\)\.\s*\n\s*IF lv_new_on_vendor IS INITIAL\.\s*\n\s*add\(")
 need('an account that is on the partner but not on the supplier is reported as already maintained',
      r"INTO @DATA\(lv_old_on_vendor\)\.\s*\n\s*IF lv_old_on_vendor IS INITIAL\.\s*\n\s*add\(")
+need('an employee whose bank already matches is skipped without a log line - the customer could not see why '
+     'a vendor was not updated (24.11.2026)',
+     r"ELSE\.\s*\n(?:\s*\".*\n)*\s*APPEND VALUE ty_msg\( emp_no\s+= lv_key status = `No change`")
+need('a DPR / tax invoice vendor that is not in the employee file has no line in the log saying it was skipped and why',
+     r"status = `Skipped`\s*\n\s*remarks = `Not created:.*status = `Skipped`\s*\n\s*remarks = `Bank not checked:")
+need('the log does not explain which employees the program processes',
+     r"WRITE: / 'HOW THE PROGRAM WORKS'\.")
 need('the run\'s log is not printed in the job spool - when the mail does not go out (SOST 826) nobody sees '
      'why no vendor was created (CRQ, 23.11.2026)',
      r'PERFORM f_read_n_run\.\s*\n\s*PERFORM f_write_log\.')

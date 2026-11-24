@@ -271,6 +271,8 @@ DATA: ta_msg            TYPE TABLE OF ty_msg,
 DATA: gt_log       TYPE TABLE OF ty_msg,
       gt_run       TYPE string_table,
       gt_tried     TYPE SORTED TABLE OF lifnr WITH UNIQUE KEY table_line,
+      gt_checked   TYPE SORTED TABLE OF lifnr WITH UNIQUE KEY table_line,
+      gv_not_in_files TYPE i,
       gv_ran       TYPE abap_bool,
       gv_to_create TYPE i,
       gv_to_update TYPE i.
@@ -1503,6 +1505,7 @@ FORM f_runbdc.
         wa_update-lifnr = |{ wa_update-lifnr ALPHA = IN }|.
         IF sy-subrc = 0.
           gv_to_update = gv_to_update + 1.
+          INSERT lv_key INTO TABLE gt_checked.
           READ TABLE ta_lfbk INTO DATA(wa_lfbk) WITH KEY lifnr = wa_update-lifnr banks = wa_file-banks bankl = wa_file-bankl bankn = wa_file-bankn BINARY SEARCH.
           IF sy-subrc <> 0.
             lv_status = co_update.
@@ -1518,7 +1521,15 @@ FORM f_runbdc.
 *          PERFORM send_email.                                                               "Commented BY Aishwarya - 8000003767 - 07.04.2025
 *          REFRESH: ta_bdcdata[], ta_mess[], ta_mess_update[], ta_bdcdata_update[].
             CLEAR : wa_create, wa_lfbk, wa_update, lv_status, lv_bankl, lv_banka.
+          ELSE.
+            " S/4HANA conversion: said in the log, not silently skipped.
+            APPEND VALUE ty_msg( emp_no   = lv_key status = `No change` emp_name = wa_file-name1
+                                 remarks  = |Bank already as in the employee file (IFSC { wa_file-bankl },| &&
+                                            | account { wa_file-bankn }) - nothing to update| ) TO gt_log.
+            CLEAR : wa_lfbk, wa_update.
           ENDIF.
+        ELSE.
+          gv_not_in_files = gv_not_in_files + 1.   " no DPR / tax invoice entry
         ENDIF.
       ENDIF.
     ENDIF.
@@ -3175,53 +3186,128 @@ ENDFORM.
 * it can be read when the log mail does not go out.
 *----------------------------------------------------------------------*
 FORM f_write_log.
+  " S/4HANA conversion: a log that answers "why was this vendor not created
+  " or not updated" by itself - every DPR / tax invoice vendor gets a line
+  " with what was done and why (Cipla, 24.11.2026).
   DATA: lv_text TYPE string,
         lv_n    TYPE i.
-  WRITE: / 'Employee vendor upload - log'.
+  TYPES: BEGIN OF ty_cnt,
+           status TYPE string,
+           emp_no TYPE string,
+         END OF ty_cnt.
+  DATA lt_cnt TYPE SORTED TABLE OF ty_cnt WITH UNIQUE KEY status emp_no.
+
+  lv_text = |EMPLOYEE VENDOR UPLOAD - LOG  ({ sy-datum DATE = USER } { sy-uzeit TIME = USER })|.
+  PERFORM f_write_line USING lv_text.
   ULINE.
-  lv_text = |Vendors of the DPR / tax invoice files: { lines( ta_create ) } not yet in company code 1000, | &&
-            |{ lines( ta_update ) } already there|.
+  WRITE: / 'HOW THE PROGRAM WORKS'.
+  WRITE: / '  Only employees whose code is in a DPR or tax invoice file of this run are processed:'.
+  WRITE: / '  - not yet a vendor in company code 1000 -> the vendor is created from the employee file'.
+  WRITE: / '  - already a vendor in company code 1000 -> the bank account and IFSC are updated from the employee file'.
+  WRITE: / '  Employees without a DPR / tax invoice entry are not processed.'.
+  ULINE.
+  WRITE: / 'SUMMARY'.
+  lv_text = |  Vendors in the DPR / tax invoice files: { lines( ta_create ) + lines( ta_update ) }| &&
+            | - { lines( ta_create ) } not yet in company code 1000 (to create),| &&
+            | { lines( ta_update ) } already in company code 1000 (bank to check)|.
   PERFORM f_write_line USING lv_text.
   LOOP AT gt_run INTO lv_text.
+    lv_text = |  { lv_text }|.
     PERFORM f_write_line USING lv_text.
   ENDLOOP.
   IF gv_ran = abap_false.
-    WRITE: / 'The employee file was not processed - no employee vendor was created or changed.'.
+    WRITE: / '  The employee file was not processed - no vendor was created or changed.'.
   ELSE.
-    lv_text = |Employee rows found among them: { gv_to_create } to create, { gv_to_update } to check / change bank|.
+    lv_text = |  Employees of the file found among these vendors: { gv_to_create } to create,| &&
+              | { gv_to_update } to check bank|.
     PERFORM f_write_line USING lv_text.
-    IF gv_to_create = 0.
-      WRITE: / 'No employee vendor to create: no employee of the file is a DPR / tax invoice vendor that is',
-             / 'still missing in company code 1000.'.
-    ENDIF.
-    " Why a vendor of the DPR / tax invoice files was not created: it is
-    " not in the employee file.
-    LOOP AT ta_create INTO DATA(ls_cre) WHERE lifnr IS NOT INITIAL.
-      READ TABLE gt_tried TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_cre-lifnr.
-      IF sy-subrc <> 0.
-        lv_n = lv_n + 1.
-        IF lv_n <= 200.
-          lv_text = |Vendor { ls_cre-lifnr } of the DPR / tax invoice files is not in company code 1000 | &&
-                    |and not in the employee file - not created|.
-          PERFORM f_write_line USING lv_text.
-        ENDIF.
-      ENDIF.
-    ENDLOOP.
-    IF lv_n > 200.
-      lv_text = |... and { lv_n - 200 } more vendors not in the employee file|.
-      PERFORM f_write_line USING lv_text.
-    ENDIF.
+    lv_text = |  Employees of the file without a DPR / tax invoice entry: { gv_not_in_files } - not processed|.
+    PERFORM f_write_line USING lv_text.
   ENDIF.
-  ULINE.
+
+  " Vendors of the DPR / tax invoice files that are not in the employee file
+  LOOP AT ta_create INTO DATA(ls_cre) WHERE lifnr IS NOT INITIAL.
+    READ TABLE gt_tried TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_cre-lifnr.
+    IF sy-subrc <> 0.
+      APPEND VALUE ty_msg( emp_no  = ls_cre-lifnr status = `Skipped`
+                           remarks = `Not created: not a vendor in company code 1000, and not in the employee ` &&
+                                     `file - the employee file has the data a vendor is created from` ) TO gt_log.
+    ENDIF.
+  ENDLOOP.
+  LOOP AT ta_update INTO DATA(ls_upd) WHERE lifnr IS NOT INITIAL.
+    READ TABLE gt_checked TRANSPORTING NO FIELDS WITH TABLE KEY table_line = ls_upd-lifnr.
+    IF sy-subrc <> 0.
+      APPEND VALUE ty_msg( emp_no  = ls_upd-lifnr status = `Skipped`
+                           remarks = `Bank not checked: already a vendor in company code 1000, but not in the ` &&
+                                     `employee file - no bank data to compare` ) TO gt_log.
+    ENDIF.
+  ENDLOOP.
+
   SORT gt_log BY emp_no status remarks.
   DELETE ADJACENT DUPLICATES FROM gt_log COMPARING emp_no status remarks.
-  LOOP AT gt_log INTO DATA(ls_log).
-    lv_text = |{ ls_log-emp_no } { ls_log-status } { ls_log-emp_name }: { ls_log-remarks }|.
-    PERFORM f_write_line USING lv_text.
+  LOOP AT gt_log INTO DATA(ls_c).
+    INSERT VALUE ty_cnt( status = ls_c-status emp_no = ls_c-emp_no ) INTO TABLE lt_cnt.
+  ENDLOOP.
+  DATA(lt_st) = VALUE string_table( ( CONV string( co_create ) ) ( CONV string( co_update ) )
+                                    ( `No change` ) ( CONV string( co_failed ) ) ( `Skipped` ) ).
+  lv_text = `  Result:`.
+  LOOP AT lt_st INTO DATA(lv_st).
+    CLEAR lv_n.
+    LOOP AT lt_cnt TRANSPORTING NO FIELDS WHERE status = lv_st.
+      lv_n = lv_n + 1.
+    ENDLOOP.
+    lv_text = |{ lv_text } { lv_n } { lv_st };|.
+  ENDLOOP.
+  PERFORM f_write_line USING lv_text.
+  ULINE.
+  WRITE: / 'RESULT'.
+  WRITE: / '  New       = vendor created            Modified = bank account / IFSC updated'.
+  WRITE: / '  No change = bank already as in file   Failed   = not done, the reason says why'.
+  WRITE: / '  Skipped   = not processed, the reason says why'.
+  WRITE: / '  Employee   Result     Name                            Reason'.
+  ULINE.
+  " Failed first, then Skipped, then the rest - what needs action on top.
+  LOOP AT lt_st INTO lv_st.
+    DATA(lv_ix) = sy-tabix.
+    IF lv_ix < 4.
+      CONTINUE.
+    ENDIF.
+    LOOP AT gt_log INTO DATA(ls_log) WHERE status = lv_st.
+      PERFORM f_log_row USING ls_log.
+    ENDLOOP.
+  ENDLOOP.
+  LOOP AT lt_st INTO lv_st.
+    IF sy-tabix >= 4.
+      EXIT.
+    ENDIF.
+    LOOP AT gt_log INTO ls_log WHERE status = lv_st.
+      PERFORM f_log_row USING ls_log.
+    ENDLOOP.
+  ENDLOOP.
+  LOOP AT gt_log INTO ls_log.
+    IF NOT line_exists( lt_st[ table_line = ls_log-status ] ).
+      PERFORM f_log_row USING ls_log.
+    ENDIF.
   ENDLOOP.
   IF gt_log IS INITIAL.
-    WRITE: / 'No messages.'.
+    WRITE: / '  No messages.'.
   ENDIF.
+ENDFORM.
+*&---------------------------------------------------------------------*
+*&      Form  F_LOG_ROW
+*&---------------------------------------------------------------------*
+* One employee's result in fixed columns: code, result, name, reason.
+*----------------------------------------------------------------------*
+FORM f_log_row USING us_log TYPE ty_msg.
+  DATA: lv_emp  TYPE c LENGTH 10,
+        lv_st   TYPE c LENGTH 10,
+        lv_name TYPE c LENGTH 31,
+        lv_text TYPE string.
+  lv_emp  = us_log-emp_no.
+  lv_st   = us_log-status.
+  lv_name = us_log-emp_name.
+  lv_text = |  { lv_emp } { lv_st } { lv_name } { condense( us_log-remarks ) }|.
+  PERFORM f_write_line USING lv_text.
 ENDFORM.
 *&---------------------------------------------------------------------*
 *&      Form  F_WRITE_LINE
