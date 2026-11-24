@@ -522,6 +522,7 @@ FORM process_selected USING p_action TYPE char1.
         lv_dup    TYPE i,
         lv_zero   TYPE i,
         lv_queued TYPE i,
+        lv_text   TYPE string,
         lv_jobs   TYPE i,
         lv_remark TYPE ycis_apprvl-rej_remarks,
         lt_office TYPE STANDARD TABLE OF vkbur,
@@ -608,7 +609,13 @@ FORM process_selected USING p_action TYPE char1.
       PERFORM send_mail USING '4' '0001' '0001' space.
     ENDIF.
     IF lv_queued > 0.
-      MESSAGE |{ lv_queued } line(s) handed to { lv_jobs } background job(s) { gc_jobname } - the rebate orders are created in the background and forwarded to L4 (L4 is e-mailed when all jobs are finished). Run YRVG004_E again (Executed) to see the orders. Processed here: { lv_cnt } created, { lv_zero } zero-value closed, { lv_dup } already created/in process, { lv_err } failed.| TYPE 'I'.
+      lv_text = |{ lv_queued } line(s) handed to { lv_jobs } background job(s) | &&
+                |{ gc_jobname } - rebate orders are created in the background and | &&
+                |forwarded to L4 (L4 is e-mailed when all jobs are finished). Run | &&
+                |YRVG004_E again (Executed) to see the orders. Processed here: | &&
+                |{ lv_cnt } created, { lv_zero } zero-value closed, | &&
+                |{ lv_dup } already created/in process, { lv_err } failed.|.
+      MESSAGE lv_text TYPE 'I'.
     ELSEIF lv_dup > 0 AND lv_cnt = 0 AND lv_err = 0 AND lv_zero = 0.
       MESSAGE 'Rebate order already created for the selected line(s)' TYPE 'I'.
     ELSE.

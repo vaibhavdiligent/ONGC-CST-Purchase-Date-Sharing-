@@ -1216,7 +1216,7 @@ FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
     x_yrva_rebate-vkbur        = w_vkbur.
   ENDIF.
   SELECT SINGLE bezei INTO w_bezei FROM tvkbt
-    WHERE spras = 'EN' AND vkbur = x_yrva_rebate-vkbur.
+    WHERE spras = 'E' AND vkbur = x_yrva_rebate-vkbur.
   SELECT kunnr INTO w_kunnr FROM vbpa UP TO 1 ROWS
     WHERE vbeln = w_aubel AND parvw = 'WE' ORDER BY PRIMARY KEY.
   ENDSELECT.
