@@ -238,3 +238,12 @@ Prerequisites / checks in PDR:
 * PDR-3: L3 users need **S_BTCH_JOB** (JOBACTION `RELE`, JOBGROUP `*`) to release their own jobs – without it the lines are executed in dialog as before. Enough background work processes (SM50, type BGD) for 5 parallel jobs. Packets are handed over in cluster table INDX (areas `YC`/`YD`) – nothing to create.
 * PDR-2: after the new version, POST one line in YRVG004_P – the Remarks / result list give the SAP reason (typical: authorisation V_VBRK_FKA for billing type G2 / V_VBRK_VKO for sales org. 5000, billing block on ZP09, copy control ZP09 → G2 (VTFA), G2 number range, posting period, account determination).
 * PDR-1: YCIS_WF_APPR level 6 entry with user ID; e-mail ID in YCIS_WF_APPR or SU01. Mails that still do not arrive: SOST.
+
+## PDR issue 23.11.2026 – YRVG052 shows PP grade (IHP120 OG / MPG N2) with a discount
+
+Customers 34558 and 236296 (October 2026): YRVG052 listed grade IHP120 OG (PP, MPG N2) with Rs. 14,602.54 / Rs. 14,547.65.
+
+* Cause: the **rebate order was correct** – the CIS lifted qty is calculated only from the CIS grades in YRVA_GRADE_CISD (34558: 918.5 MT × Rs. 600 = Rs. 5,51,100, the 25 MT PP not included). But the grade-wise detail written at L1 (FORM `stage_grade_detail`, table YCIS_APPRVL_GRD) read S922 for **all** grades the customer bought and spread the eligible qty / value over 943.5 MT. So the PP grade got a share (25/943.5 of the value) and each PE grade showed about 2.6 % too little. Order total and credit note amount are not affected.
+* Fix:
+  * **YRVG004_QAIS_EXECUTE_N1** – `stage_grade_detail` takes only grades in YRVA_GRADE_CISD (new L1 runs).
+  * **YCIS_REBATE_REPORT (YRVG052)** – grades not in YRVA_GRADE_CISD are dropped and the order's eligible qty / rebate value are split again over the CIS grades only. This corrects the display (and the Approval Note) of records already captured – no data correction needed. The S922 fallback uses the same grade list.

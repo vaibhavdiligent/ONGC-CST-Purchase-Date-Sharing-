@@ -13458,7 +13458,10 @@ FORM stage_grade_detail USING p_hdr TYPE ycis_apprvl.
         END OF ls_g.
   DATA: lt_g LIKE STANDARD TABLE OF ls_g,
         lv_totl TYPE menge_d,
-        lv_totd TYPE menge_d.
+        lv_totd TYPE menge_d,
+        lr_cis  TYPE RANGE OF kondm,
+        ls_cis  LIKE LINE OF lr_cis,
+        lt_cisg TYPE STANDARD TABLE OF kondm.
 
   DELETE FROM ycis_apprvl_grd
     WHERE qais_no     = p_hdr-qais_no
@@ -13468,9 +13471,24 @@ FORM stage_grade_detail USING p_hdr TYPE ycis_apprvl.
       AND kunnr       = p_hdr-kunnr
       AND kvgr2       = p_hdr-kvgr2.
 
+*   GAIL 25.11.2026 (YRVG052 showed PP grade IHP120 OG / N2 with a discount):
+*   only the CIS grades (YRVA_GRADE_CISD - the same list the CIS lifted qty
+*   is calculated from, LT_KONDM in get_data) are split. Other grades the
+*   customer bought (e.g. PP) are not part of the CIS and get no line.
+  SELECT yy_grade FROM yrva_grade_cisd INTO TABLE lt_cisg.
+  SORT lt_cisg.
+  DELETE ADJACENT DUPLICATES FROM lt_cisg.
+  ls_cis-sign = 'I'. ls_cis-option = 'EQ'.
+  LOOP AT lt_cisg INTO ls_cis-low.
+    APPEND ls_cis TO lr_cis.
+  ENDLOOP.
+
   SELECT kondm ummenge FROM s922 INTO (ls_g-kondm, ls_g-qty)
     WHERE sptag  BETWEEN p_hdr-period_from AND p_hdr-period_to
       AND pkunag = p_hdr-kunnr.
+    IF lr_cis IS NOT INITIAL AND ls_g-kondm NOT IN lr_cis.
+      CONTINUE.                         " not a CIS grade (e.g. PP)
+    ENDIF.
     COLLECT ls_g INTO lt_g.
   ENDSELECT.
   CHECK lt_g IS NOT INITIAL.

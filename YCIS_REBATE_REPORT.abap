@@ -96,7 +96,9 @@ DATA: gt_out    TYPE STANDARD TABLE OF ty_out,
       gs_fcat   TYPE slis_fieldcat_alv,
       gs_layout TYPE slis_layout_alv,
       gr_nodisc TYPE RANGE OF kondm,
-      gs_nodisc LIKE LINE OF gr_nodisc.
+      gs_nodisc LIKE LINE OF gr_nodisc,
+* GAIL 25.11.2026: CIS grades (YRVA_GRADE_CISD) - only these are shown
+      gr_cisgrd TYPE RANGE OF kondm.
 
 *--------------------------------------------------------------------*
 * Selection screen
@@ -126,12 +128,24 @@ START-OF-SELECTION.
 FORM load_nodisc.
   DATA: lt_nod TYPE STANDARD TABLE OF ycis_nodisc_grd,
         ls_nod TYPE ycis_nodisc_grd.
+  DATA: lt_cisg TYPE STANDARD TABLE OF kondm,
+        lv_grd  TYPE kondm.
   REFRESH gr_nodisc.
   SELECT * FROM ycis_nodisc_grd INTO TABLE lt_nod.
   LOOP AT lt_nod INTO ls_nod.
     gs_nodisc-sign = 'I'. gs_nodisc-option = 'EQ'.
     gs_nodisc-low  = ls_nod-kondm.
     APPEND gs_nodisc TO gr_nodisc.
+  ENDLOOP.
+* GAIL 25.11.2026: CIS grade list (PE grades) - see FORM emit_order
+  REFRESH gr_cisgrd.
+  SELECT yy_grade FROM yrva_grade_cisd INTO TABLE lt_cisg.
+  SORT lt_cisg.
+  DELETE ADJACENT DUPLICATES FROM lt_cisg.
+  gs_nodisc-sign = 'I'. gs_nodisc-option = 'EQ'.
+  LOOP AT lt_cisg INTO lv_grd.
+    gs_nodisc-low = lv_grd.
+    APPEND gs_nodisc TO gr_cisgrd.
   ENDLOOP.
 ENDFORM.
 
@@ -197,6 +211,38 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
       AND period_to   = p_appr-period_to
       AND kunnr       = p_appr-kunnr
       AND kvgr2       = p_appr-kvgr2.
+* GAIL 25.11.2026 (YRVG052 captured PP sale - grade IHP120 OG / N2): grades
+* that are not CIS grades (not in YRVA_GRADE_CISD, e.g. PP) are dropped. The
+* rebate order itself never contained them, but L1 had spread its eligible
+* qty / value over all grades bought, so the PP line showed a discount and
+* every PE grade showed a little too little. When a grade is dropped, the
+* header eligible qty and rebate value are split again over the CIS grades
+* only - same rule as at L1 (value only on discountable grades).
+  IF lt_cap IS NOT INITIAL AND gr_cisgrd IS NOT INITIAL.
+    DATA: lv_ncap TYPE i.
+    lv_ncap = lines( lt_cap ).
+    DELETE lt_cap WHERE kondm NOT IN gr_cisgrd.
+    IF lt_cap IS NOT INITIAL AND lines( lt_cap ) < lv_ncap.
+      CLEAR: lv_totl, lv_totd.
+      LOOP AT lt_cap INTO ls_cap.
+        lv_totl = lv_totl + ls_cap-lft_qty.
+        IF ls_cap-kondm NOT IN gr_nodisc.
+          lv_totd = lv_totd + ls_cap-lft_qty.
+        ENDIF.
+      ENDLOOP.
+      LOOP AT lt_cap INTO ls_cap.
+        IF lv_totl > 0.
+          ls_cap-elig_qty = p_appr-elig_qty * ls_cap-lft_qty / lv_totl.
+        ENDIF.
+        IF ls_cap-kondm IN gr_nodisc OR lv_totd IS INITIAL.
+          CLEAR ls_cap-rebate_val.
+        ELSE.
+          ls_cap-rebate_val = p_appr-rebate_val * ls_cap-lft_qty / lv_totd.
+        ENDIF.
+        MODIFY lt_cap FROM ls_cap.
+      ENDLOOP.
+    ENDIF.
+  ENDIF.
   IF lt_cap IS NOT INITIAL.
     LOOP AT lt_cap INTO ls_cap.
       CLEAR gs_out.
@@ -223,6 +269,9 @@ FORM emit_order USING p_appr TYPE ycis_apprvl.
   SELECT kondm ummenge FROM s922 INTO (ls_grade-kondm, ls_grade-qty)
     WHERE sptag  BETWEEN p_appr-period_from AND p_appr-period_to
       AND pkunag = p_appr-kunnr.
+    IF gr_cisgrd IS NOT INITIAL AND ls_grade-kondm NOT IN gr_cisgrd.
+      CONTINUE.                         " GAIL 25.11.2026: not a CIS grade (e.g. PP)
+    ENDIF.
     COLLECT ls_grade INTO lt_grade.
   ENDSELECT.
 
