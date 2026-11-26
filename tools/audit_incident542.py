@@ -143,6 +143,16 @@ for f in ('BUKRS', 'VKORG', 'VTWEG', 'SPART'):
 if 'ref_fill(' not in master:
     fail.append('customer: nothing is copied from the reference company code and sales area')
 
+# Production, 26.11.2026 (ZBP_CREATE_CUST): new customers had no e-mail,
+# mobile or telephone - they were sent on the customer only, and a new
+# customer takes its address from the business partner.
+for what, pat in (('telephone / mobile', r'APPEND ls_bph TO ls_adr-data-communication-phone-phone\.'),
+                  ('e-mail', r'APPEND ls_bpm TO ls_adr-data-communication-smtp-smtp\.'),
+                  ('mobile marked as mobile', r"ls_bph-contact-data-r_3_user\s+= gc_mobile\.")):
+    if not re.search(pat, C):
+        fail.append(f'customer: the {what} of a new customer is not put on the business partner\'s address - '
+                    f'it is dropped (production, 26.11.2026)')
+
 if fail:
     print(f'{len(fail)} problem(s):')
     for f in fail:

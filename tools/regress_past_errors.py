@@ -360,6 +360,8 @@ CASES = [
      [(V, "WHERE ind_sector = @iv_sector AND istype <> @space", "WHERE ind_sector = @iv_sector")]),
     ('Supplier upload: GSTIN in column 55 cut to VEN_CLASS 2 (SEZ) without a word (production, 26.11.2026)', V, 'audit_incident542.py',
      [(V, "is not a GST vendor classification (column 55, VEN_CLASS)", "is not a GST vendor class (col 55)")]),
+    ('Customer upload: e-mail, mobile and telephone of a new customer dropped - sent on the customer only (ZBP_CREATE_CUST, production, 26.11.2026)', C, 'audit_incident542.py',
+     [(C, "        APPEND ls_bpm TO ls_adr-data-communication-smtp-smtp.\n", "")]),
     ('Employee upload: CONVT_NO_NUMBER in the mail - serial number C(1) (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "         lv_srno                TYPE i,", "         lv_srno                TYPE c VALUE 0,")]),
     ('Employee upload: payment method C instead of CNT (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',

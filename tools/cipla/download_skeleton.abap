@@ -4274,7 +4274,47 @@ CLASS lcl_engine IMPLEMENTATION.
                   is_fromx = ls_cust-central_data-address-postal-datax
         CHANGING  cs_to    = ls_adr-data-postal-data
                   cs_tox   = ls_adr-data-postal-datax ).
-      IF ls_adr-data-postal-datax IS NOT INITIAL.
+      " Telephone, mobile, fax and e-mail go with the partner's address too.
+      " A new customer takes its address from the business partner, so the
+      " numbers sent on the customer alone were dropped - new customers had
+      " no e-mail, mobile or telephone (Cipla production, 26.11.2026). The
+      " first telephone or mobile is the standard number.
+      DATA ls_bph TYPE bus_ei_bupa_telephone.
+      DATA(lv_std) = abap_true.
+      IF lv_tel IS NOT INITIAL.
+        CLEAR ls_bph.
+        ls_bph-contact-task           = gc_i.
+        ls_bph-contact-data-telephone = lv_tel.
+        ls_bph-contact-data-std_no    = lv_std.
+        lv_std = abap_false.
+        APPEND ls_bph TO ls_adr-data-communication-phone-phone.
+      ENDIF.
+      IF lv_mob IS NOT INITIAL.
+        CLEAR ls_bph.
+        ls_bph-contact-task           = gc_i.
+        ls_bph-contact-data-telephone = lv_mob.
+        ls_bph-contact-data-r_3_user  = gc_mobile.
+        ls_bph-contact-data-std_no    = lv_std.
+        APPEND ls_bph TO ls_adr-data-communication-phone-phone.
+      ENDIF.
+      IF lv_fax IS NOT INITIAL.
+        DATA ls_bpf TYPE bus_ei_bupa_fax.
+        CLEAR ls_bpf.
+        ls_bpf-contact-task        = gc_i.
+        ls_bpf-contact-data-fax    = lv_fax.
+        ls_bpf-contact-data-std_no = abap_true.
+        APPEND ls_bpf TO ls_adr-data-communication-fax-fax.
+      ENDIF.
+      IF lv_smt IS NOT INITIAL.
+        DATA ls_bpm TYPE bus_ei_bupa_smtp.
+        CLEAR ls_bpm.
+        ls_bpm-contact-task        = gc_i.
+        ls_bpm-contact-data-e_mail = lv_smt.
+        ls_bpm-contact-data-std_no = abap_true.
+        APPEND ls_bpm TO ls_adr-data-communication-smtp-smtp.
+      ENDIF.
+      IF ls_adr-data-postal-datax IS NOT INITIAL
+         OR ls_adr-data-communication IS NOT INITIAL.
         APPEND ls_adr TO ls_bp-central_data-address-addresses.
       ENDIF.
     ENDIF.
