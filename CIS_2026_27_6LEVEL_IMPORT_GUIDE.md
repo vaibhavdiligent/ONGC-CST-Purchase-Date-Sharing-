@@ -247,3 +247,10 @@ Customers 34558 and 236296 (October 2026): YRVG052 listed grade IHP120 OG (PP, M
 * Fix:
   * **YRVG004_QAIS_EXECUTE_N1** – `stage_grade_detail` takes only grades in YRVA_GRADE_CISD (new L1 runs).
   * **YCIS_REBATE_REPORT (YRVG052)** – grades not in YRVA_GRADE_CISD are dropped and the order's eligible qty / rebate value are split again over the CIS grades only. This corrects the display (and the Approval Note) of records already captured – no data correction needed. The S922 fallback uses the same grade list.
+
+## PDR issue 25.11.2026 – credit note e-mail to a wrong e-mail ID (mail "CIS (L1 to L2)")
+
+Credit note 5011158219, customer 236956: mail went to kggail@kgpl.biz, the BP master has another e-mail ID.
+
+* Cause: YCIS_DISBURSE (send_cn_mail) mailed the e-mail IDs of **all partners** of the customer in KNVP for the billing sales area (other customers / vendors in any partner function – a vendor number was even read as a customer number).
+* Fix: only the e-mail ID(s) of the **customer's own address** (KNA1-ADRNR → ADR6, as in the BP master), standard e-mail ID first. No e-mail ID → no mail, message at L6. Program: **YCIS_DISBURSE**.

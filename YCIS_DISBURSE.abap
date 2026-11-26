@@ -1126,9 +1126,9 @@ ENDFORM.
 *&---------------------------------------------------------------------*
 *   E-mails the posted credit note to the customer, as done today with
 *   YRVR167 (PDF download, Smart Form YRV_CREDIT_NOTE for rebate credit
-*   notes) + YRVR169 (mail to the e-mail IDs of the customer's partners in
-*   the billing sales area, sender EINVOICE@GAIL.CO.IN) - now in one step
-*   at L6 posting. p_cnt = number of recipients the mail was sent to.
+*   notes) + YRVR169 (mail text, sender EINVOICE@GAIL.CO.IN) - now in one
+*   step at L6 posting. Recipients: the e-mail ID(s) of the customer's own
+*   master address (GAIL 25.11.2026). p_cnt = number of recipients the mail was sent to.
 *&---------------------------------------------------------------------*
 FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
                   CHANGING p_cnt   TYPE i.
@@ -1160,10 +1160,6 @@ FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
         lv_size         TYPE i,
         lv_pdf          TYPE xstring,
         lt_hex          TYPE solix_tab,
-        lt_knvp         TYPE STANDARD TABLE OF knvp,
-        ls_knvp         TYPE knvp,
-        lt_partner      TYPE STANDARD TABLE OF kunnr,
-        lv_partner      TYPE kunnr,
         lt_adr6         TYPE STANDARD TABLE OF adr6,
         ls_adr6         TYPE adr6,
         lt_body         TYPE bcsy_text,
@@ -1295,33 +1291,32 @@ FORM send_cn_mail USING    p_cndoc TYPE vbeln_vf
   ENDIF.
   lt_hex = cl_bcs_convert=>xstring_to_solix( iv_xstring = lv_pdf ).
 
-* ---- recipients: e-mail IDs of the customer's partners (as YRVR169)
-  SELECT * FROM knvp INTO TABLE lt_knvp
-    WHERE kunnr = ls_vbrk-kunag
-      AND vkorg = ls_vbrk-vkorg
-      AND vtweg = ls_vbrk-vtweg
-      AND spart = ls_vbrk-spart.
-  LOOP AT lt_knvp INTO ls_knvp.
-    lv_partner = ls_knvp-kunn2.
-    IF lv_partner IS INITIAL.
-      lv_partner = ls_knvp-lifnr.
-    ENDIF.
-    CHECK lv_partner IS NOT INITIAL.
-    COLLECT lv_partner INTO lt_partner.
-  ENDLOOP.
-  IF lt_partner IS INITIAL.
-    APPEND ls_vbrk-kunag TO lt_partner.
+* ---- recipients: e-mail ID(s) of the CUSTOMER itself (customer / BP master)
+*   GAIL 25.11.2026 (CIS L1 to L2 - credit note 5011158219, customer 236956
+*   went to kggail@kgpl.biz although the BP master has another e-mail ID):
+*   before, the mail went to the e-mail IDs of ALL partners of the customer
+*   in KNVP (other customers / vendors such as agents in any partner
+*   function; a vendor number was even read as a customer number). Now only
+*   the e-mail ID(s) of the customer's own address (KNA1-ADRNR -> ADR6, as
+*   shown in the BP master) are used - the standard (default) e-mail ID
+*   first; further e-mail IDs maintained on the same address are copied.
+  SELECT SINGLE adrnr FROM kna1 INTO w_adrnr WHERE kunnr = ls_vbrk-kunag.
+  IF w_adrnr IS NOT INITIAL.
+    SELECT * FROM adr6 INTO TABLE lt_adr6
+      WHERE addrnumber = w_adrnr
+        AND persnumber = space.
   ENDIF.
-  SELECT b~addrnumber b~persnumber b~smtp_addr
-    FROM kna1 AS a INNER JOIN adr6 AS b ON b~addrnumber = a~adrnr
-    INTO CORRESPONDING FIELDS OF TABLE lt_adr6
-    FOR ALL ENTRIES IN lt_partner
-    WHERE a~kunnr = lt_partner-table_line.
-  DELETE lt_adr6 WHERE persnumber IS NOT INITIAL OR smtp_addr IS INITIAL.
-  SORT lt_adr6 BY smtp_addr.
+  DELETE lt_adr6 WHERE smtp_addr IS INITIAL.
+  LOOP AT lt_adr6 INTO ls_adr6.
+    TRANSLATE ls_adr6-smtp_addr TO LOWER CASE.
+    CONDENSE ls_adr6-smtp_addr NO-GAPS.
+    MODIFY lt_adr6 FROM ls_adr6.
+  ENDLOOP.
+  SORT lt_adr6 BY smtp_addr flgdefault DESCENDING.
   DELETE ADJACENT DUPLICATES FROM lt_adr6 COMPARING smtp_addr.
+  SORT lt_adr6 BY flgdefault DESCENDING smtp_addr.  " standard e-mail ID first
   IF lt_adr6 IS INITIAL.
-    MESSAGE |Credit Note { p_cndoc }: no customer e-mail ID maintained - e-mail not sent| TYPE 'I'.
+    MESSAGE |Credit Note { p_cndoc }: no e-mail ID in the customer master of { ls_vbrk-kunag ALPHA = OUT } - e-mail not sent| TYPE 'I'.
     RETURN.
   ENDIF.
 
