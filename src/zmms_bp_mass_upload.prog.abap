@@ -281,6 +281,18 @@ CLASS lcl_util DEFINITION FINAL.
                 cs_datax TYPE any.
 
     CLASS-METHODS cell    IMPORTING is_row TYPE ty_row iv_col TYPE i RETURNING VALUE(rv) TYPE string.
+    "! One bank detail of the BUSINESS PARTNER (BUT0BK). In S/4HANA a
+    "! supplier's bank details come from its business partner: sent on the
+    "! supplier (CVIS_EI_EXTERN-VENDOR-...-BANKDETAIL) they are ignored with
+    "! CVI_EI 004 "Bank data is provided from the business partner".
+    CLASS-METHODS bp_bank IMPORTING iv_task   TYPE clike
+                                    iv_bkvid  TYPE bu_bkvid
+                                    iv_banks  TYPE clike
+                                    iv_bankl  TYPE clike
+                                    iv_bankn  TYPE clike
+                                    iv_koinh  TYPE clike OPTIONAL
+                                    iv_bkont  TYPE clike OPTIONAL
+                          RETURNING VALUE(rs) TYPE bus_ei_bupa_bankdetail.
     CLASS-METHODS to_date IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE d.
     CLASS-METHODS to_dec  IMPORTING iv_in  TYPE string RETURNING VALUE(rv) TYPE ty_dec.
     "! Generic ALPHA conversion for fields whose domain carries the exit.
@@ -386,6 +398,21 @@ CLASS lcl_util IMPLEMENTATION.
     IF sy-subrc = 0.
       <lv_x> = abap_true.
     ENDIF.
+  ENDMETHOD.
+
+  METHOD bp_bank.
+    rs-task     = iv_task.
+    rs-data_key = iv_bkvid.
+    set( EXPORTING iv_comp = 'BANK_CTRY'     iv_value = to_upper( condense( CONV string( iv_banks ) ) )
+         CHANGING  cs_data = rs-data cs_datax = rs-datax ).
+    set( EXPORTING iv_comp = 'BANK_KEY'      iv_value = to_upper( condense( CONV string( iv_bankl ) ) )
+         CHANGING  cs_data = rs-data cs_datax = rs-datax ).
+    set( EXPORTING iv_comp = 'BANK_ACCT'     iv_value = condense( CONV string( iv_bankn ) )
+         CHANGING  cs_data = rs-data cs_datax = rs-datax ).
+    set( EXPORTING iv_comp = 'ACCOUNTHOLDER' iv_value = condense( CONV string( iv_koinh ) )
+         CHANGING  cs_data = rs-data cs_datax = rs-datax ).
+    set( EXPORTING iv_comp = 'CTRL_KEY'      iv_value = condense( CONV string( iv_bkont ) )
+         CHANGING  cs_data = rs-data cs_datax = rs-datax ).
   ENDMETHOD.
 
   METHOD cell.
@@ -1742,6 +1769,9 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     METHODS ok_parvw IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_land1 IMPORTING iv TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_bankl IMPORTING iv_banks TYPE clike iv_bankl TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
+    "! The values the GST vendor classification (LFA1-VEN_CLASS) takes, as
+    "! "value = text" - the fixed values of its domain in this system.
+    METHODS ven_classes RETURNING VALUE(rt) TYPE string_table.
     METHODS ok_akont IMPORTING iv_bukrs TYPE clike iv_saknr TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_witht IMPORTING iv_land1 TYPE clike iv_witht TYPE clike RETURNING VALUE(rv) TYPE abap_bool.
     METHODS ok_wcode IMPORTING iv_land1 TYPE clike iv_witht TYPE clike iv_wcd TYPE clike
@@ -1767,11 +1797,6 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
                                VALUE(iv_bukrs) TYPE bukrs
                                VALUE(iv_witht) TYPE witht
                      RETURNING VALUE(rv)       TYPE abap_bool.
-    METHODS has_lfbk IMPORTING VALUE(iv_lifnr) TYPE lifnr
-                               VALUE(iv_banks) TYPE banks
-                               VALUE(iv_bankl) TYPE bankk
-                               VALUE(iv_bankn) TYPE bankn
-                     RETURNING VALUE(rv)       TYPE abap_bool.
     METHODS has_wyt3 IMPORTING VALUE(iv_lifnr) TYPE lifnr
                                VALUE(iv_ekorg) TYPE ekorg
                                VALUE(iv_parvw) TYPE parvw
@@ -1792,6 +1817,20 @@ CLASS lcl_cfg DEFINITION FINAL CREATE PRIVATE.
     "! The industry systems (TB038A) that hold an industry sector.
     METHODS ind_systems IMPORTING VALUE(iv_sector) TYPE bu_indsect
                         RETURNING VALUE(rt)        TYPE string_table.
+    "! A business partner's bank details that are valid today (BUT0BK),
+    "! lowest ID first.
+    TYPES: BEGIN OF ty_bk,
+             bkvid TYPE bu_bkvid,
+             banks TYPE banks,
+             bankl TYPE bankk,
+             bankn TYPE bankn,
+           END OF ty_bk,
+           tt_bk TYPE STANDARD TABLE OF ty_bk WITH EMPTY KEY.
+    METHODS bp_banks IMPORTING VALUE(iv_partner) TYPE bu_partner
+                     RETURNING VALUE(rt)         TYPE tt_bk.
+    "! The next free bank details ID of a partner, ended ones counted.
+    METHODS bp_bank_next IMPORTING VALUE(iv_partner) TYPE bu_partner
+                         RETURNING VALUE(rv)         TYPE bu_bkvid.
     "! Whether a partner already has an industry sector (BUT0IS).
     METHODS has_industry IMPORTING VALUE(iv_partner) TYPE bu_partner
                                    VALUE(iv_istype)  TYPE bu_istype
@@ -1901,6 +1940,18 @@ CLASS lcl_cfg IMPLEMENTATION.
     rv = xsdbool( line_exists( mt_land1[ table_line = CONV land1( iv ) ] ) ).
   ENDMETHOD.
 
+  METHOD ven_classes.
+    TRY.
+        DATA(lo_el) = CAST cl_abap_elemdescr( cl_abap_typedescr=>describe_by_name( 'LFA1-VEN_CLASS' ) ).
+        LOOP AT lo_el->get_ddic_fixed_values( ) INTO DATA(ls_fv).
+          APPEND |{ COND string( WHEN ls_fv-low IS INITIAL THEN `blank` ELSE CONV string( ls_fv-low ) ) }| &&
+                 | = { ls_fv-ddtext }| TO rt.
+        ENDLOOP.
+      CATCH cx_root.
+        CLEAR rt.
+    ENDTRY.
+  ENDMETHOD.
+
   METHOD ok_bankl.
     DATA lv TYPE abap_bool.
     SELECT SINGLE @abap_true FROM bnka
@@ -1979,11 +2030,6 @@ CLASS lcl_cfg IMPLEMENTATION.
       WHERE lifnr = @iv_lifnr AND bukrs = @iv_bukrs AND witht = @iv_witht INTO @rv.
   ENDMETHOD.
 
-  METHOD has_lfbk.
-    SELECT SINGLE @abap_true FROM lfbk
-      WHERE lifnr = @iv_lifnr AND banks = @iv_banks
-        AND bankl = @iv_bankl AND bankn = @iv_bankn INTO @rv.
-  ENDMETHOD.
 
   METHOD has_wyt3.
     SELECT SINGLE @abap_true FROM wyt3
@@ -2029,12 +2075,50 @@ CLASS lcl_cfg IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD ind_systems.
+    " Rows without an industry system are left out: Cipla's TB038A has the
+    " sectors 0009-0015 under system 0001 and again under a blank system,
+    " and the sector was refused as ambiguous ("is in industry systems
+    " 0001, " - production, sector 0010, 26.11.2026). A partner's industry
+    " always belongs to a system.
     DATA lt_sys TYPE STANDARD TABLE OF bu_istype WITH EMPTY KEY.
-    SELECT istype FROM tb038a WHERE ind_sector = @iv_sector
+    SELECT istype FROM tb038a WHERE ind_sector = @iv_sector AND istype <> @space
       ORDER BY istype INTO TABLE @lt_sys.
     LOOP AT lt_sys INTO DATA(lv_sys).
       APPEND CONV string( lv_sys ) TO rt.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD bp_banks.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lv_now TYPE timestamp.
+    GET TIME STAMP FIELD lv_now.
+    SELECT bkvid, banks, bankl, bankn, bk_valid_from, bk_valid_to FROM but0bk
+      WHERE partner = @iv_partner ORDER BY bkvid INTO TABLE @DATA(lt_db).
+    LOOP AT lt_db INTO DATA(ls_db).
+      IF ( ls_db-bk_valid_from IS NOT INITIAL AND ls_db-bk_valid_from > lv_now )
+      OR ( ls_db-bk_valid_to   IS NOT INITIAL AND ls_db-bk_valid_to   < lv_now ).
+        CONTINUE.                               " not valid today
+      ENDIF.
+      APPEND VALUE #( bkvid = ls_db-bkvid banks = ls_db-banks
+                      bankl = ls_db-bankl bankn = ls_db-bankn ) TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD bp_bank_next.
+    rv = '0001'.
+    IF iv_partner IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT bkvid FROM but0bk WHERE partner = @iv_partner INTO TABLE @DATA(lt_id).
+    DATA lv_max TYPE i.
+    LOOP AT lt_id INTO DATA(ls_id).
+      IF ls_id-bkvid CO '0123456789' AND CONV i( ls_id-bkvid ) > lv_max.
+        lv_max = CONV i( ls_id-bkvid ).
+      ENDIF.
+    ENDLOOP.
+    rv = |{ lv_max + 1 WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
   ENDMETHOD.
 
   METHOD has_industry.
@@ -2344,11 +2428,6 @@ CLASS lcl_base DEFINITION ABSTRACT.
       EXPORTING ev_guid  TYPE bu_partner_guid
       CHANGING  cs_data  TYPE cvis_ei_extern.
 
-    "! Gross merge - existing LFBK rows that are not in the file must be sent
-    "! back or the API deletes them.
-    METHODS merge_banks
-      IMPORTING iv_lifnr TYPE lifnr
-      CHANGING  ct_bank  TYPE cvis_ei_bankdetail_t.
 
     "! Gross merge for LFBW.
     METHODS merge_wtax
@@ -2454,32 +2533,6 @@ CLASS lcl_base IMPLEMENTATION.
     ev_guid = lv_guid.
   ENDMETHOD.
 
-  METHOD merge_banks.
-    SELECT banks, bankl, bankn, bkont, bvtyp, koinh
-      FROM lfbk WHERE lifnr = @iv_lifnr
-      INTO TABLE @DATA(lt_db).
-
-    LOOP AT lt_db INTO DATA(ls_db).
-      IF line_exists( ct_bank[ data_key-banks = ls_db-banks
-                               data_key-bankl = ls_db-bankl
-                               data_key-bankn = ls_db-bankn ] ).
-        CONTINUE.                                " file overrides this one
-      ENDIF.
-      DATA ls_keep TYPE cvis_ei_cvi_bankdetail.
-      CLEAR ls_keep.
-      ls_keep-task           = gc_u.
-      ls_keep-data_key-banks = ls_db-banks.
-      ls_keep-data_key-bankl = ls_db-bankl.
-      ls_keep-data_key-bankn = ls_db-bankn.
-      lcl_util=>set( EXPORTING iv_comp = 'KOINH' iv_value = CONV string( ls_db-koinh )
-                     CHANGING  cs_data = ls_keep-data cs_datax = ls_keep-datax ).
-      lcl_util=>set( EXPORTING iv_comp = 'BKONT' iv_value = CONV string( ls_db-bkont )
-                     CHANGING  cs_data = ls_keep-data cs_datax = ls_keep-datax ).
-      lcl_util=>set( EXPORTING iv_comp = 'BVTYP' iv_value = CONV string( ls_db-bvtyp )
-                     CHANGING  cs_data = ls_keep-data cs_datax = ls_keep-datax ).
-      APPEND ls_keep TO ct_bank.
-    ENDLOOP.
-  ENDMETHOD.
 
   METHOD merge_wtax.
     SELECT witht, wt_withcd, wt_subjct, qsrec, wt_wtstcd,
@@ -3009,6 +3062,33 @@ CLASS lcl_h_create IMPLEMENTATION.
         lv_bad = abap_true.
       ENDIF.
 
+      " GST vendor classification: one character. A longer value was cut to
+      " its first character - a GSTIN "27AAACB3262C3Z5" in this column made
+      " the vendor class 2, Special Economic Zone in S/4HANA, and the GSTIN
+      " reached no tax number (Cipla production, 26.11.2026).
+      DATA(lv_vclass) = lcl_util=>cell( is_row = ls_row iv_col = 55 ).
+      IF lv_vclass IS NOT INITIAL.
+        DATA(lt_vclass) = mo_cfg->ven_classes( ).
+        DATA(lv_vc_ok) = xsdbool( strlen( lv_vclass ) = 1 ).
+        IF lv_vc_ok = abap_true AND lt_vclass IS NOT INITIAL.
+          lv_vc_ok = abap_false.
+          LOOP AT lt_vclass INTO DATA(lv_vc_one).
+            IF lv_vc_one CP |{ lv_vclass } = *|.
+              lv_vc_ok = abap_true.
+              EXIT.
+            ENDIF.
+          ENDLOOP.
+        ENDIF.
+        IF lv_vc_ok = abap_false.
+          mo_log->add( iv_row = ls_row-row iv_ty = 'E' iv_st = 'VENDOR' iv_fl = 'VEN_CLASS'
+                       iv_txt = |"{ lv_vclass }" is not a GST vendor classification (column 55, VEN_CLASS)| &&
+                                COND string( WHEN strlen( lv_vclass ) = 15
+                                             THEN ` - it is a GSTIN: put it in column 35 (STCD3)` ) &&
+                                | - allowed: { concat_lines_of( table = lt_vclass sep = `; ` ) }| ).
+          lv_bad = abap_true.
+        ENDIF.
+      ENDIF.
+
       IF lv_bad = abap_true.
         IF p_stop = abap_true.
           EXIT.
@@ -3061,19 +3141,25 @@ CLASS lcl_h_create IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      " bank details
+      " bank details - on the business partner. Sent on the supplier they
+      " were ignored ("CVI_EI 004 Bank data is provided from the business
+      " partner") and new suppliers had none (Cipla production, 26.11.2026).
+      " An account the partner already has is not sent again.
       IF lv_bankl IS NOT INITIAL AND lv_bankn IS NOT INITIAL.
-        DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
-        CLEAR ls_bk.
-        ls_bk-task           = gc_i.
-        ls_bk-data_key-banks = lv_banks.
-        ls_bk-data_key-bankl = lv_bankl.
-        ls_bk-data_key-bankn = lv_bankn.
-        lcl_util=>set( EXPORTING iv_comp = 'KOINH' iv_value = lcl_util=>cell( is_row = ls_row iv_col = 44 )
-                       CHANGING cs_data = ls_bk-data cs_datax = ls_bk-datax ).
-        lcl_util=>set( EXPORTING iv_comp = 'BKONT' iv_value = lcl_util=>cell( is_row = ls_row iv_col = 45 )
-                       CHANGING cs_data = ls_bk-data cs_datax = ls_bk-datax ).
-        APPEND ls_bk TO ls_data-vendor-central_data-bankdetail-bankdetails.
+        DATA(lv_bk_bp) = COND bu_partner( WHEN lv_lifnr IS NOT INITIAL
+                                          THEN mo_cfg->vend_bp( CONV lifnr( lv_lifnr ) ) ).
+        DATA(lt_bk_has) = mo_cfg->bp_banks( lv_bk_bp ).
+        IF NOT line_exists( lt_bk_has[ banks = to_upper( lv_banks ) bankl = to_upper( lv_bankl )
+                                       bankn = lv_bankn ] ).
+          APPEND lcl_util=>bp_bank( iv_task  = gc_i
+                                    iv_bkvid = mo_cfg->bp_bank_next( lv_bk_bp )
+                                    iv_banks = lv_banks
+                                    iv_bankl = lv_bankl
+                                    iv_bankn = lv_bankn
+                                    iv_koinh = lcl_util=>cell( is_row = ls_row iv_col = 44 )
+                                    iv_bkont = lcl_util=>cell( is_row = ls_row iv_col = 45 ) )
+                 TO ls_data-partner-central_data-bankdetail-bankdetails.
+        ENDIF.
       ENDIF.
 
       " company code data
@@ -3682,10 +3768,15 @@ CLASS lcl_h_bank IMPLEMENTATION.
       RETURN.
     ENDIF.
 
-    DATA lt_bank TYPE cvis_ei_bankdetail_t.
+    " On the business partner - see LCL_UTIL=>BP_BANK. An account the
+    " partner already has gets the file's holder; a new one the next ID.
+    DATA lt_bank TYPE bus_ei_bupa_bankdetail_t.
     CLEAR lt_bank.
     DATA lv_bad TYPE abap_bool.
     CLEAR lv_bad.
+    DATA(lv_bp)   = mo_cfg->vend_bp( iv_lifnr ).
+    DATA(lt_has)  = mo_cfg->bp_banks( lv_bp ).
+    DATA(lv_next) = CONV i( mo_cfg->bp_bank_next( lv_bp ) ).
 
     LOOP AT it_grp INTO DATA(ls_in).
       IF ls_in-bankl IS INITIAL OR ls_in-bankn IS INITIAL.
@@ -3701,37 +3792,38 @@ CLASS lcl_h_bank IMPLEMENTATION.
         CONTINUE.
       ENDIF.
 
-      DATA ls_bk TYPE cvis_ei_cvi_bankdetail.
-      CLEAR ls_bk.
-      ls_bk-task           = COND #( WHEN mo_cfg->has_lfbk( iv_lifnr = CONV lifnr( iv_lifnr )
-                                                            iv_banks = CONV banks( ls_in-banks )
-                                                            iv_bankl = CONV bankk( ls_in-bankl )
-                                                            iv_bankn = CONV bankn( ls_in-bankn ) ) = abap_true
-                                     THEN gc_u ELSE gc_i ).
-      ls_bk-data_key-banks = ls_in-banks.
-      ls_bk-data_key-bankl = ls_in-bankl.
-      ls_bk-data_key-bankn = ls_in-bankn.
-      lcl_util=>set( EXPORTING iv_comp = 'KOINH' iv_value = CONV string( ls_in-koinh )
-                     CHANGING cs_data = ls_bk-data cs_datax = ls_bk-datax ).
-      APPEND ls_bk TO lt_bank.
+      DATA(lv_old) = VALUE #( lt_has[ banks = to_upper( ls_in-banks ) bankl = to_upper( ls_in-bankl )
+                                      bankn = condense( CONV string( ls_in-bankn ) ) ]-bkvid OPTIONAL ).
+      DATA(lv_holder) = condense( CONV string( ls_in-koinh ) ).
+      IF lv_old IS NOT INITIAL.
+        IF lv_holder IS INITIAL.
+          mo_log->add( iv_row = ls_in-row iv_k1 = iv_lifnr iv_ty = 'I'
+                       iv_txt = |Bank account { ls_in-bankl } { ls_in-bankn } is already on business partner | &&
+                                |{ lv_bp ALPHA = OUT } (ID { lv_old }) - nothing to change| ).
+          CONTINUE.
+        ENDIF.
+        APPEND lcl_util=>bp_bank( iv_task = gc_u iv_bkvid = lv_old
+                                  iv_banks = ls_in-banks iv_bankl = ls_in-bankl iv_bankn = ls_in-bankn
+                                  iv_koinh = ls_in-koinh ) TO lt_bank.
+      ELSE.
+        APPEND lcl_util=>bp_bank( iv_task  = gc_i
+                                  iv_bkvid = CONV bu_bkvid( |{ lv_next WIDTH = 4 ALIGN = RIGHT PAD = '0' }| )
+                                  iv_banks = ls_in-banks iv_bankl = ls_in-bankl iv_bankn = ls_in-bankn
+                                  iv_koinh = ls_in-koinh ) TO lt_bank.
+        lv_next = lv_next + 1.
+      ENDIF.
     ENDLOOP.
 
     IF lv_bad = abap_true OR lt_bank IS INITIAL.
       RETURN.
     ENDIF.
 
-    " keep the accounts that are not in the file - the API works on gross data
-    DATA(lv_before) = lines( lt_bank ).
-    merge_banks( EXPORTING iv_lifnr = iv_lifnr CHANGING ct_bank = lt_bank ).
-    IF lines( lt_bank ) > lv_before.
-      mo_log->add( iv_row = lv_row iv_k1 = iv_lifnr iv_ty = 'I'
-                   iv_txt = |{ lines( lt_bank ) - lv_before } existing bank account(s) retained| ).
-    ENDIF.
-
+    " The partner's other accounts are not sent and stay as they are: the
+    " partner's bank details are changed line by line (task per ID).
     DATA ls_data TYPE cvis_ei_extern.
     CLEAR ls_data.
     header( EXPORTING iv_lifnr = iv_lifnr iv_task = gc_u CHANGING cs_data = ls_data ).
-    ls_data-vendor-central_data-bankdetail-bankdetails = lt_bank.
+    ls_data-partner-central_data-bankdetail-bankdetails = lt_bank.
 
     mo_cvis->post( iv_row = lv_row iv_k1 = iv_lifnr iv_k2 = lv_cc is_data = ls_data ).
   ENDMETHOD.

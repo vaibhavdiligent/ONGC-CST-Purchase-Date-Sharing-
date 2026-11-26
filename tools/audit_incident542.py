@@ -56,6 +56,27 @@ if 'cs_data-partner-central_data-industry-industries' not in ind:
 if 'fill_industry(' not in run:
     fail.append('supplier: the creation tab never calls FILL_INDUSTRY')
 
+# Production, 26.11.2026 (ZBP_CREATE_SUPP): new suppliers had no bank details.
+# They were sent on the supplier, which CVI ignores ("CVI_EI 004 Bank data is
+# provided from the business partner"); bank details belong to the partner.
+if re.search(r'vendor-central_data-bankdetail', V):
+    fail.append('supplier: bank details are sent on the supplier (VENDOR-CENTRAL_DATA-BANKDETAIL) - '
+                'CVI ignores them ("Bank data is provided from the business partner"); send them on '
+                'the partner (PARTNER-CENTRAL_DATA-BANKDETAIL)')
+if not re.search(r'APPEND lcl_util=>bp_bank\(.*?TO ls_data-partner-central_data-bankdetail-bankdetails\.', run, re.S):
+    fail.append('supplier: the creation tab does not put the bank account on the business partner')
+if 'ls_data-partner-central_data-bankdetail-bankdetails = lt_bank.' not in V:
+    fail.append('supplier: the bank tab does not put the bank accounts on the business partner')
+# A GSTIN in column 55 was cut to its first character, VEN_CLASS 2 (SEZ).
+if not re.search(r"is not a GST vendor classification \(column 55, VEN_CLASS\)", run):
+    fail.append('supplier: column 55 (VEN_CLASS) is not checked - a longer value is cut to its first character '
+                '(a GSTIN made the vendor class 2, Special Economic Zone; production, 26.11.2026)')
+# Cipla's TB038A files sectors 0009-0015 under system 0001 and again under a
+# blank system: sector 0010 was refused as "in industry systems 0001, ".
+if not re.search(r"SELECT istype FROM tb038a WHERE ind_sector = @iv_sector AND istype <> @space", V):
+    fail.append('supplier: industry systems without a key (blank ISTYPE in TB038A) are counted - a sector '
+                'in system 0001 is refused as ambiguous (production, sector 0010, 26.11.2026)')
+
 # ---- customer -------------------------------------------------------------
 master = method(C, 'lcl_engine', 'master')
 if not master:
