@@ -378,6 +378,8 @@ CASES = [
      [('tools/ccej/bp_maint/30_cat.abap', "           WHEN 'COMP' THEN |{ lv_root }-COMPANY_DATA-COMPANY-DATA|", "           WHEN 'COMP' THEN |{ lv_root }-COMPANY_DATA-COMPANYX-DATA|")]),
     ('CCBJI: custom field without change flag offered - value silently ignored (review, 27.11.2026)', 'tools/ccej/bp_maint/30_cat.abap', 'ccej/audit_bp_lessons.py',
      [('tools/ccej/bp_maint/30_cat.abap', "      IF lt_apix IS NOT INITIAL AND NOT line_exists( lt_apix[ table_line = CONV string( ls_d-fieldname ) ] ).", "      IF lt_apix IS INITIAL AND NOT line_exists( lt_apix[ table_line = CONV string( ls_d-fieldname ) ] ).")]),
+    ('Supplier upload: second new supplier warned "Supplier ##1 does not match interval of number range" - validation left in the buffers (Cipla, 27.11.2026)', V, 'audit_incident542.py',
+     [(V, "    \" (Cipla, 27.11.2026). Same rule as ZFI_VEND_HONC since 20.11.2026.\n    discard( ).\n", "    \" (Cipla, 27.11.2026). Same rule as ZFI_VEND_HONC since 20.11.2026.\n")]),
     ('Employee upload: CONVT_NO_NUMBER in the mail - serial number C(1) (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "         lv_srno                TYPE i,", "         lv_srno                TYPE c VALUE 0,")]),
     ('Employee upload: payment method C instead of CNT (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',

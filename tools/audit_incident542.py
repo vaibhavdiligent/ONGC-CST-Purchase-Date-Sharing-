@@ -71,6 +71,14 @@ if 'ls_data-partner-central_data-bankdetail-bankdetails = lt_bank.' not in V:
 if not re.search(r"is not a GST vendor classification \(column 55, VEN_CLASS\)", run):
     fail.append('supplier: column 55 (VEN_CLASS) is not checked - a longer value is cut to its first character '
                 '(a GSTIN made the vendor class 2, Special Economic Zone; production, 26.11.2026)')
+# 27.11.2026: WY 111 "Supplier ##1 does not match interval of number range" on the
+# second new supplier of a file - the first one's validation was left in the buffers.
+if not re.search(r"ENDTRY\.\s*\n(?:\s*\".*\n)*\s*discard\( \)\.\s*\n\s*LOOP AT lt_map INTO DATA\(ls_map\)", V):
+    fail.append('supplier: what VALIDATE_SINGLE left in the buffers is not discarded before posting - the next '
+                'new supplier is checked against the previous temporary number ##1 (WY 111, CVI_API 007)')
+if re.search(r'^\s*ROLLBACK WORK\.', V, re.M):
+    fail.append('supplier: a bare ROLLBACK WORK is left - it does not refresh the business partner and supplier '
+                'API buffers; use DISCARD (BAPI_TRANSACTION_ROLLBACK)')
 # Cipla's TB038A files sectors 0009-0015 under system 0001 and again under a
 # blank system: sector 0010 was refused as "in industry systems 0001, ".
 if not re.search(r"SELECT istype FROM tb038a WHERE ind_sector = @iv_sector AND istype <> @space", V):

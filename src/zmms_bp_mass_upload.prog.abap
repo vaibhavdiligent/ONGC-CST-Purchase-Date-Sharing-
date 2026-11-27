@@ -2221,6 +2221,10 @@ CLASS lcl_cvis DEFINITION FINAL.
     " ' ' for FM BUPA_CREATE_FROM_DATA. It should be 'A'". Initialising the
     " memory gives every row a clean start.
     METHODS reset_bp.
+    "! Undo what is not committed and refresh the buffers of the business
+    "! partner and the supplier API. A bare ROLLBACK WORK does not refresh
+    "! them, and what one row left behind showed up on the next.
+    METHODS discard.
     DATA mo_log TYPE REF TO lcl_log.
 ENDCLASS.
 
@@ -2236,6 +2240,11 @@ CLASS lcl_cvis IMPLEMENTATION.
       CATCH cx_sy_dyn_call_illegal_func.
         RETURN.
     ENDTRY.
+  ENDMETHOD.
+
+  METHOD discard.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    reset_bp( ).
   ENDMETHOD.
 
   METHOD commit.
@@ -2265,11 +2274,19 @@ CLASS lcl_cvis IMPLEMENTATION.
           EXPORTING i_data        = is_data
           IMPORTING et_return_map = lt_map ).
       CATCH cx_root INTO DATA(lx1).
+        discard( ).
         mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
                      iv_ty = 'E' iv_txt = |Validation failed: { lx1->get_text( ) }| ).
         rv_ok = abap_false.
         RETURN.
     ENDTRY.
+    " What the validation left in the buffers goes before the real posting.
+    " Left there, the supplier API checked the next new supplier against the
+    " previous one's temporary number "##1" - WY 111 "Supplier ##1 does not
+    " match interval of number range Z001" and CVI_API 007 "Account group:
+    " plausibility check failed" on the second row of a file, warnings only
+    " (Cipla, 27.11.2026). Same rule as ZFI_VEND_HONC since 20.11.2026.
+    discard( ).
 
     LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
       mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
@@ -2293,7 +2310,7 @@ CLASS lcl_cvis IMPLEMENTATION.
                     i_test_run = p_test
           IMPORTING e_return   = lt_ret ).
       CATCH cx_root INTO DATA(lx2).
-        ROLLBACK WORK.
+        discard( ).
         mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
                      iv_ty = 'E' iv_txt = |Maintain failed: { lx2->get_text( ) }| ).
         rv_ok = abap_false.
@@ -2329,14 +2346,12 @@ CLASS lcl_cvis IMPLEMENTATION.
     ENDLOOP.
 
     IF rv_ok = abap_false.
-      ROLLBACK WORK.
-      reset_bp( ).
+      discard( ).
       RETURN.
     ENDIF.
 
     IF p_test = abap_true.
-      ROLLBACK WORK.
-      reset_bp( ).
+      discard( ).
       mo_log->add( iv_row = iv_row iv_k1 = iv_k1 iv_k2 = iv_k2 iv_k3 = iv_k3
                    iv_ty = 'S' iv_txt = 'Test run OK - would post' ).
     ELSE.
