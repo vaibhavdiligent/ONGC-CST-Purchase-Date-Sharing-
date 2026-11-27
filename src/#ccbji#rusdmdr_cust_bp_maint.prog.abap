@@ -2041,6 +2041,33 @@ CLASS lcl_cfg DEFINITION FINAL.
     CLASS-METHODS nrart
       IMPORTING VALUE(iv_parvw) TYPE parvw
       RETURNING VALUE(rv)       TYPE nrart.
+    " The business partner's bank details valid today (BUT0BK), and the
+    " next free bank details ID - ended ones counted.
+    TYPES: BEGIN OF ty_bk,
+             bkvid TYPE bu_bkvid,
+             banks TYPE banks,
+             bankl TYPE bankk,
+             bankn TYPE bankn,
+           END OF ty_bk,
+           tt_bk TYPE STANDARD TABLE OF ty_bk WITH EMPTY KEY.
+    CLASS-METHODS bp_banks
+      IMPORTING VALUE(iv_bp) TYPE bu_partner
+      RETURNING VALUE(rt)    TYPE tt_bk.
+    CLASS-METHODS bp_bank_next
+      IMPORTING VALUE(iv_bp) TYPE bu_partner
+      RETURNING VALUE(rv)    TYPE i.
+    " The tax number category of a country and digit (IN3, JP1 ...) when
+    " the system has it (TFKTAXNUMTYPE), and whether a partner holds one.
+    CLASS-METHODS tax_cat
+      IMPORTING iv_country    TYPE clike
+                iv_digit      TYPE clike
+      RETURNING VALUE(rv)     TYPE bptaxtype.
+    CLASS-METHODS taxnum_of
+      IMPORTING VALUE(iv_bp)   TYPE bu_partner
+                VALUE(iv_type) TYPE bptaxtype
+      EXPORTING ev_num         TYPE bptaxnum
+                ev_numxl       TYPE bptaxnumxl
+      RETURNING VALUE(rv)      TYPE abap_bool.
 ENDCLASS.
 
 
@@ -2144,6 +2171,53 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD nrart.
     SELECT SINGLE nrart FROM tpar WHERE parvw = @iv_parvw INTO @rv.
+  ENDMETHOD.
+
+  METHOD bp_banks.
+    IF iv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lv_now TYPE timestamp.
+    GET TIME STAMP FIELD lv_now.
+    SELECT bkvid, banks, bankl, bankn, bk_valid_from, bk_valid_to FROM but0bk
+      WHERE partner = @iv_bp ORDER BY bkvid INTO TABLE @DATA(lt_db).
+    LOOP AT lt_db INTO DATA(ls_db).
+      IF ( ls_db-bk_valid_from IS NOT INITIAL AND ls_db-bk_valid_from > lv_now )
+      OR ( ls_db-bk_valid_to   IS NOT INITIAL AND ls_db-bk_valid_to   < lv_now ).
+        CONTINUE.                               " not valid today
+      ENDIF.
+      APPEND VALUE #( bkvid = ls_db-bkvid banks = ls_db-banks
+                      bankl = ls_db-bankl bankn = ls_db-bankn ) TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD bp_bank_next.
+    rv = 1.
+    IF iv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT bkvid FROM but0bk WHERE partner = @iv_bp INTO TABLE @DATA(lt_id).
+    LOOP AT lt_id INTO DATA(ls_id).
+      IF ls_id-bkvid CO '0123456789' AND CONV i( ls_id-bkvid ) >= rv.
+        rv = CONV i( ls_id-bkvid ) + 1.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD tax_cat.
+    DATA(lv_type) = CONV bptaxtype( |{ to_upper( condense( CONV string( iv_country ) ) ) }{ iv_digit }| ).
+    SELECT SINGLE taxtype FROM tfktaxnumtype WHERE taxtype = @lv_type INTO @rv.
+  ENDMETHOD.
+
+  METHOD taxnum_of.
+    CLEAR: ev_num, ev_numxl, rv.
+    IF iv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE taxnum, taxnumxl FROM dfkkbptaxnum
+      WHERE partner = @iv_bp AND taxtype = @iv_type
+      INTO (@ev_num, @ev_numxl).
+    rv = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
 ENDCLASS.
@@ -3322,6 +3396,10 @@ CLASS lcl_ul DEFINITION FINAL.
     CLASS-DATA mv_rep  TYPE ty_grp.
     CLASS-DATA mo_db   TYPE REF TO lcl_db.
     CLASS-DATA mt_line TYPE HASHED TABLE OF ty_line WITH UNIQUE KEY key.
+    " The partner's bank details valid today and the next free ID - bank
+    " details are the business partner's, keyed by ID (see BANK_LINE).
+    CLASS-DATA mt_bk     TYPE lcl_cfg=>tt_bk.
+    CLASS-DATA mv_bknext TYPE i.
 
     CLASS-METHODS map_cols
       IMPORTING it_head   TYPE tt_cell
@@ -3360,6 +3438,8 @@ CLASS lcl_ul DEFINITION FINAL.
                 is_obj    TYPE ty_obj
       RETURNING VALUE(rv) TYPE abap_bool.
     CLASS-METHODS reset_bp.
+    "! Undo what is not committed and refresh the partner's buffers.
+    CLASS-METHODS discard.
 
     " ---- generic access to the API structure
     CLASS-METHODS sub
@@ -3385,6 +3465,19 @@ CLASS lcl_ul DEFINITION FINAL.
     CLASS-METHODS text_lines
       IMPORTING iv_text   TYPE string
       RETURNING VALUE(rt) TYPE tline_tab.
+    " The line of a bank account on the BUSINESS PARTNER. In S/4HANA a
+    " customer's or supplier's bank details come from its business partner:
+    " sent on the customer / supplier (CENTRAL_DATA-BANKDETAIL) they are
+    " ignored with CVI_EI 004 "Bank data is provided from the business
+    " partner" - learnt at Cipla, production, 26.11.2026.
+    CLASS-METHODS bank_line
+      IMPORTING ir_ext    TYPE REF TO data
+                is_ent    TYPE ty_ent
+      RETURNING VALUE(rr) TYPE REF TO data.
+    " KNBK / LFBK field -> component of the partner's bank details.
+    CLASS-METHODS bank_comp
+      IMPORTING iv_api    TYPE clike
+      RETURNING VALUE(rv) TYPE string.
 ENDCLASS.
 
 
@@ -3899,13 +3992,80 @@ CLASS lcl_ul IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+  METHOD bank_comp.
+    rv = SWITCH #( to_upper( iv_api )
+                   WHEN 'KOINH' THEN `ACCOUNTHOLDER`
+                   WHEN 'BKONT' THEN `CTRL_KEY`
+                   WHEN 'BKREF' THEN `BANK_REF`
+                   WHEN 'XEZER' THEN `COLL_AUTH`
+                   WHEN 'BANKS' THEN `BANK_CTRY`
+                   WHEN 'BANKL' THEN `BANK_KEY`
+                   WHEN 'BANKN' THEN `BANK_ACCT`
+                   ELSE `` ).
+  ENDMETHOD.
+
+  METHOD bank_line.
+    DATA(lv_id) = |BANK/{ is_ent-key }|.
+    READ TABLE mt_line INTO DATA(ls_l) WITH TABLE KEY key = lv_id.
+    IF sy-subrc = 0.
+      rr = ls_l-ref.
+      RETURN.
+    ENDIF.
+    SPLIT is_ent-key AT `|` INTO DATA(lv_banks) DATA(lv_bankl) DATA(lv_bankn).
+    lv_banks = to_upper( condense( lv_banks ) ).
+    lv_bankl = to_upper( condense( lv_bankl ) ).
+    lv_bankn = condense( lv_bankn ).
+    " The partner's ID of this account, if it has the account today.
+    DATA lv_bkvid TYPE bu_bkvid.
+    LOOP AT mt_bk INTO DATA(ls_bk) WHERE banks = lv_banks AND bankn = lv_bankn.
+      IF to_upper( ls_bk-bankl ) = lv_bankl.
+        lv_bkvid = ls_bk-bkvid.
+        EXIT.
+      ENDIF.
+    ENDLOOP.
+    DATA lv_task TYPE c LENGTH 1.
+    IF is_ent-task = gc_del.
+      IF lv_bkvid IS INITIAL.
+        mo_log->add( iv_row = is_ent-row iv_type = 'W' iv_part = `Bank details` iv_field = is_ent-key
+                     iv_msg = 'The business partner does not have this bank account today - nothing to delete' ).
+        RETURN.
+      ENDIF.
+      lv_task = gc_del.
+    ELSEIF lv_bkvid IS NOT INITIAL.
+      lv_task = gc_upd.
+    ELSE.
+      lv_task  = gc_ins.
+      lv_bkvid = |{ mv_bknext WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
+      mv_bknext = mv_bknext + 1.
+    ENDIF.
+    rr = new_line( sub( ir = ir_ext iv_path = `PARTNER-CENTRAL_DATA-BANKDETAIL-BANKDETAILS` ) ).
+    IF rr IS NOT BOUND.
+      RETURN.
+    ENDIF.
+    put( ir = rr iv_path = `TASK`     iv_val = lv_task ).
+    put( ir = rr iv_path = `DATA_KEY` iv_val = lv_bkvid ).
+    IF lv_task = gc_ins.
+      put( ir = rr iv_path = `DATA-BANK_CTRY`  iv_val = lv_banks ).
+      put( ir = rr iv_path = `DATAX-BANK_CTRY` iv_val = abap_true ).
+      put( ir = rr iv_path = `DATA-BANK_KEY`   iv_val = lv_bankl ).
+      put( ir = rr iv_path = `DATAX-BANK_KEY`  iv_val = abap_true ).
+      put( ir = rr iv_path = `DATA-BANK_ACCT`  iv_val = lv_bankn ).
+      put( ir = rr iv_path = `DATAX-BANK_ACCT` iv_val = abap_true ).
+    ENDIF.
+    INSERT VALUE #( key = lv_id ref = rr ) INTO TABLE mt_line.
+  ENDMETHOD.
+
   METHOD build.
-    CLEAR: es_ext, ev_guid, mt_line.
+    CLEAR: es_ext, ev_guid, mt_line, mt_bk, mv_bknext.
     DATA(lv_create) = xsdbool( is_obj-exists = abap_false ).
     DATA(lv_task) = COND #( WHEN lv_create = abap_true THEN gc_ins ELSE gc_upd ).
     DATA lr_ext TYPE REF TO data.
     GET REFERENCE OF es_ext INTO lr_ext.
     DATA(lr_obj) = sub( ir = lr_ext iv_path = COND #( WHEN gc_side = 'C' THEN `CUSTOMER` ELSE `VENDOR` ) ).
+    DATA(lv_bp0) = COND bu_partner( WHEN lv_create = abap_false
+                                    THEN lcl_cfg=>bp_of( CONV kunnr( is_obj-num ) ) ).
+    mt_bk     = lcl_cfg=>bp_banks( lv_bp0 ).
+    mv_bknext = lcl_cfg=>bp_bank_next( lv_bp0 ).
 
     " ---- the customer / supplier
     put( ir = lr_obj iv_path = `HEADER-OBJECT_TASK` iv_val = lv_task ).
@@ -3921,6 +4081,15 @@ CLASS lcl_ul IMPLEMENTATION.
 
     " ---- the entries: company codes, sales areas, repeating entries
     LOOP AT is_obj-ent INTO DATA(ls_e).
+      IF ls_e-grp = 'BANK'.
+        " A new or a deleted account gets its line here; an existing one
+        " only when one of its fields changes (see the values below) - an
+        " update line with nothing in it is not sent.
+        IF ls_e-task = gc_ins OR ls_e-task = gc_del.
+          bank_line( ir_ext = lr_ext is_ent = ls_e ).
+        ENDIF.
+        CONTINUE.
+      ENDIF.
       DATA(lr_l) = line_of( ir_obj = lr_obj is_ent = ls_e ).
       " The task of a line created as a parent is the parent's own.
       IF lr_l IS BOUND.
@@ -3940,11 +4109,49 @@ CLASS lcl_ul IMPLEMENTATION.
              del  TYPE abap_bool,
            END OF ty_com.
     DATA lt_com TYPE STANDARD TABLE OF ty_com WITH EMPTY KEY.
+    TYPES: BEGIN OF ty_tax,
+             digit TYPE string,
+             chg   TYPE ty_chg,
+           END OF ty_tax.
+    DATA lt_tax TYPE STANDARD TABLE OF ty_tax WITH EMPTY KEY.
     LOOP AT is_obj-chg INTO DATA(ls_c).
       ASSIGN ls_c-new->* TO FIELD-SYMBOL(<lv_new>).
       CASE ls_c-fld-grp.
         WHEN 'CENT'.
+          " Tax numbers belong to the business partner, under a category of
+          " country and digit (IN3, JP1 ...). Written into KNA1 / LFA1 only,
+          " the number does not show in BP and the next BP save can lose it
+          " (Cipla Incident 542). Where the country has no such category the
+          " number stays on the customer / supplier, as before.
+          DATA(lv_tdig) = SWITCH string( ls_c-fld-api WHEN 'STCD1' THEN `1` WHEN 'STCD2' THEN `2`
+                                                      WHEN 'STCD3' THEN `3` WHEN 'STCD4' THEN `4`
+                                                      WHEN 'STCD5' THEN `5` WHEN 'STCD6' THEN `6`
+                                                      WHEN 'STCEG' THEN `0` ELSE `` ).
+          IF lv_tdig IS NOT INITIAL.
+            APPEND VALUE #( digit = lv_tdig chg = ls_c ) TO lt_tax.
+            CONTINUE.
+          ENDIF.
           set_field( ir_line = lr_cd is_chg = ls_c ).
+
+        WHEN 'BANK'.
+          READ TABLE is_obj-ent INTO DATA(ls_bke) WITH KEY grp = 'BANK' key = ls_c-key.
+          IF sy-subrc <> 0.
+            CONTINUE.
+          ENDIF.
+          DATA(lv_bcomp) = bank_comp( ls_c-fld-api ).
+          IF lv_bcomp IS INITIAL.
+            mo_log->add( iv_row = ls_c-row iv_obj = is_obj-num iv_type = 'W' iv_part = `Bank details`
+                         iv_field = ls_c-fld-name
+                         iv_msg = |{ ls_c-fld-name } is not part of the business partner's bank details | &&
+                                  |in S/4HANA - not changed| ).
+            CONTINUE.
+          ENDIF.
+          DATA(lr_bkl) = bank_line( ir_ext = lr_ext is_ent = ls_bke ).
+          IF lr_bkl IS BOUND.
+            ASSIGN ls_c-new->* TO FIELD-SYMBOL(<lv_bkv>).
+            put( ir = lr_bkl iv_path = |DATA-{ lv_bcomp }|  iv_val = <lv_bkv> ).
+            put( ir = lr_bkl iv_path = |DATAX-{ lv_bcomp }| iv_val = abap_true ).
+          ENDIF.
 
         WHEN 'ADDR'.
           set_field( ir_line = sub( ir = lr_obj iv_path = `CENTRAL_DATA-ADDRESS-POSTAL` ) is_chg = ls_c ).
@@ -4067,6 +4274,58 @@ CLASS lcl_ul IMPLEMENTATION.
       ENDIF.
     ENDLOOP.
 
+    " ---- tax numbers: on the business partner where the country has the category
+    IF lt_tax IS NOT INITIAL.
+      DATA lv_tcty TYPE string.
+      DATA(lr_tcp) = sub( ir = lr_obj iv_path = `CENTRAL_DATA-ADDRESS-POSTAL-DATA-COUNTRY` ).
+      IF lr_tcp IS BOUND.
+        ASSIGN lr_tcp->* TO FIELD-SYMBOL(<lv_tcp>).
+        lv_tcty = <lv_tcp>.
+      ENDIF.
+      IF lv_tcty IS INITIAL AND mo_db IS BOUND AND lv_create = abap_false.
+        DATA(lr_tdb) = mo_db->value( is_f = lcl_cat=>by_name( `ADRC-COUNTRY` ) iv_num = is_obj-num iv_key = `` ).
+        IF lr_tdb IS BOUND.
+          ASSIGN lr_tdb->* TO FIELD-SYMBOL(<lv_tdb>).
+          lv_tcty = <lv_tdb>.
+        ENDIF.
+      ENDIF.
+      LOOP AT lt_tax INTO DATA(ls_tx).
+        DATA(lv_tcat) = COND bptaxtype( WHEN lv_tcty IS NOT INITIAL
+                                        THEN lcl_cfg=>tax_cat( iv_country = lv_tcty iv_digit = ls_tx-digit ) ).
+        IF lv_tcat IS INITIAL.
+          set_field( ir_line = lr_cd is_chg = ls_tx-chg ).     " no category: as before
+          CONTINUE.
+        ENDIF.
+        DATA: lv_told   TYPE bptaxnum,
+              lv_toldxl TYPE bptaxnumxl.
+        DATA(lv_thas) = lcl_cfg=>taxnum_of( EXPORTING iv_bp = lv_bp0 iv_type = lv_tcat
+                                            IMPORTING ev_num = lv_told ev_numxl = lv_toldxl ).
+        DATA ls_tn TYPE bus_ei_bupa_taxnumber.
+        CLEAR ls_tn.
+        ls_tn-data_key-taxtype = lv_tcat.
+        IF ls_tx-chg-clear = abap_true.
+          IF lv_thas = abap_false.
+            CONTINUE.                            " nothing there to remove
+          ENDIF.
+          ls_tn-task               = gc_del.
+          ls_tn-data_key-taxnumber = lv_told.
+          ls_tn-data_key-taxnumxl  = lv_toldxl.
+        ELSE.
+          ASSIGN ls_tx-chg-new->* TO FIELD-SYMBOL(<lv_tnv>).
+          DATA(lv_tnum) = condense( CONV string( <lv_tnv> ) ).
+          ls_tn-task = COND #( WHEN lv_thas = abap_true THEN gc_upd ELSE gc_ins ).
+          " Up to 20 characters the number is TAXNUM; a longer one only fits
+          " TAXNUMXL, which is where BP itself keeps it.
+          IF strlen( lv_tnum ) > 20.
+            ls_tn-data_key-taxnumxl  = lv_tnum.
+          ELSE.
+            ls_tn-data_key-taxnumber = lv_tnum.
+          ENDIF.
+        ENDIF.
+        APPEND ls_tn TO es_ext-partner-central_data-taxnumber-taxnumbers.
+      ENDLOOP.
+    ENDIF.
+
     IF lv_addr = abap_true.
       put( ir = lr_obj iv_path = `CENTRAL_DATA-ADDRESS-TASK` iv_val = lv_task ).
       " A postal code is checked against its country: a row that changes
@@ -4103,8 +4362,7 @@ CLASS lcl_ul IMPLEMENTATION.
     ENDIF.
     es_ext-partner-header-object_instance-bpartnerguid = ev_guid.
 
-    DATA(lv_bp) = COND bu_partner( WHEN lv_create = abap_false
-                                   THEN lcl_cfg=>bp_of( CONV kunnr( is_obj-num ) ) ).
+    DATA(lv_bp) = lv_bp0.
     DATA lt_role TYPE lcl_cfg=>tt_role.
     DATA(lv_area) = abap_false.
     LOOP AT is_obj-ent INTO ls_e WHERE grp = 'SALE' OR grp = 'PURC'.
@@ -4174,7 +4432,44 @@ CLASS lcl_ul IMPLEMENTATION.
                                      is_fromx = <ls_pdx>
                            CHANGING  cs_to    = ls_adr-data-postal-data
                                      cs_tox   = ls_adr-data-postal-datax ).
-      IF ls_adr-data-postal-datax IS NOT INITIAL.
+      " Telephone, mobile, fax and e-mail go with the partner's address too:
+      " a new customer / supplier takes its address from the business
+      " partner, and numbers sent on the customer alone were dropped (Cipla,
+      " ZBP_CREATE_CUST, production, 26.11.2026). The first telephone or
+      " mobile is the standard number.
+      DATA(lv_std) = abap_true.
+      LOOP AT lt_com INTO DATA(ls_nc) WHERE val IS NOT INITIAL AND del = abap_false.
+        CASE ls_nc-kind.
+          WHEN `TEL` OR `MOB`.
+            DATA ls_nph TYPE bus_ei_bupa_telephone.
+            CLEAR ls_nph.
+            ls_nph-contact-task           = gc_ins.
+            ls_nph-contact-data-telephone = ls_nc-val.
+            ls_nph-contact-data-extension = ls_nc-ext.
+            ls_nph-contact-data-std_no    = lv_std.
+            IF ls_nc-kind = `MOB`.
+              ls_nph-contact-data-r_3_user = gc_mobile.
+            ENDIF.
+            lv_std = abap_false.
+            APPEND ls_nph TO ls_adr-data-communication-phone-phone.
+          WHEN `FAX`.
+            DATA ls_nfx TYPE bus_ei_bupa_fax.
+            CLEAR ls_nfx.
+            ls_nfx-contact-task        = gc_ins.
+            ls_nfx-contact-data-fax    = ls_nc-val.
+            ls_nfx-contact-data-std_no = abap_true.
+            APPEND ls_nfx TO ls_adr-data-communication-fax-fax.
+          WHEN OTHERS.
+            DATA ls_nsm TYPE bus_ei_bupa_smtp.
+            CLEAR ls_nsm.
+            ls_nsm-contact-task        = gc_ins.
+            ls_nsm-contact-data-e_mail = ls_nc-val.
+            ls_nsm-contact-data-std_no = abap_true.
+            APPEND ls_nsm TO ls_adr-data-communication-smtp-smtp.
+        ENDCASE.
+      ENDLOOP.
+      IF ls_adr-data-postal-datax IS NOT INITIAL
+         OR ls_adr-data-communication IS NOT INITIAL.
         APPEND ls_adr TO es_ext-partner-central_data-address-addresses.
       ENDIF.
     ENDIF.
@@ -4200,11 +4495,17 @@ CLASS lcl_ul IMPLEMENTATION.
         cl_md_bp_maintain=>validate_single( EXPORTING i_data        = is_ext
                                             IMPORTING et_return_map = lt_map ).
       CATCH cx_root INTO DATA(lx1).
+        discard( ).
         mo_log->add( iv_row = is_obj-row iv_obj = lv_obj iv_type = 'E'
                      iv_msg = |Validation failed: { lx1->get_text( ) }| ).
         rv = abap_false.
         RETURN.
     ENDTRY.
+    " What the validation left in the partner's buffers goes before the
+    " real posting, and a refused record leaves nothing behind: a failed
+    " row's partner otherwise came up at a later row's COMMIT and ended the
+    " job in CX_FSBP_PARTNER_INCONSISTENT (Cipla, HONC, 20.11.2026).
+    discard( ).
     LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
       mo_log->add( iv_row = is_obj-row iv_obj = lv_obj iv_type = 'E'
                    iv_field = |{ ls_map-bapistrucname }-{ ls_map-bapifldnm }| iv_msg = ls_map-message ).
@@ -4222,8 +4523,7 @@ CLASS lcl_ul IMPLEMENTATION.
                                                i_test_run = p_test
                                      IMPORTING e_return   = lt_ret ).
       CATCH cx_root INTO DATA(lx2).
-        ROLLBACK WORK.
-        reset_bp( ).
+        discard( ).
         mo_log->add( iv_row = is_obj-row iv_obj = lv_obj iv_type = 'E'
                      iv_msg = |Maintain failed: { lx2->get_text( ) }| ).
         rv = abap_false.
@@ -4249,8 +4549,7 @@ CLASS lcl_ul IMPLEMENTATION.
       ENDLOOP.
     ENDLOOP.
     IF rv = abap_false OR p_test = abap_true.
-      ROLLBACK WORK.
-      reset_bp( ).
+      discard( ).
       RETURN.
     ENDIF.
 
@@ -4266,7 +4565,35 @@ CLASS lcl_ul IMPLEMENTATION.
       mo_log->add( iv_row = is_obj-row iv_obj = lv_obj iv_type = 'E'
                    iv_msg = |The update did not go through - nothing was saved: { ls_cret-message }| ).
       rv = abap_false.
+      RETURN.
     ENDIF.
+
+    " A new record: did SAP create the customer / supplier as well? With
+    " postprocessing active it saves the business partner and parks the
+    " customer / supplier error in MDS_PPO2 instead of returning it - 13
+    " partners without supplier at Cipla, production, 23.11.2026.
+    IF is_obj-exists = abap_false.
+      DATA(lv_ng) = CONV bu_partner_guid( is_ext-partner-header-object_instance-bpartnerguid ).
+      IF lv_ng IS NOT INITIAL AND lcl_cfg=>num_by_guid( lv_ng ) IS INITIAL.
+        DATA(lv_nbp) = lcl_cfg=>bp_by_guid( lv_ng ).
+        mo_log->add( iv_row = is_obj-row iv_obj = lv_obj iv_type = 'E'
+                     iv_msg = COND string(
+                       WHEN lv_nbp IS INITIAL
+                       THEN `Nothing was created - no business partner and no ` &&
+                            COND string( WHEN gc_side = 'C' THEN `customer` ELSE `supplier` )
+                       ELSE |Business partner { lv_nbp ALPHA = OUT } was saved, but no | &&
+                            |{ COND string( WHEN gc_side = 'C' THEN `customer` ELSE `supplier` ) } | &&
+                            |is linked to it - SAP parked the reason in MDS_PPO2| ) ).
+        rv = abap_false.
+      ENDIF.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD discard.
+    " BAPI_TRANSACTION_ROLLBACK also refreshes the buffers the business
+    " partner functions registered; a bare ROLLBACK WORK does not.
+    CALL FUNCTION 'BAPI_TRANSACTION_ROLLBACK'.
+    reset_bp( ).
   ENDMETHOD.
 
   METHOD run.

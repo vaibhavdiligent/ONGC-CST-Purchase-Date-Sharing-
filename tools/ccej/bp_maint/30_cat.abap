@@ -931,6 +931,33 @@ CLASS lcl_cfg DEFINITION FINAL.
     CLASS-METHODS nrart
       IMPORTING VALUE(iv_parvw) TYPE parvw
       RETURNING VALUE(rv)       TYPE nrart.
+    " The business partner's bank details valid today (BUT0BK), and the
+    " next free bank details ID - ended ones counted.
+    TYPES: BEGIN OF ty_bk,
+             bkvid TYPE bu_bkvid,
+             banks TYPE banks,
+             bankl TYPE bankk,
+             bankn TYPE bankn,
+           END OF ty_bk,
+           tt_bk TYPE STANDARD TABLE OF ty_bk WITH EMPTY KEY.
+    CLASS-METHODS bp_banks
+      IMPORTING VALUE(iv_bp) TYPE bu_partner
+      RETURNING VALUE(rt)    TYPE tt_bk.
+    CLASS-METHODS bp_bank_next
+      IMPORTING VALUE(iv_bp) TYPE bu_partner
+      RETURNING VALUE(rv)    TYPE i.
+    " The tax number category of a country and digit (IN3, JP1 ...) when
+    " the system has it (TFKTAXNUMTYPE), and whether a partner holds one.
+    CLASS-METHODS tax_cat
+      IMPORTING iv_country    TYPE clike
+                iv_digit      TYPE clike
+      RETURNING VALUE(rv)     TYPE bptaxtype.
+    CLASS-METHODS taxnum_of
+      IMPORTING VALUE(iv_bp)   TYPE bu_partner
+                VALUE(iv_type) TYPE bptaxtype
+      EXPORTING ev_num         TYPE bptaxnum
+                ev_numxl       TYPE bptaxnumxl
+      RETURNING VALUE(rv)      TYPE abap_bool.
 ENDCLASS.
 
 
@@ -1034,6 +1061,53 @@ CLASS lcl_cfg IMPLEMENTATION.
 
   METHOD nrart.
     SELECT SINGLE nrart FROM tpar WHERE parvw = @iv_parvw INTO @rv.
+  ENDMETHOD.
+
+  METHOD bp_banks.
+    IF iv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lv_now TYPE timestamp.
+    GET TIME STAMP FIELD lv_now.
+    SELECT bkvid, banks, bankl, bankn, bk_valid_from, bk_valid_to FROM but0bk
+      WHERE partner = @iv_bp ORDER BY bkvid INTO TABLE @DATA(lt_db).
+    LOOP AT lt_db INTO DATA(ls_db).
+      IF ( ls_db-bk_valid_from IS NOT INITIAL AND ls_db-bk_valid_from > lv_now )
+      OR ( ls_db-bk_valid_to   IS NOT INITIAL AND ls_db-bk_valid_to   < lv_now ).
+        CONTINUE.                               " not valid today
+      ENDIF.
+      APPEND VALUE #( bkvid = ls_db-bkvid banks = ls_db-banks
+                      bankl = ls_db-bankl bankn = ls_db-bankn ) TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD bp_bank_next.
+    rv = 1.
+    IF iv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT bkvid FROM but0bk WHERE partner = @iv_bp INTO TABLE @DATA(lt_id).
+    LOOP AT lt_id INTO DATA(ls_id).
+      IF ls_id-bkvid CO '0123456789' AND CONV i( ls_id-bkvid ) >= rv.
+        rv = CONV i( ls_id-bkvid ) + 1.
+      ENDIF.
+    ENDLOOP.
+  ENDMETHOD.
+
+  METHOD tax_cat.
+    DATA(lv_type) = CONV bptaxtype( |{ to_upper( condense( CONV string( iv_country ) ) ) }{ iv_digit }| ).
+    SELECT SINGLE taxtype FROM tfktaxnumtype WHERE taxtype = @lv_type INTO @rv.
+  ENDMETHOD.
+
+  METHOD taxnum_of.
+    CLEAR: ev_num, ev_numxl, rv.
+    IF iv_bp IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE taxnum, taxnumxl FROM dfkkbptaxnum
+      WHERE partner = @iv_bp AND taxtype = @iv_type
+      INTO (@ev_num, @ev_numxl).
+    rv = xsdbool( sy-subrc = 0 ).
   ENDMETHOD.
 
 ENDCLASS.
