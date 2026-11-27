@@ -376,6 +376,8 @@ CASES = [
      [('tools/ccej/bp_maint/60_ul.abap', "    LOOP AT is_obj-chg INTO DATA(ls_nb) WHERE grp = 'ADDR'.", "    LOOP AT is_obj-chg INTO DATA(ls_nb) WHERE grp = 'NONE'.")]),
     ('CCBJI: field outside the API structure (review, 27.11.2026)', 'tools/ccej/bp_maint/30_cat.abap', 'ccej/audit_field_paths.py',
      [('tools/ccej/bp_maint/30_cat.abap', "           WHEN 'COMP' THEN |{ lv_root }-COMPANY_DATA-COMPANY-DATA|", "           WHEN 'COMP' THEN |{ lv_root }-COMPANY_DATA-COMPANYX-DATA|")]),
+    ('CCBJI: custom field without change flag offered - value silently ignored (review, 27.11.2026)', 'tools/ccej/bp_maint/30_cat.abap', 'ccej/audit_bp_lessons.py',
+     [('tools/ccej/bp_maint/30_cat.abap', "      IF lt_apix IS NOT INITIAL AND NOT line_exists( lt_apix[ table_line = CONV string( ls_d-fieldname ) ] ).", "      IF lt_apix IS INITIAL AND NOT line_exists( lt_apix[ table_line = CONV string( ls_d-fieldname ) ] ).")]),
     ('Employee upload: CONVT_NO_NUMBER in the mail - serial number C(1) (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',
      [('src/zfi_emp_upld.prog.abap', "         lv_srno                TYPE i,", "         lv_srno                TYPE c VALUE 0,")]),
     ('Employee upload: payment method C instead of CNT (CRQ, 23.11.2026)', 'src/zfi_emp_upld.prog.abap', 'cipla/audit_emp_upld.py',

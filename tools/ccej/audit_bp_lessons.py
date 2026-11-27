@@ -84,6 +84,13 @@ need('a number given in the file is not passed as the partner number for an exte
 need('BVTYP of the file is not used as the bank details ID of a new account',
      r"IF ls_bv-fld-api = 'BVTYP'\..*?bank_line\( ir_ext = lr_ext is_ent = ls_e iv_bkvid = lv_bvask \)")
 
+# Custom fields (appends on KNA1, KNVV, LFA1, LFB1 ...): offered only with a place in the
+# API structure AND a change flag; otherwise the column is refused with the reason.
+need('a custom field without a change flag (DATAX) is offered - SAP would ignore its value',
+     r"IF lt_apix IS NOT INITIAL AND NOT line_exists\( lt_apix\[ table_line = CONV string\( ls_d-fieldname \) \] \)\.")
+need('a column for a table field that is not in the API is refused without saying why',
+     r"READ TABLE mt_why INTO DATA\(ls_why\) WITH TABLE KEY name = lv_h\.")
+
 if fail:
     print(f'{len(fail)} problem(s):')
     for f in fail:

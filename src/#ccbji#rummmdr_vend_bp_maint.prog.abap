@@ -1150,6 +1150,13 @@ CLASS lcl_cat DEFINITION FINAL.
              name  TYPE string,
            END OF ty_alias.
     CLASS-DATA mt_alias TYPE SORTED TABLE OF ty_alias WITH UNIQUE KEY alias.
+    " Fields of a master table the program does not offer, and why - a
+    " custom field appended to KNA1 but not to the API, for instance.
+    TYPES: BEGIN OF ty_why,
+             name TYPE string,
+             text TYPE string,
+           END OF ty_why.
+    CLASS-DATA mt_why TYPE HASHED TABLE OF ty_why WITH UNIQUE KEY name.
 
     CLASS-METHODS build.
     CLASS-METHODS add_table IMPORTING is_g TYPE ty_gdef.
@@ -1174,8 +1181,10 @@ CLASS lcl_cat DEFINITION FINAL.
     CLASS-METHODS api_path
       IMPORTING iv_grp    TYPE ty_grp
       RETURNING VALUE(rv) TYPE string.
+    " IV_X: the change flags (DATAX) instead of the values (DATA).
     CLASS-METHODS path_comps
       IMPORTING iv_grp    TYPE ty_grp
+                iv_x      TYPE abap_bool DEFAULT abap_false
       RETURNING VALUE(rt) TYPE string_table.
 ENDCLASS.
 
@@ -1339,6 +1348,9 @@ CLASS lcl_cat IMPLEMENTATION.
     IF lv_path IS INITIAL.
       RETURN.
     ENDIF.
+    IF iv_x = abap_true.
+      lv_path = |{ lv_path }X|.                  " ...-DATA -> ...-DATAX
+    ENDIF.
     DATA lo_t TYPE REF TO cl_abap_typedescr.
     cl_abap_typedescr=>describe_by_name(
       EXPORTING  p_name         = 'CVIS_EI_EXTERN'
@@ -1412,6 +1424,14 @@ CLASS lcl_cat IMPLEMENTATION.
     LOOP AT lt_c INTO DATA(lv_c).
       INSERT lv_c INTO TABLE lt_api.
     ENDLOOP.
+    " The change flags. A value whose field has no flag is not taken by the
+    " API on a change - a custom field appended to the DATA structure but
+    " not to the DATAX one. Empty when the structure cannot be read: then
+    " the flags are not checked.
+    DATA lt_apix TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
+    LOOP AT path_comps( iv_grp = is_g-grp iv_x = abap_true ) INTO DATA(lv_cx).
+      INSERT lv_cx INTO TABLE lt_apix.
+    ENDLOOP.
 
     " ---- keys: the number on the general data, the group's own keys here
     DATA lt_key TYPE SORTED TABLE OF fieldname WITH UNIQUE KEY table_line.
@@ -1443,9 +1463,22 @@ CLASS lcl_cat IMPLEMENTATION.
         " function's plant, for instance) stays out of the data fields.
         CONTINUE.
       ENDIF.
-      IF line_exists( lt_api[ table_line = CONV string( ls_d-fieldname ) ] ).
-        add( ls_f ).
+      IF NOT line_exists( lt_api[ table_line = CONV string( ls_d-fieldname ) ] ).
+        INSERT VALUE #( name = ls_f-name
+                        text = |{ ls_f-name } is in { is_g-tab } but not in the API structure | &&
+                               |{ api_path( is_g-grp ) } - SAP cannot write it through the business | &&
+                               |partner API. For a custom field: append it to that structure and to | &&
+                               |its change-flag structure (DATAX) as well| ) INTO TABLE mt_why.
+        CONTINUE.
       ENDIF.
+      IF lt_apix IS NOT INITIAL AND NOT line_exists( lt_apix[ table_line = CONV string( ls_d-fieldname ) ] ).
+        INSERT VALUE #( name = ls_f-name
+                        text = |{ ls_f-name } is in the API structure but has no change flag in | &&
+                               |{ api_path( is_g-grp ) }X - SAP would ignore the value. Append the | &&
+                               |field to the change-flag structure as well (type BAPIUPDATE)| ) INTO TABLE mt_why.
+        CONTINUE.
+      ENDIF.
+      add( ls_f ).
     ENDLOOP.
 
     " The customer's partner function names its partner in KUNN2, LIFNR,
@@ -1606,7 +1639,7 @@ CLASS lcl_cat IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD build.
-    CLEAR: mt_fld, mt_alias.
+    CLEAR: mt_fld, mt_alias, mt_why.
     LOOP AT groups( ) INTO DATA(ls_g).
       CASE ls_g-grp.
         WHEN 'ADDR'.
@@ -1658,6 +1691,12 @@ CLASS lcl_cat IMPLEMENTATION.
         ev_err = |Column "{ iv_head }" is in more than one table - name it as one of: { lv_alt }|.
         RETURN.
       ENDIF.
+    ENDIF.
+    " A field of a master table the program does not offer: say why.
+    READ TABLE mt_why INTO DATA(ls_why) WITH TABLE KEY name = lv_h.
+    IF sy-subrc = 0.
+      ev_err = ls_why-text.
+      RETURN.
     ENDIF.
     ev_err = |Column "{ iv_head }" is not a field this program knows|.
   ENDMETHOD.
