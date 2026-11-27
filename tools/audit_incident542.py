@@ -161,6 +161,13 @@ for what, pat in (('telephone / mobile', r'APPEND ls_bph TO ls_adr-data-communic
         fail.append(f'customer: the {what} of a new customer is not put on the business partner\'s address - '
                     f'it is dropped (production, 26.11.2026)')
 
+# Productive run 27.11.2026: WY 111 / CVI_API 007 on rows 3 and 4, not on
+# row 2 - the supplier API's own buffer survived the commit of the row before.
+rb = method(V, 'lcl_cvis', 'reset_bp')
+if "CALL METHOD ('VMD_EI_API')=>('INITIALIZE')." not in rb:
+    fail.append('supplier: RESET_BP does not empty the supplier API buffer (VMD_EI_API=>INITIALIZE) - the '
+                'next new supplier is checked against the last one: WY 111 / CVI_API 007 warnings')
+
 if fail:
     print(f'{len(fail)} problem(s):')
     for f in fail:

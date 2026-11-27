@@ -2237,8 +2237,24 @@ CLASS lcl_cvis IMPLEMENTATION.
   METHOD reset_bp.
     TRY.
         CALL FUNCTION 'BUP_MEMORY_CENTRAL_INIT'.
-      CATCH cx_sy_dyn_call_illegal_func.
-        RETURN.
+      CATCH cx_sy_dyn_call_illegal_func ##NO_HANDLER.
+    ENDTRY.
+    " The supplier and customer APIs keep a buffer of their own - "global
+    " and current vendor buffer" - which neither BAPI_TRANSACTION_COMMIT nor
+    " BAPI_TRANSACTION_ROLLBACK empties. Left there, the next new supplier
+    " (temporary number ##1) was checked against the one just created: WY 111
+    " "Supplier ##1 does not match interval of number range Z001" and
+    " CVI_API 007 "Account group: Plausibility check failed" on every row
+    " after the first, warnings only - the suppliers were created correctly
+    " (Cipla, productive run 27.11.2026, rows 3 and 4; row 2 clean).
+    " Called by name: a release without the method skips it.
+    TRY.
+        CALL METHOD ('VMD_EI_API')=>('INITIALIZE').
+      CATCH cx_sy_dyn_call_error ##NO_HANDLER.
+    ENDTRY.
+    TRY.
+        CALL METHOD ('CMD_EI_API')=>('INITIALIZE').
+      CATCH cx_sy_dyn_call_error ##NO_HANDLER.
     ENDTRY.
   ENDMETHOD.
 
@@ -2280,12 +2296,9 @@ CLASS lcl_cvis IMPLEMENTATION.
         rv_ok = abap_false.
         RETURN.
     ENDTRY.
-    " What the validation left in the buffers goes before the real posting.
-    " Left there, the supplier API checked the next new supplier against the
-    " previous one's temporary number "##1" - WY 111 "Supplier ##1 does not
-    " match interval of number range Z001" and CVI_API 007 "Account group:
-    " plausibility check failed" on the second row of a file, warnings only
-    " (Cipla, 27.11.2026). Same rule as ZFI_VEND_HONC since 20.11.2026.
+    " What the validation left in the buffers goes before the real posting
+    " (Cipla, 27.11.2026). Same rule as ZFI_VEND_HONC since 20.11.2026. The
+    " supplier API's own buffer is emptied in RESET_BP, after every row.
     discard( ).
 
     LOOP AT lt_map INTO DATA(ls_map) WHERE type CA 'EAX'.
