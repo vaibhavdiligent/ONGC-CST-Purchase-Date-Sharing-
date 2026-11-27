@@ -1170,6 +1170,13 @@ CLASS lcl_cat DEFINITION FINAL.
       RETURNING VALUE(rs) TYPE ty_fld.
     CLASS-METHODS add
       IMPORTING is_f TYPE ty_fld.
+    " The fields of a part's DATA structure, read from CVIS_EI_EXTERN itself.
+    CLASS-METHODS api_path
+      IMPORTING iv_grp    TYPE ty_grp
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS path_comps
+      IMPORTING iv_grp    TYPE ty_grp
+      RETURNING VALUE(rt) TYPE string_table.
 ENDCLASS.
 
 
@@ -1308,6 +1315,68 @@ CLASS lcl_cat IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+  METHOD api_path.
+    " Where the upload writes a part's fields, from CVIS_EI_EXTERN down to
+    " the DATA structure. LCL_UL=>LINE_OF builds the same paths.
+    DATA(lv_root) = COND string( WHEN gc_side = 'C' THEN `CUSTOMER` ELSE `VENDOR` ).
+    DATA(lv_area) = COND string( WHEN gc_side = 'C' THEN `SALES_DATA-SALES` ELSE `PURCHASING_DATA-PURCHASING` ).
+    rv = SWITCH #( iv_grp
+           WHEN 'CENT' THEN |{ lv_root }-CENTRAL_DATA-CENTRAL-DATA|
+           WHEN 'COMP' THEN |{ lv_root }-COMPANY_DATA-COMPANY-DATA|
+           WHEN 'SALE' OR 'PURC' THEN |{ lv_root }-{ lv_area }-DATA|
+           WHEN 'TAXI' THEN |{ lv_root }-CENTRAL_DATA-TAX_IND-TAX_IND-DATA|
+           WHEN 'UNLD' THEN |{ lv_root }-CENTRAL_DATA-LOADING-LOADING-DATA|
+           WHEN 'BANK' THEN |{ lv_root }-CENTRAL_DATA-BANKDETAIL-BANKDETAILS-DATA|
+           WHEN 'CONT' THEN |{ lv_root }-CENTRAL_DATA-CONTACT-CONTACTS-DATA|
+           WHEN 'PART' THEN |{ lv_root }-{ lv_area }-FUNCTIONS-FUNCTIONS-DATA|
+           WHEN 'DUNN' THEN |{ lv_root }-COMPANY_DATA-COMPANY-DUNNING-DUNNING-DATA|
+           WHEN 'WTAX' THEN |{ lv_root }-COMPANY_DATA-COMPANY-WTAX_TYPE-WTAX_TYPE-DATA|
+           ELSE `` ).
+  ENDMETHOD.
+
+  METHOD path_comps.
+    DATA(lv_path) = api_path( iv_grp ).
+    IF lv_path IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lo_t TYPE REF TO cl_abap_typedescr.
+    cl_abap_typedescr=>describe_by_name(
+      EXPORTING  p_name         = 'CVIS_EI_EXTERN'
+      RECEIVING  p_descr_ref    = lo_t
+      EXCEPTIONS type_not_found = 1
+                 OTHERS         = 2 ).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    SPLIT lv_path AT `-` INTO TABLE DATA(lt_p).
+    LOOP AT lt_p INTO DATA(lv_p).
+      IF lo_t->kind = cl_abap_typedescr=>kind_table.
+        lo_t = CAST cl_abap_tabledescr( lo_t )->get_table_line_type( ).
+      ENDIF.
+      IF lo_t->kind <> cl_abap_typedescr=>kind_struct.
+        RETURN.
+      ENDIF.
+      DATA lo_d TYPE REF TO cl_abap_datadescr.
+      CAST cl_abap_structdescr( lo_t )->get_component_type(
+        EXPORTING  p_name                 = lv_p
+        RECEIVING  p_descr_ref            = lo_d
+        EXCEPTIONS component_not_found    = 1
+                   unsupported_input_type = 2
+                   OTHERS                 = 3 ).
+      IF sy-subrc <> 0.
+        RETURN.
+      ENDIF.
+      lo_t = lo_d.
+    ENDLOOP.
+    IF lo_t->kind <> cl_abap_typedescr=>kind_struct.
+      RETURN.
+    ENDIF.
+    DATA(lt_c) = CAST cl_abap_structdescr( lo_t )->get_included_view( ).
+    LOOP AT lt_c INTO DATA(ls_c).
+      APPEND CONV string( ls_c-name ) TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
   METHOD from_dfies.
     rs-name     = |{ is_d-tabname }-{ is_d-fieldname }|.
     rs-grp      = iv_grp.
@@ -1334,6 +1403,12 @@ CLASS lcl_cat IMPLEMENTATION.
     ENDIF.
     DATA lt_api TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA(lt_c) = comps( is_g-api ).
+    IF lt_c IS INITIAL.
+      " The structure name gave nothing (a name that differs in this
+      " release): take the fields from the place the upload writes them
+      " to, so no part is left without its fields.
+      lt_c = path_comps( is_g-grp ).
+    ENDIF.
     LOOP AT lt_c INTO DATA(lv_c).
       INSERT lv_c INTO TABLE lt_api.
     ENDLOOP.
@@ -2058,6 +2133,14 @@ CLASS lcl_cfg DEFINITION FINAL.
       RETURNING VALUE(rv)    TYPE i.
     " The tax number category of a country and digit (IN3, JP1 ...) when
     " the system has it (TFKTAXNUMTYPE), and whether a partner holds one.
+    " Whether a business partner is an organisation (BUT000-TYPE 2).
+    CLASS-METHODS bp_is_org
+      IMPORTING VALUE(iv_bp)  TYPE bu_partner
+      RETURNING VALUE(rv)     TYPE abap_bool.
+    " Whether a grouping's business partner numbers are given from outside.
+    CLASS-METHODS bp_ext
+      IMPORTING iv_group      TYPE clike
+      RETURNING VALUE(rv)     TYPE abap_bool.
     CLASS-METHODS tax_cat
       IMPORTING iv_country    TYPE clike
                 iv_digit      TYPE clike
@@ -2202,6 +2285,27 @@ CLASS lcl_cfg IMPLEMENTATION.
         rv = CONV i( ls_id-bkvid ) + 1.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD bp_is_org.
+    SELECT SINGLE type FROM but000 WHERE partner = @iv_bp INTO @DATA(lv_type).
+    rv = xsdbool( lv_type = gc_org ).
+  ENDMETHOD.
+
+  METHOD bp_ext.
+    DATA lv_nr TYPE nrnr.
+    DATA(lv_grp) = CONV bu_group( iv_group ).
+    TRY.
+        SELECT SINGLE ('NRRNG') FROM tb001 WHERE bu_group = @lv_grp INTO @lv_nr.
+      CATCH cx_sy_dynamic_osql_error.
+        RETURN.
+    ENDTRY.
+    IF lv_nr IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE externind FROM nriv
+      WHERE object = 'BU_PARTNER' AND nrrangenr = @lv_nr INTO @DATA(lv_x).
+    rv = xsdbool( lv_x = abap_true ).
   ENDMETHOD.
 
   METHOD tax_cat.
@@ -3400,6 +3504,7 @@ CLASS lcl_ul DEFINITION FINAL.
     " details are the business partner's, keyed by ID (see BANK_LINE).
     CLASS-DATA mt_bk     TYPE lcl_cfg=>tt_bk.
     CLASS-DATA mv_bknext TYPE i.
+    CLASS-DATA mt_bkused TYPE SORTED TABLE OF bu_bkvid WITH UNIQUE KEY table_line.
 
     CLASS-METHODS map_cols
       IMPORTING it_head   TYPE tt_cell
@@ -3473,6 +3578,7 @@ CLASS lcl_ul DEFINITION FINAL.
     CLASS-METHODS bank_line
       IMPORTING ir_ext    TYPE REF TO data
                 is_ent    TYPE ty_ent
+                iv_bkvid  TYPE clike OPTIONAL
       RETURNING VALUE(rr) TYPE REF TO data.
     " KNBK / LFBK field -> component of the partner's bank details.
     CLASS-METHODS bank_comp
@@ -4035,8 +4141,17 @@ CLASS lcl_ul IMPLEMENTATION.
       lv_task = gc_upd.
     ELSE.
       lv_task  = gc_ins.
-      lv_bkvid = |{ mv_bknext WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
-      mv_bknext = mv_bknext + 1.
+      " The ID the file asks for (KNBK / LFBK-BVTYP) if the partner does not
+      " use it, else the next free one.
+      DATA(lv_ask) = CONV bu_bkvid( to_upper( condense( CONV string( iv_bkvid ) ) ) ).
+      IF lv_ask IS NOT INITIAL AND NOT line_exists( mt_bk[ bkvid = lv_ask ] )
+         AND NOT line_exists( mt_bkused[ table_line = lv_ask ] ).
+        lv_bkvid = lv_ask.
+      ELSE.
+        lv_bkvid = |{ mv_bknext WIDTH = 4 ALIGN = RIGHT PAD = '0' }|.
+        mv_bknext = mv_bknext + 1.
+      ENDIF.
+      INSERT lv_bkvid INTO TABLE mt_bkused.
     ENDIF.
     rr = new_line( sub( ir = ir_ext iv_path = `PARTNER-CENTRAL_DATA-BANKDETAIL-BANKDETAILS` ) ).
     IF rr IS NOT BOUND.
@@ -4056,7 +4171,7 @@ CLASS lcl_ul IMPLEMENTATION.
   ENDMETHOD.
 
   METHOD build.
-    CLEAR: es_ext, ev_guid, mt_line, mt_bk, mv_bknext.
+    CLEAR: es_ext, ev_guid, mt_line, mt_bk, mv_bknext, mt_bkused.
     DATA(lv_create) = xsdbool( is_obj-exists = abap_false ).
     DATA(lv_task) = COND #( WHEN lv_create = abap_true THEN gc_ins ELSE gc_upd ).
     DATA lr_ext TYPE REF TO data.
@@ -4086,7 +4201,14 @@ CLASS lcl_ul IMPLEMENTATION.
         " only when one of its fields changes (see the values below) - an
         " update line with nothing in it is not sent.
         IF ls_e-task = gc_ins OR ls_e-task = gc_del.
-          bank_line( ir_ext = lr_ext is_ent = ls_e ).
+          DATA(lv_bvask) = ``.
+          LOOP AT is_obj-chg INTO DATA(ls_bv) WHERE grp = 'BANK' AND key = ls_e-key.
+            IF ls_bv-fld-api = 'BVTYP'.
+              ASSIGN ls_bv-new->* TO FIELD-SYMBOL(<lv_bvv>).
+              lv_bvask = <lv_bvv>.
+            ENDIF.
+          ENDLOOP.
+          bank_line( ir_ext = lr_ext is_ent = ls_e iv_bkvid = lv_bvask ).
         ENDIF.
         CONTINUE.
       ENDIF.
@@ -4136,6 +4258,16 @@ CLASS lcl_ul IMPLEMENTATION.
         WHEN 'BANK'.
           READ TABLE is_obj-ent INTO DATA(ls_bke) WITH KEY grp = 'BANK' key = ls_c-key.
           IF sy-subrc <> 0.
+            CONTINUE.
+          ENDIF.
+          IF ls_c-fld-api = 'BVTYP'.
+            " The bank details ID: taken for a new account (above); the ID
+            " of an existing account is its key and cannot be changed.
+            IF ls_bke-task <> gc_ins.
+              mo_log->add( iv_row = ls_c-row iv_obj = is_obj-num iv_type = 'W' iv_part = `Bank details`
+                           iv_field = ls_c-fld-name
+                           iv_msg = 'The bank details ID of an existing account cannot be changed - left as it is' ).
+            ENDIF.
             CONTINUE.
           ENDIF.
           DATA(lv_bcomp) = bank_comp( ls_c-fld-api ).
@@ -4257,8 +4389,21 @@ CLASS lcl_ul IMPLEMENTATION.
         put( ir = lr_cl iv_path = `CONTACT-DATA-CONSNUMBER`  iv_val = ls_cm-cons ).
         put( ir = lr_cl iv_path = `CONTACT-DATAX-CONSNUMBER` iv_val = abap_true ).
       ELSE.
-        put( ir = lr_cl iv_path = `CONTACT-DATA-STD_NO`  iv_val = abap_true ).
-        put( ir = lr_cl iv_path = `CONTACT-DATAX-STD_NO` iv_val = abap_true ).
+        " One standard number per address: a new mobile is the standard
+        " number only when there is no landline, in SAP or in this row.
+        DATA(lv_stdno) = abap_true.
+        IF ls_cm-kind = `MOB`.
+          IF line_exists( lt_com[ kind = `TEL` del = abap_false ] ).
+            lv_stdno = abap_false.
+          ELSEIF mo_db IS BOUND AND lv_create = abap_false
+                 AND mo_db->rec( iv_grp = 'COMM' iv_num = is_obj-num iv_key = `ADR2` ) IS BOUND.
+            lv_stdno = abap_false.
+          ENDIF.
+        ENDIF.
+        IF lv_stdno = abap_true.
+          put( ir = lr_cl iv_path = `CONTACT-DATA-STD_NO`  iv_val = abap_true ).
+          put( ir = lr_cl iv_path = `CONTACT-DATAX-STD_NO` iv_val = abap_true ).
+        ENDIF.
       ENDIF.
       IF ls_cm-xval = abap_true.
         put( ir = lr_cl iv_path = |CONTACT-DATA-{ lv_vfld }|  iv_val = ls_cm-val ).
@@ -4372,9 +4517,23 @@ CLASS lcl_ul IMPLEMENTATION.
       es_ext-partner-central_data-common-data-bp_control-category = gc_org.
       es_ext-partner-central_data-common-data-bp_control-grouping =
         COND #( WHEN p_bpgrp IS NOT INITIAL THEN p_bpgrp ELSE lcl_cfg=>bp_group( p_ktogr ) ).
+      " A number given in the file is the partner's number too when its
+      " grouping takes numbers from outside; without it SAP asks for one.
+      IF is_obj-num IS NOT INITIAL
+         AND lcl_cfg=>bp_ext( es_ext-partner-central_data-common-data-bp_control-grouping ) = abap_true.
+        es_ext-partner-header-object_instance-bpartner = is_obj-num.
+      ENDIF.
       lt_role = lcl_cfg=>bp_roles( p_ktogr ).
       IF lt_role IS INITIAL.
         APPEND COND bu_role( WHEN gc_side = 'C' THEN 'FLCU00' ELSE 'FLVN00' ) TO lt_role.
+      ENDIF.
+    ENDIF.
+    " A company code added to an existing record needs the FI role, as a
+    " sales area / purchasing organisation needs its own.
+    IF lv_create = abap_false AND line_exists( is_obj-ent[ grp = 'COMP' task = gc_ins ] ).
+      DATA(lv_brole) = COND bu_role( WHEN gc_side = 'C' THEN 'FLCU00' ELSE 'FLVN00' ).
+      IF NOT line_exists( lt_role[ table_line = lv_brole ] ).
+        APPEND lv_brole TO lt_role.
       ENDIF.
     ENDIF.
     IF lv_area = abap_true.
@@ -4388,6 +4547,40 @@ CLASS lcl_ul IMPLEMENTATION.
         CONTINUE.
       ENDIF.
       APPEND VALUE bus_ei_bupa_roles( task = gc_ins data_key = lv_role ) TO es_ext-partner-central_data-role-roles.
+    ENDLOOP.
+
+    " The partner's own name, search terms and title - they are fields of
+    " the business partner, not of its address. Sent on a creation and on a
+    " change, so BP shows what the file says.
+    " A partner that is a person has no organisation name: there the name
+    " stays with the customer / supplier address, as before.
+    DATA(lv_isorg) = xsdbool( lv_create = abap_true OR lcl_cfg=>bp_is_org( lv_bp0 ) = abap_true ).
+    LOOP AT is_obj-chg INTO DATA(ls_nb) WHERE grp = 'ADDR'.
+      DATA(lv_bpo) = COND string( WHEN lv_isorg = abap_true THEN
+                       SWITCH string( ls_nb-fld-api WHEN 'NAME'   THEN `NAME1` WHEN 'NAME_2' THEN `NAME2`
+                                                    WHEN 'NAME_3' THEN `NAME3` WHEN 'NAME_4' THEN `NAME4`
+                                                    ELSE `` ) ).
+      DATA(lv_bpc) = SWITCH string( ls_nb-fld-api WHEN 'SORT1' THEN `SEARCHTERM1` WHEN 'SORT2' THEN `SEARCHTERM2`
+                                                  WHEN 'TITLE' THEN `TITLE_KEY`
+                                                  ELSE `` ).
+      IF lv_bpo IS INITIAL AND lv_bpc IS INITIAL.
+        CONTINUE.
+      ENDIF.
+      ASSIGN ls_nb-new->* TO FIELD-SYMBOL(<lv_nbv>).
+      FIELD-SYMBOLS: <lv_nbd> TYPE any,
+                     <lv_nbx> TYPE any.
+      UNASSIGN: <lv_nbd>, <lv_nbx>.
+      IF lv_bpo IS NOT INITIAL.
+        ASSIGN COMPONENT lv_bpo OF STRUCTURE es_ext-partner-central_data-common-data-bp_organization TO <lv_nbd>.
+        ASSIGN COMPONENT lv_bpo OF STRUCTURE es_ext-partner-central_data-common-datax-bp_organization TO <lv_nbx>.
+      ELSE.
+        ASSIGN COMPONENT lv_bpc OF STRUCTURE es_ext-partner-central_data-common-data-bp_centraldata TO <lv_nbd>.
+        ASSIGN COMPONENT lv_bpc OF STRUCTURE es_ext-partner-central_data-common-datax-bp_centraldata TO <lv_nbx>.
+      ENDIF.
+      IF <lv_nbd> IS ASSIGNED AND <lv_nbx> IS ASSIGNED.
+        <lv_nbd> = <lv_nbv>.
+        <lv_nbx> = abap_true.
+      ENDIF.
     ENDLOOP.
 
     " A new partner needs its name and address of its own; on a change CVI

@@ -68,6 +68,22 @@ need('a creation is not checked afterwards - a partner saved without its custome
      'would be reported as created',
      r"IF is_obj-exists = abap_false\.\s*\n.*?num_by_guid\( lv_ng \) IS INITIAL.*?MDS_PPO2")
 
+# Reviewed field by field, 27.11.2026.
+need('the catalogue takes no fields for a part whose structure name gives none - it falls back to the '
+     'structure the upload writes to', r"IF lt_c IS INITIAL\.\s*\n(?:\s*\".*\n)*\s*lt_c = path_comps\( is_g-grp \)\.")
+need('the partner\'s own name, search terms and title are not sent - BP keeps the old ones after a change',
+     r"LOOP AT is_obj-chg INTO DATA\(ls_nb\) WHERE grp = 'ADDR'\..*?`SEARCHTERM1`.*?`TITLE_KEY`")
+need('organisation names are sent to a partner that is a person',
+     r"DATA\(lv_isorg\) = xsdbool\( lv_create = abap_true OR lcl_cfg=>bp_is_org\( lv_bp0 \) = abap_true \)\.")
+need('a new mobile is made the standard number next to an existing landline - two standard numbers',
+     r"IF ls_cm-kind = `MOB`\.\s*\n\s*IF line_exists\( lt_com\[ kind = `TEL` del = abap_false \] \)\.")
+need('a company code added to an existing record does not get the FI role (FLCU00 / FLVN00)',
+     r"line_exists\( is_obj-ent\[ grp = 'COMP' task = gc_ins \] \).*?THEN 'FLCU00' ELSE 'FLVN00'")
+need('a number given in the file is not passed as the partner number for an external grouping',
+     r"lcl_cfg=>bp_ext\(.*?es_ext-partner-header-object_instance-bpartner = is_obj-num\.")
+need('BVTYP of the file is not used as the bank details ID of a new account',
+     r"IF ls_bv-fld-api = 'BVTYP'\..*?bank_line\( ir_ext = lr_ext is_ent = ls_e iv_bkvid = lv_bvask \)")
+
 if fail:
     print(f'{len(fail)} problem(s):')
     for f in fail:

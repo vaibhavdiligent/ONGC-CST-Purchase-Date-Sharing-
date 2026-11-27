@@ -58,6 +58,8 @@ KNOWN = {
     'TSTL', 'TVV3', 'TVKO', 'TVKOV', 'TSPA', 'SKB1', 'DD02L',
     # business partner, and the link to the customer and the supplier
     'BUT000', 'BUT100', 'BUT0ID', 'BUT0BK', 'BUT020', 'BUT021_FS', 'CVI_CUST_LINK', 'CVI_VEND_LINK',
+    # BP groupings and their number range intervals (is the partner number given from outside?)
+    'TB001', 'NRIV',
     # sets (GS01) and region texts, read by the CIMMRA vendor interface
     'SETLEAF', 'T005U',
     # the partner's industry sectors (PARTNER, ISTYPE, IND_SECTOR, ISDEF) and

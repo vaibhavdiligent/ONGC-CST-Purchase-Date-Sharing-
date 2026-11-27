@@ -60,6 +60,13 @@ CLASS lcl_cat DEFINITION FINAL.
       RETURNING VALUE(rs) TYPE ty_fld.
     CLASS-METHODS add
       IMPORTING is_f TYPE ty_fld.
+    " The fields of a part's DATA structure, read from CVIS_EI_EXTERN itself.
+    CLASS-METHODS api_path
+      IMPORTING iv_grp    TYPE ty_grp
+      RETURNING VALUE(rv) TYPE string.
+    CLASS-METHODS path_comps
+      IMPORTING iv_grp    TYPE ty_grp
+      RETURNING VALUE(rt) TYPE string_table.
 ENDCLASS.
 
 
@@ -198,6 +205,68 @@ CLASS lcl_cat IMPLEMENTATION.
     ENDLOOP.
   ENDMETHOD.
 
+  METHOD api_path.
+    " Where the upload writes a part's fields, from CVIS_EI_EXTERN down to
+    " the DATA structure. LCL_UL=>LINE_OF builds the same paths.
+    DATA(lv_root) = COND string( WHEN gc_side = 'C' THEN `CUSTOMER` ELSE `VENDOR` ).
+    DATA(lv_area) = COND string( WHEN gc_side = 'C' THEN `SALES_DATA-SALES` ELSE `PURCHASING_DATA-PURCHASING` ).
+    rv = SWITCH #( iv_grp
+           WHEN 'CENT' THEN |{ lv_root }-CENTRAL_DATA-CENTRAL-DATA|
+           WHEN 'COMP' THEN |{ lv_root }-COMPANY_DATA-COMPANY-DATA|
+           WHEN 'SALE' OR 'PURC' THEN |{ lv_root }-{ lv_area }-DATA|
+           WHEN 'TAXI' THEN |{ lv_root }-CENTRAL_DATA-TAX_IND-TAX_IND-DATA|
+           WHEN 'UNLD' THEN |{ lv_root }-CENTRAL_DATA-LOADING-LOADING-DATA|
+           WHEN 'BANK' THEN |{ lv_root }-CENTRAL_DATA-BANKDETAIL-BANKDETAILS-DATA|
+           WHEN 'CONT' THEN |{ lv_root }-CENTRAL_DATA-CONTACT-CONTACTS-DATA|
+           WHEN 'PART' THEN |{ lv_root }-{ lv_area }-FUNCTIONS-FUNCTIONS-DATA|
+           WHEN 'DUNN' THEN |{ lv_root }-COMPANY_DATA-COMPANY-DUNNING-DUNNING-DATA|
+           WHEN 'WTAX' THEN |{ lv_root }-COMPANY_DATA-COMPANY-WTAX_TYPE-WTAX_TYPE-DATA|
+           ELSE `` ).
+  ENDMETHOD.
+
+  METHOD path_comps.
+    DATA(lv_path) = api_path( iv_grp ).
+    IF lv_path IS INITIAL.
+      RETURN.
+    ENDIF.
+    DATA lo_t TYPE REF TO cl_abap_typedescr.
+    cl_abap_typedescr=>describe_by_name(
+      EXPORTING  p_name         = 'CVIS_EI_EXTERN'
+      RECEIVING  p_descr_ref    = lo_t
+      EXCEPTIONS type_not_found = 1
+                 OTHERS         = 2 ).
+    IF sy-subrc <> 0.
+      RETURN.
+    ENDIF.
+    SPLIT lv_path AT `-` INTO TABLE DATA(lt_p).
+    LOOP AT lt_p INTO DATA(lv_p).
+      IF lo_t->kind = cl_abap_typedescr=>kind_table.
+        lo_t = CAST cl_abap_tabledescr( lo_t )->get_table_line_type( ).
+      ENDIF.
+      IF lo_t->kind <> cl_abap_typedescr=>kind_struct.
+        RETURN.
+      ENDIF.
+      DATA lo_d TYPE REF TO cl_abap_datadescr.
+      CAST cl_abap_structdescr( lo_t )->get_component_type(
+        EXPORTING  p_name                 = lv_p
+        RECEIVING  p_descr_ref            = lo_d
+        EXCEPTIONS component_not_found    = 1
+                   unsupported_input_type = 2
+                   OTHERS                 = 3 ).
+      IF sy-subrc <> 0.
+        RETURN.
+      ENDIF.
+      lo_t = lo_d.
+    ENDLOOP.
+    IF lo_t->kind <> cl_abap_typedescr=>kind_struct.
+      RETURN.
+    ENDIF.
+    DATA(lt_c) = CAST cl_abap_structdescr( lo_t )->get_included_view( ).
+    LOOP AT lt_c INTO DATA(ls_c).
+      APPEND CONV string( ls_c-name ) TO rt.
+    ENDLOOP.
+  ENDMETHOD.
+
   METHOD from_dfies.
     rs-name     = |{ is_d-tabname }-{ is_d-fieldname }|.
     rs-grp      = iv_grp.
@@ -224,6 +293,12 @@ CLASS lcl_cat IMPLEMENTATION.
     ENDIF.
     DATA lt_api TYPE SORTED TABLE OF string WITH UNIQUE KEY table_line.
     DATA(lt_c) = comps( is_g-api ).
+    IF lt_c IS INITIAL.
+      " The structure name gave nothing (a name that differs in this
+      " release): take the fields from the place the upload writes them
+      " to, so no part is left without its fields.
+      lt_c = path_comps( is_g-grp ).
+    ENDIF.
     LOOP AT lt_c INTO DATA(lv_c).
       INSERT lv_c INTO TABLE lt_api.
     ENDLOOP.
@@ -948,6 +1023,14 @@ CLASS lcl_cfg DEFINITION FINAL.
       RETURNING VALUE(rv)    TYPE i.
     " The tax number category of a country and digit (IN3, JP1 ...) when
     " the system has it (TFKTAXNUMTYPE), and whether a partner holds one.
+    " Whether a business partner is an organisation (BUT000-TYPE 2).
+    CLASS-METHODS bp_is_org
+      IMPORTING VALUE(iv_bp)  TYPE bu_partner
+      RETURNING VALUE(rv)     TYPE abap_bool.
+    " Whether a grouping's business partner numbers are given from outside.
+    CLASS-METHODS bp_ext
+      IMPORTING iv_group      TYPE clike
+      RETURNING VALUE(rv)     TYPE abap_bool.
     CLASS-METHODS tax_cat
       IMPORTING iv_country    TYPE clike
                 iv_digit      TYPE clike
@@ -1092,6 +1175,27 @@ CLASS lcl_cfg IMPLEMENTATION.
         rv = CONV i( ls_id-bkvid ) + 1.
       ENDIF.
     ENDLOOP.
+  ENDMETHOD.
+
+  METHOD bp_is_org.
+    SELECT SINGLE type FROM but000 WHERE partner = @iv_bp INTO @DATA(lv_type).
+    rv = xsdbool( lv_type = gc_org ).
+  ENDMETHOD.
+
+  METHOD bp_ext.
+    DATA lv_nr TYPE nrnr.
+    DATA(lv_grp) = CONV bu_group( iv_group ).
+    TRY.
+        SELECT SINGLE ('NRRNG') FROM tb001 WHERE bu_group = @lv_grp INTO @lv_nr.
+      CATCH cx_sy_dynamic_osql_error.
+        RETURN.
+    ENDTRY.
+    IF lv_nr IS INITIAL.
+      RETURN.
+    ENDIF.
+    SELECT SINGLE externind FROM nriv
+      WHERE object = 'BU_PARTNER' AND nrrangenr = @lv_nr INTO @DATA(lv_x).
+    rv = xsdbool( lv_x = abap_true ).
   ENDMETHOD.
 
   METHOD tax_cat.
