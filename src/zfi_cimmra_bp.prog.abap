@@ -119,6 +119,10 @@ CLASS lcl_cimmra_bp DEFINITION FINAL.
     CLASS-METHODS to_date
       IMPORTING iv_in     TYPE clike
       RETURNING VALUE(rv) TYPE d.
+    "! YYYYMMDD that is a calendar date.
+    CLASS-METHODS plausible
+      IMPORTING iv        TYPE clike
+      RETURNING VALUE(rv) TYPE abap_bool.
 
   PRIVATE SECTION.
     CONSTANTS: c_insert TYPE c LENGTH 1 VALUE 'I',
@@ -240,16 +244,52 @@ CLASS lcl_cimmra_bp IMPLEMENTATION.
     IF lv IS INITIAL.
       RETURN.
     ENDIF.
-    REPLACE ALL OCCURRENCES OF PCRE '[./\-]' IN lv WITH ``.
-    IF strlen( lv ) <> 8 OR lv CN '0123456789'.
+    " The year leads when the text starts with four digits and a separator
+    " (2026-11-28); with a separator after two digits the day leads
+    " (28-11-2026). Without separators DDMMYYYY is taken when it gives a
+    " date: "20112026" looks like a year 2011 but is 20.11.2026 - every
+    " day from the 19th to the 29th was read as a year before (28.11.2026).
+    DATA(lv_ymd) = xsdbool( matches( val = lv pcre = `^\d{4}[./\-]\d{1,2}[./\-]\d{1,2}$` ) ).
+    DATA(lv_dmy) = xsdbool( matches( val = lv pcre = `^\d{1,2}[./\-]\d{1,2}[./\-]\d{4}$` ) ).
+    IF lv_ymd = abap_true OR lv_dmy = abap_true.
+      DATA(lv_norm) = lv.
+      REPLACE ALL OCCURRENCES OF PCRE '[./\-]' IN lv_norm WITH `|`.
+      SPLIT lv_norm AT '|' INTO DATA(lv_p1) DATA(lv_p2) DATA(lv_p3).
+      IF lv_ymd = abap_true.
+        lv = |{ lv_p1 }{ lv_p2 WIDTH = 2 ALIGN = RIGHT PAD = '0' }{ lv_p3 WIDTH = 2 ALIGN = RIGHT PAD = '0' }|.
+      ELSE.
+        lv = |{ lv_p3 }{ lv_p2 WIDTH = 2 ALIGN = RIGHT PAD = '0' }{ lv_p1 WIDTH = 2 ALIGN = RIGHT PAD = '0' }|.
+      ENDIF.
+    ELSE.
+      IF strlen( lv ) <> 8 OR lv CN '0123456789'.
+        RETURN.
+      ENDIF.
+      DATA(lv_from_dmy) = |{ lv+4(4) }{ lv+2(2) }{ lv(2) }|.
+      lv = COND #( WHEN plausible( lv_from_dmy ) = abap_true THEN lv_from_dmy ELSE lv ).
+    ENDIF.
+    IF strlen( lv ) = 8 AND lv CO '0123456789' AND plausible( lv ) = abap_true.
+      rv = lv.
+    ENDIF.
+  ENDMETHOD.
+
+  METHOD plausible.
+    rv = abap_false.
+    IF strlen( iv ) <> 8 OR iv CN '0123456789'.
       RETURN.
     ENDIF.
-    " YYYYMMDD when it starts with a year, otherwise DDMMYYYY.
-    IF lv(4) >= '1900' AND lv(4) <= '2999'.
-      rv = lv.
-    ELSE.
-      rv = |{ lv+4(4) }{ lv+2(2) }{ lv(2) }|.
+    DATA(lv_y) = CONV i( iv(4) ).
+    DATA(lv_m) = CONV i( iv+4(2) ).
+    DATA(lv_d) = CONV i( iv+6(2) ).
+    IF lv_y < 1900 OR lv_m < 1 OR lv_m > 12 OR lv_d < 1.
+      RETURN.
     ENDIF.
+    " The last day of the month: the first of the next one, less a day.
+    DATA lv_next TYPE d.
+    lv_next = COND #( WHEN lv_m = 12 THEN |{ lv_y + 1 WIDTH = 4 ALIGN = RIGHT PAD = '0' }0101|
+                      ELSE |{ lv_y WIDTH = 4 ALIGN = RIGHT PAD = '0' }{ lv_m + 1 WIDTH = 2 ALIGN = RIGHT PAD = '0' }01| ).
+    DATA lv_last TYPE d.
+    lv_last = lv_next - 1.
+    rv = xsdbool( lv_d <= CONV i( lv_last+6(2) ) ).
   ENDMETHOD.
 
   METHOD add.

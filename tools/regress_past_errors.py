@@ -328,6 +328,12 @@ CASES = [
      'src/zfi_vend_honc.prog.abap', 'cipla/audit_honc.py',
      [('src/zfi_vend_honc.prog.abap', "      ELSEIF lines( lt_istype ) > 1.\n        DATA(lv_stdsys) = std_system( ).\n",
        "      ELSEIF lines( lt_istype ) > 99.\n        DATA(lv_stdsys) = std_system( ).\n")]),
+    # ---- CIMMRA, QA 28.11.2026
+    ('CIMMRA create: "Enter a valid date interval in line EXEMPT" - placeholder exemption 1900 sent (file CIM_VEND_CRT06112026QA1199)', 'src/zfi_cimmra_vendor_create.prog.abap', 'cipla/audit_cimmra.py',
+     [('src/zfi_cimmra_vendor_create.prog.abap', "      IF lv_exrt > 0.\n        ls_with_holding_tax-wt_exnr", "      IF lv_exrt >= 0.\n        ls_with_holding_tax-wt_exnr")]),
+    ('CIMMRA TO_DATE: 20112026 read as year 2011', 'src/zfi_cimmra_bp.prog.abap', 'cipla/audit_cimmra.py',
+     [('src/zfi_cimmra_bp.prog.abap', "      lv = COND #( WHEN plausible( lv_from_dmy ) = abap_true THEN lv_from_dmy ELSE lv ).\n",
+       "      lv = COND #( WHEN lv(4) < '1900' THEN lv_from_dmy ELSE lv ).\n")]),
     # ---- ZMMS_BP_INDUSTRY_UPD (new, 27.11.2026) - the same lessons kept
     ('Industry update: validation leftovers not discarded before posting', 'src/zmms_bp_industry_upd.prog.abap', 'cipla/audit_industry_upd.py',
      [('src/zmms_bp_industry_upd.prog.abap', "    \" (Cipla, HONC 20.11.2026 and ZMMS_BP_MASS_UPLOAD 27.11.2026).\n    discard( ).\n",

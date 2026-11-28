@@ -62,6 +62,20 @@ for what, pat in (
     if not re.search(pat, inc, re.I):
         fail.append(f'ZFI_CIMMRA_BP no longer {what}')
 
+# QA 28.11.2026, file CIM_VEND_CRT06112026QA1199: CIMMRA's placeholder for
+# "no exemption" (1111111111, rate 0, 11-11-1900 to 12-11-1900) was sent and
+# the vendor refused - "Enter a valid date interval in line EXEMPT".
+_vc = open(os.path.join(ROOT, 'src/zfi_cimmra_vendor_create.prog.abap'), encoding='utf-8').read()
+if not re.search(r"IF lv_exrt > 0\.\s*\n\s*ls_with_holding_tax-wt_exnr = wa_al11-exemptionnumber\.", _vc):
+    fail.append('ZFI_CIMMRA_VENDOR_CREATE sends a withholding tax exemption without a rate - CIMMRA\'s '
+                'placeholder 11-11-1900 to 12-11-1900 is refused: "Enter a valid date interval in line EXEMPT"')
+# TO_DATE read "20112026" (20.11.2026) as the year 2011: every day from the
+# 19th to the 29th without separators.
+if 'plausible( lv_from_dmy ) = abap_true THEN lv_from_dmy' not in inc:
+    fail.append('ZFI_CIMMRA_BP TO_DATE takes DDMMYYYY of the 19th to the 29th for a year')
+if not re.search(r'IF strlen\( lv \) = 8 AND lv CO \'0123456789\' AND plausible\( lv \) = abap_true\.', inc):
+    fail.append('ZFI_CIMMRA_BP TO_DATE hands back dates that are not calendar dates')
+
 if fail:
     print(f'{len(fail)} problem(s):')
     for f in fail:

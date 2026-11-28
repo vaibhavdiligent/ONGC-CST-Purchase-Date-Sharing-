@@ -1041,15 +1041,29 @@ FORM call_rfc_vendor .
       ENDIF.
 
       ls_with_holding_tax-qsrec = wa_al11-recipienttype.
-      ls_with_holding_tax-wt_exnr = wa_al11-exemptionnumber.
-      ls_with_holding_tax-wt_exrt = wa_al11-exemptionrate.
-      " S/4HANA conversion 17.11.2026: the offsets took the month from +2(2),
-      " which in DD.MM.YYYY is ".0" - read the date whatever its separator.
-      IF wa_al11-exemptionfrom IS NOT INITIAL.
-        ls_with_holding_tax-wt_exdf = lcl_cimmra_bp=>to_date( wa_al11-exemptionfrom ).
-      ENDIF.
-      IF wa_al11-exemptionto IS NOT INITIAL.
-        ls_with_holding_tax-wt_exdt = lcl_cimmra_bp=>to_date( wa_al11-exemptionto ).
+      " An exemption is sent only when the file gives a rate. For a vendor
+      " without one CIMMRA fills the columns with a placeholder - number
+      " 1111111111, rate 0, 11-11-1900 to 12-11-1900 - and S/4HANA refused
+      " the whole vendor: "Enter a valid date interval in line EXEMPT"
+      " (QA, file CIM_VEND_CRT06112026QA1199, id 1199, 28.11.2026).
+      DATA lv_exrt TYPE wt_exrt.
+      CLEAR lv_exrt.
+      TRY.
+          lv_exrt = condense( wa_al11-exemptionrate ).
+        CATCH cx_sy_conversion_error.
+          CLEAR lv_exrt.
+      ENDTRY.
+      IF lv_exrt > 0.
+        ls_with_holding_tax-wt_exnr = wa_al11-exemptionnumber.
+        ls_with_holding_tax-wt_exrt = lv_exrt.
+        " S/4HANA conversion 17.11.2026: the offsets took the month from +2(2),
+        " which in DD.MM.YYYY is ".0" - read the date whatever its separator.
+        IF wa_al11-exemptionfrom IS NOT INITIAL.
+          ls_with_holding_tax-wt_exdf = lcl_cimmra_bp=>to_date( wa_al11-exemptionfrom ).
+        ENDIF.
+        IF wa_al11-exemptionto IS NOT INITIAL.
+          ls_with_holding_tax-wt_exdt = lcl_cimmra_bp=>to_date( wa_al11-exemptionto ).
+        ENDIF.
       ENDIF.
 
       APPEND ls_with_holding_tax TO lt_with_holding_tax .
